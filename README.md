@@ -6,12 +6,11 @@
 
 **Please note:** 
 
-This **official version** is from the original author, and it is **stable and bug-free**.
+This **official version of LWT** is from the original author, and it is **stable and bug-free**.
 
-All **LWT forks** that I found on the internet (e.g. from jzohrab, HugoFara, chaosarium, 
-pirtleshell, hans, and many more) are either outdated or faulty, even if they contain some new features or may have a cleaner source code. 
+All **LWT forks** that I found on the internet (e.g. from [jzohrab](https://github.com/jzohrab/lute), [HugoFara](https://github.com/HugoFara/lwt), [chaosarium](https://github.com/chaosarium/lwt), [pirtleshell](https://github.com/pirtleshell/lwt), [andreask7](https://github.com/andreask7/lwt), [hans](https://github.com/hans/lwt), and many more) are either outdated or faulty, even if they contain some new features or may have a cleaner source code. 
 
-The fork from jzohrab - called **Lute** (see [github.com/LuteOrg/lute-v3](https://github.com/LuteOrg/lute-v3)) - describes itself in many places on the web (e.g. on Reddit, YouTube) as the **better LWT**, but my extensive testing revealed a number of features that are worse than in the official LWT, or are completely missing. Furthermore, a number of serious software crashes occurred. **Lute** currently (Nov. 2025) has over 170 issues on GitHub but hasn't been updated since March 2025.
+The fork from [jzohrab](https://github.com/jzohrab/lute) - called **Lute** (newest version see [github.com/LuteOrg/lute-v3](https://github.com/LuteOrg/lute-v3)) - describes itself in many places on the web (e.g. on Reddit, YouTube) as the **better LWT**, but my extensive testing revealed a number of features that are worse than in the official LWT, or are completely missing. Furthermore, a number of serious software crashes occurred. **Lute** currently (Nov. 2025) has over 170 issues on GitHub but hasn't been updated since March 2025.
 
 ## Abstract
 
