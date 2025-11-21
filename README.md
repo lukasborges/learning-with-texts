@@ -4,9 +4,14 @@
 
 ## This is the Official LWT Version 25.10.0 (October 25 2025)
 
-**Please note:** All LWT forks on the web that I've found and tested are either outdated or buggy, even though they contain some new features or cleaner source code. 
+**Please note:** 
 
 This **official version** is from the original author, and it is **stable and bug-free**.
+
+All **LWT forks** that I found on the internet (e.g. from jzohrab, HugoFara, chaosarium, 
+pirtleshell, hans, and many more) are either outdated or faulty, even if they contain some new features or may have a cleaner source code. 
+
+The fork from jzohrab - called **Lute** (see [github.com/LuteOrg/lute-v3](https://github.com/LuteOrg/lute-v3)) - describes itself in many places on the web (e.g. on Reddit, YouTube) as the **better LWT**, but my extensive testing revealed a number of features that are worse than in the official LWT, or are completely missing. Furthermore, a number of serious software crashes occurred. **Lute** currently (Nov. 2025) has over 170 issues on GitHub but hasn't been updated since March 2025.
 
 ## Abstract
 
