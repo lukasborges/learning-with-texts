@@ -40,7 +40,7 @@ To run LWT, you'll need:
 
 ## DOWNLOAD:
 
-- [Latest releases](https://github.com/hapepo23/learning-with-texts/releases)
+- [Latest release](https://sourceforge.net/projects/learning-with-texts/files)
 
 -----
 
