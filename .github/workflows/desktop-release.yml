@@ -1,0 +1,87 @@
+name: Desktop Release Artifacts
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.artifact }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            artifact: lwt-desktop-linux-x86_64
+            rust_target: x86_64-unknown-linux-gnu
+            build_args: --bundles deb,appimage
+            paths: |
+              desktop/src-tauri/target/release/bundle/deb/*.deb
+              desktop/src-tauri/target/release/bundle/appimage/*.AppImage
+          - runner: windows-2025
+            artifact: lwt-desktop-windows-x86_64
+            rust_target: x86_64-pc-windows-msvc
+            build_args: --bundles msi,nsis
+            paths: |
+              desktop/src-tauri/target/release/bundle/msi/*.msi
+              desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
+          - runner: macos-15
+            artifact: lwt-desktop-macos-aarch64
+            rust_target: aarch64-apple-darwin
+            build_args: --target aarch64-apple-darwin --bundles dmg
+            paths: desktop/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+          - runner: macos-15-intel
+            artifact: lwt-desktop-macos-x86_64
+            rust_target: x86_64-apple-darwin
+            build_args: --target x86_64-apple-darwin --bundles dmg
+            paths: desktop/src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Linux packaging dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libwebkit2gtk-4.1-dev \
+            patchelf
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20.19.0
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+          key: ${{ matrix.rust_target }}
+
+      - run: npm ci
+      - run: npm run desktop:check
+      - run: npm run desktop:test
+
+      - name: Build native installers
+        working-directory: desktop
+        env:
+          NO_STRIP: ${{ runner.os == 'Linux' && '1' || '' }}
+        run: npx tauri build ${{ matrix.build_args }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.paths }}
+          if-no-files-found: error
+          retention-days: 30

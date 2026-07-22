@@ -22,6 +22,10 @@ npm run desktop:tauri:build
 review, statistics, backup, and restore through the native WebView. See
 [E2E.md](E2E.md) for local and CI prerequisites.
 
+Release CI produces unsigned Linux, Windows, and Intel/Apple Silicon macOS
+installers. See [RELEASING.md](RELEASING.md) for the matrix, local commands, and
+current trust boundary.
+
 ## Current Boundary
 
 The shell reads data through `LibraryGateway`. `MockLibraryGateway` supports browser development and automated tests without PHP. Tauri-mode builds use `TauriLibraryGateway` and the native `list_texts` command backed by SQLite.

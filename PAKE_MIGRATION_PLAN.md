@@ -77,14 +77,14 @@ Last updated: July 22, 2026. A checked current-slice item is implemented and
 tested; completed workflows also include their commit. The current slice is
 expanded so its remaining work is visible before the next commit.
 
-### Current Slice — Cross-Platform Release Artifacts
+### Current Slice — Desktop Schema Upgrade Coverage
 
-- [ ] Define a release matrix for Windows, macOS, and Linux.
-- [ ] Build native installers for each operating system in GitHub Actions.
-- [ ] Upload consistently named artifacts with retention settings.
-- [ ] Run platform-appropriate checks before packaging.
-- [ ] Document platform prerequisites and local release commands.
-- [ ] Validate the workflow configuration and retain Linux E2E coverage.
+- [ ] Inventory the data introduced by each desktop schema version.
+- [ ] Create representative populated databases at older schema versions.
+- [ ] Upgrade those databases through schema 10 without data loss.
+- [ ] Verify settings and media defaults across version boundaries.
+- [ ] Cover failed/interrupted migration rollback behavior.
+- [ ] Run all checks, package, and clean-launch the upgraded application.
 
 ### Completed Desktop Workflows
 
@@ -102,7 +102,8 @@ expanded so its remaining work is visible before the next commit.
 - [x] Verified reconstruction of legacy compound positions (`e14be17`).
 - [x] Local audio storage, playback, backup, and legacy embedding (`cc45046`).
 - [x] Language and application settings parity, migration, and documentation (`87e0a9f`).
-- [x] Packaged Linux first-launch and workflow E2E coverage (this commit).
+- [x] Packaged Linux first-launch and workflow E2E coverage (`561f494`).
+- [x] Cross-platform release matrix configured; Linux release artifacts smoke-tested (this commit).
 
 ### Remaining MVP Migration
 
@@ -110,13 +111,13 @@ expanded so its remaining work is visible before the next commit.
 - [x] Recreate legacy compound-term positions where they can be identified (`e14be17`).
 - [x] Import/copy local audio and other media instead of retaining references only (`cc45046`).
 - [x] Complete parity checks for remaining language and application settings (`87e0a9f`).
-- [x] Add packaged-app end-to-end tests for first launch, reading, review, and restore (this commit).
+- [x] Add packaged-app end-to-end tests for first launch, reading, review, and restore (`561f494`).
 
 ### Distribution and Hardening
 
 - [x] Produce local Linux DEB and AppImage proof-of-concept packages.
-- [ ] Build Windows, macOS, and Linux release artifacts in CI. **In progress.**
-- [ ] Add upgrade tests covering older desktop schema versions.
+- [ ] Build Windows, macOS, and Linux release artifacts in CI. **Matrix ready; first remote run pending.**
+- [ ] Add upgrade tests covering older desktop schema versions. **In progress.**
 - [ ] Add signing/notarization, checksums, SBOM, and signed updates.
 - [ ] Validate installation, backup, upgrade, and removal with nontechnical users.
 
