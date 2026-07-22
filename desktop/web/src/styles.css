@@ -314,6 +314,59 @@ textarea {
   opacity: 0.65;
 }
 
+.data-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: 1rem;
+}
+
+.data-card {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  padding: 1.25rem;
+  border: 1px solid #d9e1e8;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(30 55 80 / 8%);
+}
+
+.data-card h2,
+.data-card > p {
+  margin: 0;
+}
+
+.data-card > p:not(.form-status) {
+  color: #637083;
+}
+
+.data-card label {
+  display: grid;
+  gap: 0.4rem;
+  font-weight: 650;
+}
+
+.data-card input[type='file'] {
+  max-width: 100%;
+  font-weight: 400;
+}
+
+.data-card button {
+  justify-self: start;
+  padding: 0.65rem 0.9rem;
+  border: 0;
+  border-radius: 8px;
+  background: #246f96;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.data-card button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
 .import-panel {
   margin-bottom: 2rem;
   padding: 1.25rem;
@@ -813,6 +866,15 @@ textarea {
     border-color: #55687a;
     background: #131b24;
     color: #edf3f7;
+  }
+
+  .data-card {
+    border-color: #344352;
+    background: #1e2a35;
+  }
+
+  .data-card > p:not(.form-status) {
+    color: #a8b7c5;
   }
 
   .term-editor__normalized {

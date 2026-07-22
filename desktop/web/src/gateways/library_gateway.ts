@@ -1,4 +1,5 @@
 import type {
+  BackupSummary,
   CreateTextInput,
   CreateExpressionInput,
   CreatedExpression,
@@ -23,6 +24,8 @@ export interface LibraryGateway {
   listTexts(): Promise<readonly LibraryText[]>;
   listLanguages(): Promise<readonly LanguageSettings[]>;
   updateLanguage(input: UpdateLanguageInput): Promise<LanguageSettings>;
+  exportBackup(): Promise<string>;
+  restoreBackup(payload: string): Promise<BackupSummary>;
   createText(input: CreateTextInput): Promise<LibraryText>;
   getText(id: number): Promise<TextDetails>;
   updateText(input: UpdateTextInput): Promise<LibraryText>;

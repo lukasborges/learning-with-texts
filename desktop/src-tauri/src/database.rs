@@ -253,6 +253,105 @@ pub struct UpdateLanguageInput {
     pub right_to_left: bool,
 }
 
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupSummary {
+    pub languages: usize,
+    pub texts: usize,
+    pub terms: usize,
+    pub expressions: usize,
+    pub reviews: usize,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PortableBackup {
+    format: String,
+    version: u32,
+    exported_at: String,
+    languages: Vec<BackupLanguage>,
+    texts: Vec<BackupText>,
+    terms: Vec<BackupTerm>,
+    expressions: Vec<BackupExpression>,
+    reviews: Vec<BackupReview>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BackupLanguage {
+    id: i64,
+    name: String,
+    dictionary_uri_1: String,
+    dictionary_uri_2: Option<String>,
+    google_translate_uri: Option<String>,
+    export_template: Option<String>,
+    text_size: i64,
+    character_substitutions: String,
+    regexp_split_sentences: String,
+    exceptions_split_sentences: String,
+    regexp_word_characters: String,
+    remove_spaces: bool,
+    split_each_character: bool,
+    right_to_left: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BackupText {
+    id: i64,
+    language_id: i64,
+    title: String,
+    content: String,
+    annotated_content: String,
+    audio_uri: Option<String>,
+    source_uri: Option<String>,
+    last_opened_at: Option<String>,
+    created_at: String,
+    updated_at: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BackupTerm {
+    id: i64,
+    language_id: i64,
+    display_text: String,
+    normalized: String,
+    status: i64,
+    created_at: String,
+    updated_at: String,
+    translation: String,
+    romanization: Option<String>,
+    word_count: i64,
+    last_reviewed_at: Option<String>,
+    next_review_at: Option<String>,
+    review_count: i64,
+    correct_count: i64,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BackupExpression {
+    id: i64,
+    term_id: i64,
+    text_id: i64,
+    sentence_position: i64,
+    start_position: i64,
+    end_position: i64,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BackupReview {
+    id: i64,
+    term_id: i64,
+    rating: i64,
+    status_before: i64,
+    status_after: i64,
+    reviewed_at: String,
+    next_review_at: String,
+}
+
 fn legacy_score(status: i64, days_since_change: i64, tomorrow: bool) -> f64 {
     if status > 5 {
         return 100.0;
@@ -587,6 +686,371 @@ impl Database {
             .optional()
             .map_err(|error| format!("Unable to load the expression: {error}"))?
             .ok_or_else(|| "Term was not found in this text".to_string())
+    }
+
+    fn portable_backup(connection: &Connection) -> Result<PortableBackup, String> {
+        let exported_at = connection
+            .query_row("SELECT CURRENT_TIMESTAMP", [], |row| row.get(0))
+            .map_err(|error| format!("Unable to timestamp the backup: {error}"))?;
+        let languages = {
+            let mut statement = connection
+                .prepare(
+                    "SELECT id, name, dictionary_uri_1, dictionary_uri_2,
+                            google_translate_uri, export_template, text_size,
+                            character_substitutions, regexp_split_sentences,
+                            exceptions_split_sentences, regexp_word_characters,
+                            remove_spaces, split_each_character, right_to_left
+                     FROM languages ORDER BY id",
+                )
+                .map_err(|error| format!("Unable to prepare backup languages: {error}"))?;
+            let rows = statement
+                .query_map([], |row| {
+                    Ok(BackupLanguage {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        dictionary_uri_1: row.get(2)?,
+                        dictionary_uri_2: row.get(3)?,
+                        google_translate_uri: row.get(4)?,
+                        export_template: row.get(5)?,
+                        text_size: row.get(6)?,
+                        character_substitutions: row.get(7)?,
+                        regexp_split_sentences: row.get(8)?,
+                        exceptions_split_sentences: row.get(9)?,
+                        regexp_word_characters: row.get(10)?,
+                        remove_spaces: row.get(11)?,
+                        split_each_character: row.get(12)?,
+                        right_to_left: row.get(13)?,
+                    })
+                })
+                .map_err(|error| format!("Unable to read backup languages: {error}"))?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|error| format!("Unable to decode backup languages: {error}"))?
+        };
+        let texts = {
+            let mut statement = connection
+                .prepare(
+                    "SELECT id, language_id, title, content, annotated_content,
+                            audio_uri, source_uri, last_opened_at, created_at, updated_at
+                     FROM texts ORDER BY id",
+                )
+                .map_err(|error| format!("Unable to prepare backup texts: {error}"))?;
+            let rows = statement
+                .query_map([], |row| {
+                    Ok(BackupText {
+                        id: row.get(0)?,
+                        language_id: row.get(1)?,
+                        title: row.get(2)?,
+                        content: row.get(3)?,
+                        annotated_content: row.get(4)?,
+                        audio_uri: row.get(5)?,
+                        source_uri: row.get(6)?,
+                        last_opened_at: row.get(7)?,
+                        created_at: row.get(8)?,
+                        updated_at: row.get(9)?,
+                    })
+                })
+                .map_err(|error| format!("Unable to read backup texts: {error}"))?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|error| format!("Unable to decode backup texts: {error}"))?
+        };
+        let terms = {
+            let mut statement = connection
+                .prepare(
+                    "SELECT id, language_id, display_text, normalized, status,
+                            created_at, updated_at, translation, romanization,
+                            word_count, last_reviewed_at, next_review_at,
+                            review_count, correct_count
+                     FROM terms ORDER BY id",
+                )
+                .map_err(|error| format!("Unable to prepare backup terms: {error}"))?;
+            let rows = statement
+                .query_map([], |row| {
+                    Ok(BackupTerm {
+                        id: row.get(0)?,
+                        language_id: row.get(1)?,
+                        display_text: row.get(2)?,
+                        normalized: row.get(3)?,
+                        status: row.get(4)?,
+                        created_at: row.get(5)?,
+                        updated_at: row.get(6)?,
+                        translation: row.get(7)?,
+                        romanization: row.get(8)?,
+                        word_count: row.get(9)?,
+                        last_reviewed_at: row.get(10)?,
+                        next_review_at: row.get(11)?,
+                        review_count: row.get(12)?,
+                        correct_count: row.get(13)?,
+                    })
+                })
+                .map_err(|error| format!("Unable to read backup terms: {error}"))?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|error| format!("Unable to decode backup terms: {error}"))?
+        };
+        let expressions = {
+            let mut statement = connection
+                .prepare(
+                    "SELECT expression_occurrences.id,
+                            expression_occurrences.term_id,
+                            expression_occurrences.text_id,
+                            sentences.position,
+                            expression_occurrences.start_position,
+                            expression_occurrences.end_position
+                     FROM expression_occurrences
+                     INNER JOIN sentences ON sentences.id = expression_occurrences.sentence_id
+                     ORDER BY expression_occurrences.id",
+                )
+                .map_err(|error| format!("Unable to prepare backup expressions: {error}"))?;
+            let rows = statement
+                .query_map([], |row| {
+                    Ok(BackupExpression {
+                        id: row.get(0)?,
+                        term_id: row.get(1)?,
+                        text_id: row.get(2)?,
+                        sentence_position: row.get(3)?,
+                        start_position: row.get(4)?,
+                        end_position: row.get(5)?,
+                    })
+                })
+                .map_err(|error| format!("Unable to read backup expressions: {error}"))?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|error| format!("Unable to decode backup expressions: {error}"))?
+        };
+        let reviews = {
+            let mut statement = connection
+                .prepare(
+                    "SELECT id, term_id, rating, status_before, status_after,
+                            reviewed_at, next_review_at
+                     FROM review_events ORDER BY id",
+                )
+                .map_err(|error| format!("Unable to prepare backup reviews: {error}"))?;
+            let rows = statement
+                .query_map([], |row| {
+                    Ok(BackupReview {
+                        id: row.get(0)?,
+                        term_id: row.get(1)?,
+                        rating: row.get(2)?,
+                        status_before: row.get(3)?,
+                        status_after: row.get(4)?,
+                        reviewed_at: row.get(5)?,
+                        next_review_at: row.get(6)?,
+                    })
+                })
+                .map_err(|error| format!("Unable to read backup reviews: {error}"))?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|error| format!("Unable to decode backup reviews: {error}"))?
+        };
+        Ok(PortableBackup {
+            format: "lwt-desktop-backup".into(),
+            version: 1,
+            exported_at,
+            languages,
+            texts,
+            terms,
+            expressions,
+            reviews,
+        })
+    }
+
+    pub fn export_backup(&self) -> Result<String, String> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| "The desktop database lock is unavailable".to_string())?;
+        let backup = Self::portable_backup(&connection)?;
+        serde_json::to_string_pretty(&backup)
+            .map_err(|error| format!("Unable to encode the portable backup: {error}"))
+    }
+
+    pub fn restore_backup(&self, payload: String) -> Result<BackupSummary, String> {
+        if payload.is_empty() || payload.len() > 200_000_000 {
+            return Err("Backup must be between 1 byte and 200 MB".to_string());
+        }
+        let backup: PortableBackup = serde_json::from_str(&payload)
+            .map_err(|error| format!("Backup JSON is invalid: {error}"))?;
+        if backup.format != "lwt-desktop-backup" {
+            return Err("This is not an LWT desktop backup".to_string());
+        }
+        if backup.version != 1 {
+            return Err(format!(
+                "Backup version {} is not supported",
+                backup.version
+            ));
+        }
+        let summary = BackupSummary {
+            languages: backup.languages.len(),
+            texts: backup.texts.len(),
+            terms: backup.terms.len(),
+            expressions: backup.expressions.len(),
+            reviews: backup.reviews.len(),
+        };
+
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| "The desktop database lock is unavailable".to_string())?;
+        let transaction = connection
+            .transaction()
+            .map_err(|error| format!("Unable to start backup restoration: {error}"))?;
+        transaction
+            .execute_batch(
+                "DELETE FROM review_events;
+                 DELETE FROM expression_occurrences;
+                 DELETE FROM terms;
+                 DELETE FROM sentences;
+                 DELETE FROM texts;
+                 DELETE FROM languages;",
+            )
+            .map_err(|error| format!("Unable to clear current library data: {error}"))?;
+
+        for language in backup.languages {
+            transaction
+                .execute(
+                    "INSERT INTO languages
+                        (id, name, dictionary_uri_1, dictionary_uri_2,
+                         google_translate_uri, export_template, text_size,
+                         character_substitutions, regexp_split_sentences,
+                         exceptions_split_sentences, regexp_word_characters,
+                         remove_spaces, split_each_character, right_to_left)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+                    params![
+                        language.id,
+                        language.name,
+                        language.dictionary_uri_1,
+                        language.dictionary_uri_2,
+                        language.google_translate_uri,
+                        language.export_template,
+                        language.text_size,
+                        language.character_substitutions,
+                        language.regexp_split_sentences,
+                        language.exceptions_split_sentences,
+                        language.regexp_word_characters,
+                        language.remove_spaces,
+                        language.split_each_character,
+                        language.right_to_left
+                    ],
+                )
+                .map_err(|error| format!("Unable to restore a language: {error}"))?;
+        }
+        for text in &backup.texts {
+            transaction
+                .execute(
+                    "INSERT INTO texts
+                        (id, language_id, title, content, annotated_content, audio_uri,
+                         source_uri, last_opened_at, created_at, updated_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                    params![
+                        text.id,
+                        text.language_id,
+                        text.title,
+                        text.content,
+                        text.annotated_content,
+                        text.audio_uri,
+                        text.source_uri,
+                        text.last_opened_at,
+                        text.created_at,
+                        text.updated_at
+                    ],
+                )
+                .map_err(|error| format!("Unable to restore a text: {error}"))?;
+            let config = Self::parser_config(&transaction, text.language_id)?;
+            Self::persist_text_parsing(
+                &transaction,
+                text.id,
+                text.language_id,
+                &text.content,
+                &config,
+            )?;
+        }
+        for term in backup.terms {
+            transaction
+                .execute(
+                    "INSERT INTO terms
+                        (id, language_id, display_text, normalized, status,
+                         created_at, updated_at, translation, romanization, word_count,
+                         last_reviewed_at, next_review_at, review_count, correct_count)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+                    params![
+                        term.id,
+                        term.language_id,
+                        term.display_text,
+                        term.normalized,
+                        term.status,
+                        term.created_at,
+                        term.updated_at,
+                        term.translation,
+                        term.romanization,
+                        term.word_count,
+                        term.last_reviewed_at,
+                        term.next_review_at,
+                        term.review_count,
+                        term.correct_count
+                    ],
+                )
+                .map_err(|error| format!("Unable to restore a term: {error}"))?;
+        }
+        for expression in backup.expressions {
+            let sentence_id = transaction
+                .query_row(
+                    "SELECT id FROM sentences WHERE text_id = ?1 AND position = ?2",
+                    params![expression.text_id, expression.sentence_position],
+                    |row| row.get::<_, i64>(0),
+                )
+                .optional()
+                .map_err(|error| format!("Unable to match a restored expression: {error}"))?
+                .ok_or_else(|| "A restored expression references a missing sentence".to_string())?;
+            transaction
+                .execute(
+                    "INSERT INTO expression_occurrences
+                        (id, term_id, text_id, sentence_id, start_position, end_position)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                    params![
+                        expression.id,
+                        expression.term_id,
+                        expression.text_id,
+                        sentence_id,
+                        expression.start_position,
+                        expression.end_position
+                    ],
+                )
+                .map_err(|error| format!("Unable to restore an expression: {error}"))?;
+        }
+        for review in backup.reviews {
+            transaction
+                .execute(
+                    "INSERT INTO review_events
+                        (id, term_id, rating, status_before, status_after,
+                         reviewed_at, next_review_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                    params![
+                        review.id,
+                        review.term_id,
+                        review.rating,
+                        review.status_before,
+                        review.status_after,
+                        review.reviewed_at,
+                        review.next_review_at
+                    ],
+                )
+                .map_err(|error| format!("Unable to restore a review event: {error}"))?;
+        }
+        let has_foreign_key_error = {
+            let mut statement = transaction
+                .prepare("PRAGMA foreign_key_check")
+                .map_err(|error| format!("Unable to validate restored relationships: {error}"))?;
+            let mut rows = statement
+                .query([])
+                .map_err(|error| format!("Unable to check restored relationships: {error}"))?;
+            rows.next()
+                .map_err(|error| format!("Unable to read restored relationships: {error}"))?
+                .is_some()
+        };
+        if has_foreign_key_error {
+            return Err("Backup contains invalid relationships".to_string());
+        }
+        transaction
+            .commit()
+            .map_err(|error| format!("Unable to commit backup restoration: {error}"))?;
+        Ok(summary)
     }
 
     pub fn list_languages(&self) -> Result<Vec<LanguageSettings>, String> {
@@ -1860,6 +2324,83 @@ mod tests {
             .expect_err("invalid substitution should fail");
 
         assert_eq!(error, "Character substitutions must use from=to pairs");
+    }
+
+    #[test]
+    fn exports_and_restores_a_complete_portable_backup() {
+        let database = Database::in_memory().expect("database should migrate");
+        let created = database
+            .create_text(text_input("English", "Backup", "A short story."))
+            .expect("text should be created");
+        let reading = database
+            .get_reading_text(created.id)
+            .expect("reading should open");
+        database
+            .create_expression(CreateExpressionInput {
+                text_id: created.id,
+                sentence_id: reading.sentences[0].id,
+                start_position: 1,
+                end_position: 5,
+            })
+            .expect("expression should be created");
+        let review = database
+            .list_review_terms(20)
+            .expect("review queue should load")
+            .remove(0);
+        database
+            .record_review(RecordReviewInput {
+                term_id: review.id,
+                rating: 2,
+            })
+            .expect("review should record");
+        let payload = database.export_backup().expect("backup should export");
+
+        database
+            .create_text(text_input("French", "Temporary", "Texte temporaire"))
+            .expect("temporary text should be created");
+        let summary = database
+            .restore_backup(payload)
+            .expect("backup should restore");
+        let texts = database.list_texts().expect("restored library should load");
+        let restored = database
+            .get_reading_text(created.id)
+            .expect("restored reading should load");
+        let statistics = database
+            .review_statistics()
+            .expect("restored statistics should load");
+
+        assert_eq!(summary.languages, 1);
+        assert_eq!(summary.texts, 1);
+        assert_eq!(summary.terms, 1);
+        assert_eq!(summary.expressions, 1);
+        assert_eq!(summary.reviews, 1);
+        assert_eq!(texts.len(), 1);
+        assert_eq!(texts[0].title, "Backup");
+        assert_eq!(restored.expressions.len(), 1);
+        assert_eq!(statistics.reviews_today, 1);
+    }
+
+    #[test]
+    fn rolls_back_an_invalid_portable_backup() {
+        let database = Database::in_memory().expect("database should migrate");
+        database
+            .create_text(text_input("English", "Keep", "Keep this text"))
+            .expect("text should be created");
+        let payload = database.export_backup().expect("backup should export");
+        let mut value: serde_json::Value =
+            serde_json::from_str(&payload).expect("backup JSON should decode");
+        value["texts"][0]["languageId"] = serde_json::json!(999);
+
+        let error = database
+            .restore_backup(value.to_string())
+            .expect_err("invalid backup should fail");
+        let texts = database
+            .list_texts()
+            .expect("current library should survive");
+
+        assert!(error.contains("Unable to restore a text"));
+        assert_eq!(texts.len(), 1);
+        assert_eq!(texts[0].title, "Keep");
     }
 
     #[test]

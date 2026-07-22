@@ -1,4 +1,5 @@
 import type {
+  BackupSummary,
   CreateTextInput,
   CreateExpressionInput,
   CreatedExpression,
@@ -51,6 +52,19 @@ const sampleTexts: readonly TextDetails[] = [
     content: 'Le don du sang est un geste simple et généreux.'
   }
 ];
+
+interface MockBackup {
+  readonly format: 'lwt-desktop-backup';
+  readonly version: 1;
+  readonly texts: TextDetails[];
+  readonly languageSettings: Array<[string, LanguageSettings]>;
+  readonly terms: Array<[string, TermDetails]>;
+  readonly expressions: Array<CreatedExpression & { textId: number }>;
+  readonly termIds: Array<[string, number]>;
+  readonly dueTerms: string[];
+  readonly nextTermId: number;
+  readonly reviewHistory: Array<{ key: string; rating: number }>;
+}
 
 function countUniqueTerms(content: string): number {
   return new Set(normalizedTerms(content)).size;
@@ -192,6 +206,72 @@ export class MockLibraryGateway implements LibraryGateway {
       textCount: this.texts.filter(
         ({ language }) => language.toLocaleLowerCase() === previous.name.toLocaleLowerCase()
       ).length
+    };
+  }
+
+  async exportBackup(): Promise<string> {
+    await this.listLanguages();
+    const backup: MockBackup = {
+      format: 'lwt-desktop-backup',
+      version: 1,
+      texts: this.texts,
+      languageSettings: [...this.languageSettings],
+      terms: [...this.terms],
+      expressions: this.expressions,
+      termIds: [...this.termIds],
+      dueTerms: [...this.dueTerms],
+      nextTermId: this.nextTermId,
+      reviewHistory: this.reviewHistory
+    };
+    return JSON.stringify(backup, null, 2);
+  }
+
+  async restoreBackup(payload: string): Promise<BackupSummary> {
+    if (payload.length === 0 || payload.length > 200_000_000) {
+      throw new Error('Backup must be between 1 byte and 200 MB');
+    }
+    let backup: Partial<MockBackup>;
+    try {
+      backup = JSON.parse(payload) as Partial<MockBackup>;
+    } catch {
+      throw new Error('Backup JSON is invalid');
+    }
+    if (backup.format !== 'lwt-desktop-backup') {
+      throw new Error('This is not an LWT desktop backup');
+    }
+    if (backup.version !== 1) {
+      throw new Error(`Backup version ${String(backup.version)} is not supported`);
+    }
+    if (
+      !Array.isArray(backup.texts) ||
+      !Array.isArray(backup.languageSettings) ||
+      !Array.isArray(backup.terms) ||
+      !Array.isArray(backup.expressions) ||
+      !Array.isArray(backup.termIds) ||
+      !Array.isArray(backup.dueTerms) ||
+      !Array.isArray(backup.reviewHistory) ||
+      typeof backup.nextTermId !== 'number'
+    ) {
+      throw new Error('Backup content is incomplete');
+    }
+    this.texts.splice(0, this.texts.length, ...backup.texts);
+    this.languageSettings.clear();
+    backup.languageSettings.forEach(([key, value]) => this.languageSettings.set(key, value));
+    this.terms.clear();
+    backup.terms.forEach(([key, value]) => this.terms.set(key, value));
+    this.expressions.splice(0, this.expressions.length, ...backup.expressions);
+    this.termIds.clear();
+    backup.termIds.forEach(([key, value]) => this.termIds.set(key, value));
+    this.dueTerms.clear();
+    backup.dueTerms.forEach((key) => this.dueTerms.add(key));
+    this.nextTermId = backup.nextTermId;
+    this.reviewHistory.splice(0, this.reviewHistory.length, ...backup.reviewHistory);
+    return {
+      languages: this.languageSettings.size,
+      texts: this.texts.length,
+      terms: this.terms.size,
+      expressions: this.expressions.length,
+      reviews: this.reviewHistory.length
     };
   }
 

@@ -2,10 +2,10 @@ mod database;
 mod parser;
 
 use database::{
-    CreateExpressionInput, CreateTextInput, CreatedExpression, Database, LanguageSettings,
-    LibraryText, ReadingText, RecordReviewInput, ReviewCard, ReviewOutcome, ReviewStatistics,
-    SaveTermInput, SavedTerm, SetTermStatusInput, TermDetails, TermProgress, TextDetails,
-    UpdateLanguageInput, UpdateTextInput,
+    BackupSummary, CreateExpressionInput, CreateTextInput, CreatedExpression, Database,
+    LanguageSettings, LibraryText, ReadingText, RecordReviewInput, ReviewCard, ReviewOutcome,
+    ReviewStatistics, SaveTermInput, SavedTerm, SetTermStatusInput, TermDetails, TermProgress,
+    TextDetails, UpdateLanguageInput, UpdateTextInput,
 };
 use tauri::Manager;
 
@@ -25,6 +25,19 @@ fn update_language(
     input: UpdateLanguageInput,
 ) -> Result<LanguageSettings, String> {
     database.update_language(input)
+}
+
+#[tauri::command]
+fn export_backup(database: tauri::State<'_, Database>) -> Result<String, String> {
+    database.export_backup()
+}
+
+#[tauri::command]
+fn restore_backup(
+    database: tauri::State<'_, Database>,
+    payload: String,
+) -> Result<BackupSummary, String> {
+    database.restore_backup(payload)
 }
 
 #[tauri::command]
@@ -125,6 +138,8 @@ pub fn run() {
             list_texts,
             list_languages,
             update_language,
+            export_backup,
+            restore_backup,
             create_text,
             get_text,
             update_text,

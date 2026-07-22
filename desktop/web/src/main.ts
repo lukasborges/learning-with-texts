@@ -818,6 +818,144 @@ async function renderLanguages(): Promise<void> {
   applicationRoot.replaceChildren(shell);
 }
 
+async function renderDataManagement(): Promise<void> {
+  const shell = document.createElement('main');
+  shell.className = 'shell data-shell';
+  const toolbar = document.createElement('div');
+  toolbar.className = 'reading-toolbar';
+  const back = document.createElement('button');
+  back.type = 'button';
+  back.textContent = '← Back to library';
+  back.addEventListener('click', () => void render());
+  toolbar.append(back);
+  const heading = document.createElement('h1');
+  heading.textContent = 'Backup and restore';
+  const introduction = document.createElement('p');
+  introduction.className = 'language-introduction';
+  introduction.textContent =
+    'Keep a portable JSON copy of your languages, texts, terms, expressions, and review history.';
+  const grid = document.createElement('section');
+  grid.className = 'data-grid';
+
+  const exportCard = document.createElement('article');
+  exportCard.className = 'data-card';
+  const exportHeading = document.createElement('h2');
+  exportHeading.textContent = 'Export backup';
+  const exportDescription = document.createElement('p');
+  exportDescription.textContent = 'Download a complete, versioned snapshot of the local library.';
+  const exportButton = document.createElement('button');
+  exportButton.type = 'button';
+  exportButton.textContent = 'Download backup';
+  const exportStatus = document.createElement('p');
+  exportStatus.className = 'form-status';
+  exportStatus.setAttribute('role', 'status');
+  exportButton.addEventListener('click', () => {
+    exportButton.disabled = true;
+    exportStatus.className = 'form-status';
+    exportStatus.textContent = 'Preparing backup…';
+    void gateway
+      .exportBackup()
+      .then((payload) => {
+        const blob = new Blob([payload], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const download = document.createElement('a');
+        download.href = url;
+        download.download = `lwt-backup-${new Date().toISOString().slice(0, 10)}.json`;
+        download.click();
+        window.setTimeout(() => URL.revokeObjectURL(url), 0);
+        exportStatus.textContent = 'Backup downloaded.';
+      })
+      .catch((error: unknown) => {
+        exportStatus.className = 'form-status form-status--error';
+        exportStatus.textContent = error instanceof Error ? error.message : String(error);
+      })
+      .finally(() => {
+        exportButton.disabled = false;
+      });
+  });
+  exportCard.append(exportHeading, exportDescription, exportButton, exportStatus);
+
+  const restoreCard = document.createElement('article');
+  restoreCard.className = 'data-card';
+  const restoreHeading = document.createElement('h2');
+  restoreHeading.textContent = 'Restore backup';
+  const restoreDescription = document.createElement('p');
+  restoreDescription.textContent =
+    'Select an LWT desktop JSON backup. Restoring replaces the current local library.';
+  const file = document.createElement('input');
+  file.type = 'file';
+  file.accept = 'application/json,.json';
+  const restoreButton = document.createElement('button');
+  restoreButton.type = 'button';
+  restoreButton.textContent = 'Restore selected backup';
+  restoreButton.disabled = true;
+  const restoreStatus = document.createElement('p');
+  restoreStatus.className = 'form-status';
+  restoreStatus.setAttribute('role', 'status');
+  let selectedPayload = '';
+  file.addEventListener('change', () => {
+    const selected = file.files?.[0];
+    selectedPayload = '';
+    restoreButton.disabled = true;
+    if (!selected) {
+      restoreStatus.textContent = '';
+      return;
+    }
+    restoreStatus.className = 'form-status';
+    restoreStatus.textContent = 'Reading backup…';
+    void selected
+      .text()
+      .then((payload) => {
+        selectedPayload = payload;
+        restoreButton.disabled = false;
+        restoreStatus.textContent = `${selected.name} is ready to restore.`;
+      })
+      .catch(() => {
+        restoreStatus.className = 'form-status form-status--error';
+        restoreStatus.textContent = 'The selected backup could not be read.';
+      });
+  });
+  restoreButton.addEventListener('click', () => {
+    if (
+      !selectedPayload ||
+      !window.confirm(
+        'Restore this backup? The current local library will be replaced. This cannot be undone.'
+      )
+    ) {
+      return;
+    }
+    restoreButton.disabled = true;
+    file.disabled = true;
+    restoreStatus.className = 'form-status';
+    restoreStatus.textContent = 'Validating and restoring backup…';
+    void gateway
+      .restoreBackup(selectedPayload)
+      .then((summary) => {
+        restoreStatus.textContent = `Restored ${summary.texts} texts, ${summary.terms} terms, and ${summary.reviews} reviews.`;
+        selectedPayload = '';
+        file.value = '';
+      })
+      .catch((error: unknown) => {
+        restoreStatus.className = 'form-status form-status--error';
+        restoreStatus.textContent = error instanceof Error ? error.message : String(error);
+      })
+      .finally(() => {
+        file.disabled = false;
+        restoreButton.disabled = selectedPayload === '';
+      });
+  });
+  restoreCard.append(
+    restoreHeading,
+    restoreDescription,
+    createField('Backup file', file),
+    restoreButton,
+    restoreStatus
+  );
+  grid.append(exportCard, restoreCard);
+  shell.append(toolbar, heading, introduction, grid);
+  applicationRoot.replaceChildren(shell);
+}
+
 function createTextCard(text: LibraryText): HTMLElement {
   const card = document.createElement('article');
   card.className = 'text-card';
@@ -956,9 +1094,16 @@ async function render(message = '', editingId?: number): Promise<void> {
       window.alert(error instanceof Error ? error.message : String(error));
     });
   });
+  const dataButton = document.createElement('button');
+  dataButton.type = 'button';
+  dataButton.className = 'review-start';
+  dataButton.textContent = 'Backup';
+  dataButton.addEventListener('click', () => {
+    void renderDataManagement();
+  });
   const libraryActions = document.createElement('div');
   libraryActions.className = 'library-actions';
-  libraryActions.append(languagesButton, statisticsButton, reviewButton);
+  libraryActions.append(dataButton, languagesButton, statisticsButton, reviewButton);
   const libraryHeader = document.createElement('div');
   libraryHeader.className = 'library-header';
   libraryHeader.append(libraryHeading, libraryActions);

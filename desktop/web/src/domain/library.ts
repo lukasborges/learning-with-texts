@@ -174,3 +174,11 @@ export interface UpdateLanguageInput {
   readonly removeSpaces: boolean;
   readonly rightToLeft: boolean;
 }
+
+export interface BackupSummary {
+  readonly languages: number;
+  readonly texts: number;
+  readonly terms: number;
+  readonly expressions: number;
+  readonly reviews: number;
+}

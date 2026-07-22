@@ -59,6 +59,22 @@ describe('MockLibraryGateway', () => {
     expect(reading.sentences).toHaveLength(2);
   });
 
+  it('round-trips a portable browser-preview backup', async () => {
+    const gateway = new MockLibraryGateway();
+    const payload = await gateway.exportBackup();
+    await gateway.createText({
+      language: 'Portuguese',
+      title: 'Temporary',
+      content: 'Este texto será removido.'
+    });
+
+    const summary = await gateway.restoreBackup(payload);
+    const texts = await gateway.listTexts();
+
+    expect(summary).toMatchObject({ languages: 3, texts: 3 });
+    expect(texts.some(({ title }) => title === 'Temporary')).toBe(false);
+  });
+
   it('loads, updates, and deletes a text in the preview session', async () => {
     const gateway = new MockLibraryGateway();
 

@@ -1,4 +1,5 @@
 import type {
+  BackupSummary,
   CreateTextInput,
   CreateExpressionInput,
   CreatedExpression,
@@ -38,6 +39,14 @@ export class TauriLibraryGateway implements LibraryGateway {
 
   updateLanguage(input: UpdateLanguageInput): Promise<LanguageSettings> {
     return this.invoke<LanguageSettings>('update_language', { input });
+  }
+
+  exportBackup(): Promise<string> {
+    return this.invoke<string>('export_backup');
+  }
+
+  restoreBackup(payload: string): Promise<BackupSummary> {
+    return this.invoke<BackupSummary>('restore_backup', { payload });
   }
 
   createText(input: CreateTextInput): Promise<LibraryText> {

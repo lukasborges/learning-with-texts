@@ -48,6 +48,18 @@ describe('TauriLibraryGateway', () => {
     expect(invoke).toHaveBeenNthCalledWith(2, 'update_language', { input });
   });
 
+  it('exports and restores a portable backup', async () => {
+    const payload = '{"format":"lwt-desktop-backup","version":1}';
+    const summary = { languages: 1, texts: 2, terms: 3, expressions: 1, reviews: 4 };
+    const invoke = vi.fn().mockResolvedValueOnce(payload).mockResolvedValueOnce(summary);
+    const gateway = new TauriLibraryGateway(invoke);
+
+    await expect(gateway.exportBackup()).resolves.toBe(payload);
+    await expect(gateway.restoreBackup(payload)).resolves.toEqual(summary);
+    expect(invoke).toHaveBeenNthCalledWith(1, 'export_backup');
+    expect(invoke).toHaveBeenNthCalledWith(2, 'restore_backup', { payload });
+  });
+
   it('passes a text creation request to the native command', async () => {
     const input = {
       language: 'English',
