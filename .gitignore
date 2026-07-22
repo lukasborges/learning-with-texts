@@ -1,0 +1,15 @@
+# Local agent instructions
+AGENTS.md
+
+# Desktop migration outputs
+/dist-desktop/
+/desktop/artifacts/
+
+# Local configuration and dependencies
+/connect.inc.php
+/node_modules/
+/vendor/
+
+# Editor and operating-system files
+.DS_Store
+.vscode/
