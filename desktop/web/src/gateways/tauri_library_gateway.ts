@@ -4,6 +4,9 @@ import type {
   CreatedExpression,
   LibraryText,
   ReadingText,
+  RecordReviewInput,
+  ReviewCard,
+  ReviewOutcome,
   SaveTermInput,
   SavedTerm,
   SetTermStatusInput,
@@ -60,5 +63,13 @@ export class TauriLibraryGateway implements LibraryGateway {
 
   createExpression(input: CreateExpressionInput): Promise<CreatedExpression> {
     return this.invoke<CreatedExpression>('create_expression', { input });
+  }
+
+  listReviewTerms(limit: number): Promise<readonly ReviewCard[]> {
+    return this.invoke<ReviewCard[]>('list_review_terms', { limit });
+  }
+
+  recordReview(input: RecordReviewInput): Promise<ReviewOutcome> {
+    return this.invoke<ReviewOutcome>('record_review', { input });
   }
 }

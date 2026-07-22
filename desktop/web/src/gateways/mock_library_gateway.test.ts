@@ -111,4 +111,22 @@ describe('MockLibraryGateway', () => {
     expect(created.term).toMatchObject({ normalized: 'a man', wordCount: 2 });
     expect(reopened.expressions).toHaveLength(1);
   });
+
+  it('queues and reviews a saved term', async () => {
+    const gateway = new MockLibraryGateway();
+    await gateway.saveTerm({
+      textId: 1,
+      normalized: 'dog',
+      status: 1,
+      translation: 'cachorro',
+      romanization: ''
+    });
+
+    const queue = await gateway.listReviewTerms(20);
+    const outcome = await gateway.recordReview({ termId: queue[0]?.id ?? 0, rating: 2 });
+
+    expect(queue).toHaveLength(1);
+    expect(queue[0]).toMatchObject({ displayText: 'dog', translation: 'cachorro' });
+    expect(outcome).toMatchObject({ status: 2, dueTerms: 0 });
+  });
 });

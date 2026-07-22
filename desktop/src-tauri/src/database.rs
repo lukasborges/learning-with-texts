@@ -9,13 +9,15 @@ const TEXT_PARSING_MIGRATION: &str = include_str!("../migrations/0002_text_parsi
 const TERMS_MIGRATION: &str = include_str!("../migrations/0003_terms.sql");
 const TERM_DETAILS_MIGRATION: &str = include_str!("../migrations/0004_term_details.sql");
 const EXPRESSIONS_MIGRATION: &str = include_str!("../migrations/0005_expressions.sql");
-const LATEST_SCHEMA_VERSION: i64 = 5;
-const MIGRATIONS: [(i64, &str); 5] = [
+const REVIEWS_MIGRATION: &str = include_str!("../migrations/0006_reviews.sql");
+const LATEST_SCHEMA_VERSION: i64 = 6;
+const MIGRATIONS: [(i64, &str); 6] = [
     (1, INITIAL_MIGRATION),
     (2, TEXT_PARSING_MIGRATION),
     (3, TERMS_MIGRATION),
     (4, TERM_DETAILS_MIGRATION),
-    (LATEST_SCHEMA_VERSION, EXPRESSIONS_MIGRATION),
+    (5, EXPRESSIONS_MIGRATION),
+    (LATEST_SCHEMA_VERSION, REVIEWS_MIGRATION),
 ];
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -167,6 +169,34 @@ pub struct CreatedExpression {
     pub sentence_id: i64,
     pub start_position: i64,
     pub end_position: i64,
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewCard {
+    pub id: i64,
+    pub display_text: String,
+    pub language: String,
+    pub translation: String,
+    pub romanization: String,
+    pub status: i64,
+    pub word_count: i64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecordReviewInput {
+    pub term_id: i64,
+    pub rating: i64,
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewOutcome {
+    pub term_id: i64,
+    pub status: i64,
+    pub next_review_at: String,
+    pub due_terms: i64,
 }
 
 struct ValidatedTextInput {
@@ -1088,6 +1118,139 @@ impl Database {
         })
     }
 
+    pub fn list_review_terms(&self, limit: i64) -> Result<Vec<ReviewCard>, String> {
+        if !(1..=100).contains(&limit) {
+            return Err("Review limit must be between 1 and 100".to_string());
+        }
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| "The desktop database lock is unavailable".to_string())?;
+        let mut statement = connection
+            .prepare(
+                "SELECT terms.id,
+                        terms.display_text,
+                        languages.name,
+                        terms.translation,
+                        COALESCE(terms.romanization, ''),
+                        terms.status,
+                        terms.word_count
+                 FROM terms
+                 INNER JOIN languages ON languages.id = terms.language_id
+                 WHERE terms.status BETWEEN 1 AND 5
+                   AND (terms.next_review_at IS NULL OR terms.next_review_at <= CURRENT_TIMESTAMP)
+                 ORDER BY COALESCE(terms.next_review_at, ''), terms.updated_at, terms.id
+                 LIMIT ?1",
+            )
+            .map_err(|error| format!("Unable to prepare the review queue: {error}"))?;
+        let rows = statement
+            .query_map([limit], |row| {
+                Ok(ReviewCard {
+                    id: row.get(0)?,
+                    display_text: row.get(1)?,
+                    language: row.get(2)?,
+                    translation: row.get(3)?,
+                    romanization: row.get(4)?,
+                    status: row.get(5)?,
+                    word_count: row.get(6)?,
+                })
+            })
+            .map_err(|error| format!("Unable to load the review queue: {error}"))?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| format!("Unable to decode the review queue: {error}"))
+    }
+
+    pub fn record_review(&self, input: RecordReviewInput) -> Result<ReviewOutcome, String> {
+        if input.term_id <= 0 {
+            return Err("Review term was not found".to_string());
+        }
+        if !(0..=3).contains(&input.rating) {
+            return Err("Review rating is invalid".to_string());
+        }
+
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| "The desktop database lock is unavailable".to_string())?;
+        let transaction = connection
+            .transaction()
+            .map_err(|error| format!("Unable to start the review update: {error}"))?;
+        let status_before = transaction
+            .query_row(
+                "SELECT status FROM terms WHERE id = ?1 AND status BETWEEN 1 AND 5",
+                [input.term_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()
+            .map_err(|error| format!("Unable to load the review term: {error}"))?
+            .ok_or_else(|| "Review term was not found".to_string())?;
+        let (status_after, interval) = match input.rating {
+            0 => (1, "+10 minutes".to_string()),
+            1 => (status_before.max(1), "+1 day".to_string()),
+            2 => {
+                let status = (status_before + 1).min(5);
+                let days = 1_i64 << (status - 1).min(5);
+                (status, format!("+{days} days"))
+            }
+            3 => (5, "+30 days".to_string()),
+            _ => unreachable!(),
+        };
+
+        transaction
+            .execute(
+                "UPDATE terms
+                 SET status = ?1,
+                     last_reviewed_at = CURRENT_TIMESTAMP,
+                     next_review_at = datetime('now', ?2),
+                     review_count = review_count + 1,
+                     correct_count = correct_count + CASE WHEN ?3 >= 2 THEN 1 ELSE 0 END,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ?4",
+                params![status_after, interval, input.rating, input.term_id],
+            )
+            .map_err(|error| format!("Unable to update the review term: {error}"))?;
+        let next_review_at: String = transaction
+            .query_row(
+                "SELECT next_review_at FROM terms WHERE id = ?1",
+                [input.term_id],
+                |row| row.get(0),
+            )
+            .map_err(|error| format!("Unable to load the next review date: {error}"))?;
+        transaction
+            .execute(
+                "INSERT INTO review_events
+                    (term_id, rating, status_before, status_after, next_review_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    input.term_id,
+                    input.rating,
+                    status_before,
+                    status_after,
+                    next_review_at
+                ],
+            )
+            .map_err(|error| format!("Unable to save the review event: {error}"))?;
+        let due_terms: i64 = transaction
+            .query_row(
+                "SELECT COUNT(*) FROM terms
+                 WHERE status BETWEEN 1 AND 5
+                   AND (next_review_at IS NULL OR next_review_at <= CURRENT_TIMESTAMP)",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(|error| format!("Unable to count due terms: {error}"))?;
+        transaction
+            .commit()
+            .map_err(|error| format!("Unable to commit the review: {error}"))?;
+
+        Ok(ReviewOutcome {
+            term_id: input.term_id,
+            status: status_after,
+            next_review_at,
+            due_terms,
+        })
+    }
+
     pub fn delete_text(&self, id: i64) -> Result<(), String> {
         if id <= 0 {
             return Err("Text was not found".to_string());
@@ -1587,5 +1750,70 @@ mod tests {
         assert_eq!(reopened.expressions.len(), 1);
         assert_eq!(reopened.expressions[0].start_position, 1);
         assert_eq!(reopened.expressions[0].end_position, 5);
+    }
+
+    #[test]
+    fn queues_due_terms_and_records_review_history() {
+        let database = Database::in_memory().expect("database should migrate");
+        let text = database
+            .create_text(text_input("English", "Review", "Review term."))
+            .expect("text should be created");
+        database
+            .save_term(SaveTermInput {
+                text_id: text.id,
+                normalized: "term".to_string(),
+                status: 1,
+                translation: "termo".to_string(),
+                romanization: String::new(),
+            })
+            .expect("term should save");
+
+        let queue = database
+            .list_review_terms(20)
+            .expect("review queue should load");
+        let outcome = database
+            .record_review(RecordReviewInput {
+                term_id: queue[0].id,
+                rating: 2,
+            })
+            .expect("review should save");
+
+        assert_eq!(queue.len(), 1);
+        assert_eq!(queue[0].translation, "termo");
+        assert_eq!(outcome.status, 2);
+        assert_eq!(outcome.due_terms, 0);
+        let connection = database.connection.lock().expect("database should lock");
+        let stored: (i64, i64, i64) = connection
+            .query_row(
+                "SELECT review_count, correct_count,
+                        (SELECT COUNT(*) FROM review_events)
+                 FROM terms WHERE id = ?1",
+                [queue[0].id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .expect("review counters should load");
+        assert_eq!(stored, (1, 1, 1));
+    }
+
+    #[test]
+    fn excludes_ignored_terms_from_review() {
+        let database = Database::in_memory().expect("database should migrate");
+        let text = database
+            .create_text(text_input("English", "Review", "Ignored."))
+            .expect("text should be created");
+        database
+            .save_term(SaveTermInput {
+                text_id: text.id,
+                normalized: "ignored".to_string(),
+                status: 98,
+                translation: String::new(),
+                romanization: String::new(),
+            })
+            .expect("term should save");
+
+        assert!(database
+            .list_review_terms(20)
+            .expect("review queue should load")
+            .is_empty());
     }
 }

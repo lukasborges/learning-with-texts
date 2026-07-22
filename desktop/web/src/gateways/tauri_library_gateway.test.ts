@@ -147,4 +147,17 @@ describe('TauriLibraryGateway', () => {
     await expect(gateway.createExpression(input)).resolves.toEqual(created);
     expect(invoke).toHaveBeenCalledWith('create_expression', { input });
   });
+
+  it('loads the review queue and records a rating', async () => {
+    const queue = [{ id: 3, displayText: 'term' }];
+    const input = { termId: 3, rating: 2 as const };
+    const outcome = { termId: 3, status: 2, nextReviewAt: 'tomorrow', dueTerms: 0 };
+    const invoke = vi.fn().mockResolvedValueOnce(queue).mockResolvedValueOnce(outcome);
+    const gateway = new TauriLibraryGateway(invoke);
+
+    await expect(gateway.listReviewTerms(20)).resolves.toEqual(queue);
+    await expect(gateway.recordReview(input)).resolves.toEqual(outcome);
+    expect(invoke).toHaveBeenNthCalledWith(1, 'list_review_terms', { limit: 20 });
+    expect(invoke).toHaveBeenNthCalledWith(2, 'record_review', { input });
+  });
 });

@@ -5,6 +5,9 @@ import type {
   LibraryText,
   ReadingItem,
   ReadingText,
+  RecordReviewInput,
+  ReviewCard,
+  ReviewOutcome,
   SaveTermInput,
   SavedTerm,
   SetTermStatusInput,
@@ -82,9 +85,23 @@ export class MockLibraryGateway implements LibraryGateway {
   private readonly texts = sampleTexts.map((text) => ({ ...text }));
   private readonly terms = new Map<string, TermDetails>();
   private readonly expressions: Array<CreatedExpression & { textId: number }> = [];
+  private readonly termIds = new Map<string, number>();
+  private readonly dueTerms = new Set<string>();
+  private nextTermId = 1;
 
   private termKey(language: string, normalized: string): string {
     return `${language.toLocaleLowerCase()}\u0000${normalized}`;
+  }
+
+  private trackTerm(key: string, status: TermStatus): void {
+    if (!this.termIds.has(key)) {
+      this.termIds.set(key, this.nextTermId++);
+    }
+    if (status >= 1 && status <= 5) {
+      this.dueTerms.add(key);
+    } else {
+      this.dueTerms.delete(key);
+    }
   }
 
   private withProgress(text: TextDetails): TextDetails {
@@ -205,6 +222,7 @@ export class MockLibraryGateway implements LibraryGateway {
     const key = this.termKey(text.language, input.normalized);
     if (input.status === 0) {
       this.terms.delete(key);
+      this.dueTerms.delete(key);
     } else {
       const existing = this.terms.get(key);
       const surface = createReadingItems(text.content, () => 0).find(
@@ -218,6 +236,7 @@ export class MockLibraryGateway implements LibraryGateway {
         romanization: existing?.romanization ?? '',
         wordCount: existing?.wordCount ?? 1
       });
+      this.trackTerm(key, input.status);
     }
     const progress = this.withProgress(text);
     return {
@@ -269,6 +288,7 @@ export class MockLibraryGateway implements LibraryGateway {
       romanization: input.romanization.trim()
     };
     this.terms.set(this.termKey(text.language, input.normalized), term);
+    this.trackTerm(this.termKey(text.language, input.normalized), term.status);
     const progress = this.withProgress(text);
     return {
       term,
@@ -311,6 +331,7 @@ export class MockLibraryGateway implements LibraryGateway {
         wordCount: words.length
       };
     this.terms.set(key, term);
+    this.trackTerm(key, term.status);
     const created = { term, sentenceId: sentence.id, startPosition, endPosition };
     if (
       !this.expressions.some(
@@ -324,5 +345,55 @@ export class MockLibraryGateway implements LibraryGateway {
       this.expressions.push({ ...created, textId: input.textId });
     }
     return created;
+  }
+
+  async listReviewTerms(limit: number): Promise<readonly ReviewCard[]> {
+    return [...this.dueTerms]
+      .map((key) => {
+        const term = this.terms.get(key);
+        const id = this.termIds.get(key);
+        const language = key.split('\u0000')[0] ?? '';
+        if (!term || id === undefined || term.status < 1 || term.status > 5) {
+          return undefined;
+        }
+        return {
+          id,
+          displayText: term.displayText,
+          language,
+          translation: term.translation,
+          romanization: term.romanization,
+          status: term.status,
+          wordCount: term.wordCount
+        } satisfies ReviewCard;
+      })
+      .filter((card): card is ReviewCard => card !== undefined)
+      .slice(0, limit);
+  }
+
+  async recordReview(input: RecordReviewInput): Promise<ReviewOutcome> {
+    const entry = [...this.termIds].find(([, id]) => id === input.termId);
+    if (!entry) {
+      throw new Error('Review term was not found');
+    }
+    const [key] = entry;
+    const term = this.terms.get(key);
+    if (!term) {
+      throw new Error('Review term was not found');
+    }
+    const status = (input.rating === 0
+      ? 1
+      : input.rating === 1
+        ? term.status
+        : input.rating === 2
+          ? Math.min(term.status + 1, 5)
+          : 5) as TermStatus;
+    this.terms.set(key, { ...term, status });
+    this.dueTerms.delete(key);
+    return {
+      termId: input.termId,
+      status,
+      nextReviewAt: 'Scheduled',
+      dueTerms: this.dueTerms.size
+    };
   }
 }

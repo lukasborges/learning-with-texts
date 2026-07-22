@@ -526,6 +526,103 @@ async function renderReading(textId: number): Promise<void> {
   applicationRoot.replaceChildren(shell);
 }
 
+async function renderReview(): Promise<void> {
+  const queue = await gateway.listReviewTerms(20);
+  const shell = document.createElement('main');
+  shell.className = 'shell review-shell';
+  const toolbar = document.createElement('div');
+  toolbar.className = 'reading-toolbar';
+  const back = document.createElement('button');
+  back.type = 'button';
+  back.textContent = '← Back to library';
+  back.addEventListener('click', () => void render());
+  toolbar.append(back);
+  const heading = document.createElement('h1');
+  heading.textContent = 'Review terms';
+  const session = document.createElement('section');
+  session.className = 'review-card';
+  shell.append(toolbar, heading, session);
+  applicationRoot.replaceChildren(shell);
+
+  let current = 0;
+  const showCard = (): void => {
+    const term = queue[current];
+    session.replaceChildren();
+    if (!term) {
+      const done = document.createElement('h2');
+      done.textContent = queue.length === 0 ? 'No terms are due' : 'Review complete';
+      const message = document.createElement('p');
+      message.textContent =
+        queue.length === 0
+          ? 'Save terms while reading to add them to the review queue.'
+          : `${queue.length} terms reviewed in this session.`;
+      session.append(done, message);
+      return;
+    }
+
+    const counter = document.createElement('p');
+    counter.className = 'review-counter';
+    counter.textContent = `${current + 1} of ${queue.length}`;
+    const termHeading = document.createElement('h2');
+    termHeading.textContent = term.displayText;
+    const language = document.createElement('p');
+    language.className = 'review-language';
+    language.textContent = term.language;
+    const answer = document.createElement('div');
+    answer.className = 'review-answer';
+    answer.hidden = true;
+    const translation = document.createElement('p');
+    translation.textContent = term.translation || 'No translation saved';
+    const romanization = document.createElement('p');
+    romanization.textContent = term.romanization;
+    romanization.hidden = term.romanization === '';
+    answer.append(translation, romanization);
+
+    const reveal = document.createElement('button');
+    reveal.type = 'button';
+    reveal.className = 'review-reveal';
+    reveal.textContent = 'Show answer';
+    const ratings = document.createElement('div');
+    ratings.className = 'review-ratings';
+    ratings.hidden = true;
+    for (const [label, rating] of [
+      ['Again', 0],
+      ['Hard', 1],
+      ['Good', 2],
+      ['Easy', 3]
+    ] as const) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = label;
+      button.addEventListener('click', () => {
+        ratings.querySelectorAll('button').forEach((candidate) => {
+          candidate.disabled = true;
+        });
+        void gateway
+          .recordReview({ termId: term.id, rating })
+          .then(() => {
+            current += 1;
+            showCard();
+          })
+          .catch((error: unknown) => {
+            window.alert(error instanceof Error ? error.message : String(error));
+            ratings.querySelectorAll('button').forEach((candidate) => {
+              candidate.disabled = false;
+            });
+          });
+      });
+      ratings.append(button);
+    }
+    reveal.addEventListener('click', () => {
+      answer.hidden = false;
+      ratings.hidden = false;
+      reveal.hidden = true;
+    });
+    session.append(counter, termHeading, language, answer, reveal, ratings);
+  };
+  showCard();
+}
+
 function createTextCard(text: LibraryText): HTMLElement {
   const card = document.createElement('article');
   card.className = 'text-card';
@@ -637,6 +734,18 @@ async function render(message = '', editingId?: number): Promise<void> {
   const libraryHeading = document.createElement('h2');
   libraryHeading.className = 'section-title';
   libraryHeading.textContent = 'Library';
+  const reviewButton = document.createElement('button');
+  reviewButton.type = 'button';
+  reviewButton.className = 'review-start';
+  reviewButton.textContent = 'Review terms';
+  reviewButton.addEventListener('click', () => {
+    void renderReview().catch((error: unknown) => {
+      window.alert(error instanceof Error ? error.message : String(error));
+    });
+  });
+  const libraryHeader = document.createElement('div');
+  libraryHeader.className = 'library-header';
+  libraryHeader.append(libraryHeading, reviewButton);
 
   const library = document.createElement('section');
   library.className = 'library-grid';
@@ -654,7 +763,7 @@ async function render(message = '', editingId?: number): Promise<void> {
     header,
     notice,
     createImportPanel(message, editingText),
-    libraryHeading,
+    libraryHeader,
     library
   );
   applicationRoot.replaceChildren(shell);

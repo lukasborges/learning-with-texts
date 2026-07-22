@@ -104,3 +104,27 @@ export interface CreatedExpression {
   readonly startPosition: number;
   readonly endPosition: number;
 }
+
+export interface ReviewCard {
+  readonly id: number;
+  readonly displayText: string;
+  readonly language: string;
+  readonly translation: string;
+  readonly romanization: string;
+  readonly status: TermStatus;
+  readonly wordCount: number;
+}
+
+export type ReviewRating = 0 | 1 | 2 | 3;
+
+export interface RecordReviewInput {
+  readonly termId: number;
+  readonly rating: ReviewRating;
+}
+
+export interface ReviewOutcome {
+  readonly termId: number;
+  readonly status: TermStatus;
+  readonly nextReviewAt: string;
+  readonly dueTerms: number;
+}

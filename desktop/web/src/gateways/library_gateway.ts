@@ -4,6 +4,9 @@ import type {
   CreatedExpression,
   LibraryText,
   ReadingText,
+  RecordReviewInput,
+  ReviewCard,
+  ReviewOutcome,
   SaveTermInput,
   SavedTerm,
   SetTermStatusInput,
@@ -24,4 +27,6 @@ export interface LibraryGateway {
   getTermDetails(textId: number, normalized: string): Promise<TermDetails>;
   saveTerm(input: SaveTermInput): Promise<SavedTerm>;
   createExpression(input: CreateExpressionInput): Promise<CreatedExpression>;
+  listReviewTerms(limit: number): Promise<readonly ReviewCard[]>;
+  recordReview(input: RecordReviewInput): Promise<ReviewOutcome>;
 }
