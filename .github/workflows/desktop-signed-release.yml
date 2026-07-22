@@ -165,6 +165,17 @@ jobs:
           updaterJsonPreferNsis: true
           args: ${{ matrix.build_args }} --config ${{ runner.temp }}/tauri.release.conf.json
 
+      - name: Smoke test signed Linux package installation and removal
+        if: runner.os == 'Linux'
+        run: |
+          package_path="$(find desktop/src-tauri/target/release/bundle/deb -name '*.deb' -print -quit)"
+          test -n "$package_path"
+          sudo apt-get install -y "$package_path"
+          test -x /usr/bin/lwt-desktop
+          dpkg-query --show lwt-desktop
+          sudo apt-get remove -y lwt-desktop
+          test ! -e /usr/bin/lwt-desktop
+
       - name: Remove Windows signing credentials from the runner
         if: always() && runner.os == 'Windows'
         shell: pwsh
@@ -247,6 +258,18 @@ jobs:
           useradd --create-home packagebuilder
           chown -R packagebuilder:packagebuilder "$GITHUB_WORKSPACE"
           runuser -u packagebuilder -- npm run desktop:package:arch:staged
+
+      - name: Smoke test Arch package installation and removal
+        run: |
+          package_path="$(find desktop/artifacts/arch -name '*.pkg.tar.zst' -print -quit)"
+          test -n "$package_path"
+          pacman -U --noconfirm "$package_path"
+          test -x /usr/bin/lwt-desktop
+          test -f /usr/share/applications/lwt-desktop.desktop
+          pacman -Q lwt-desktop
+          pacman -R --noconfirm lwt-desktop
+          test ! -e /usr/bin/lwt-desktop
+          test ! -e /usr/share/applications/lwt-desktop.desktop
 
       - name: Generate Arch package SBOM
         uses: anchore/sbom-action@v0

@@ -15,9 +15,11 @@ Every matrix job installs from `package-lock.json`, runs TypeScript/Rust checks
 and tests, then builds with the repository-pinned Tauri CLI. Each retained
 artifact set includes a CycloneDX JSON SBOM and `SHA256SUMS`; the latter covers
 every installer and the SBOM. Artifacts use stable names and are retained for 30
-days. Linux AppImages bundle the WebKit media framework required for local audio
-playback. The separate Linux E2E workflow continues to test first launch and
-core workflows through the native WebView.
+days. The Linux jobs install and remove the generated DEB and pacman packages in
+their clean runners before publishing them. Linux AppImages bundle the WebKit
+media framework required for local audio playback. The separate Linux E2E
+workflow continues to test first launch and core workflows through the native
+WebView.
 
 ## Local Build
 
