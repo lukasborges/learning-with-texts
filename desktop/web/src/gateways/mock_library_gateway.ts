@@ -16,6 +16,7 @@ import type {
   SavedTerm,
   SetTermStatusInput,
   SetTermTagsInput,
+  SetTextArchivedInput,
   SetTextTagsInput,
   Tag,
   TermDetails,
@@ -35,6 +36,7 @@ const sampleTexts: readonly TextDetails[] = [
     knownTerms: 138,
     totalTerms: 184,
     lastOpened: 'Today',
+    archived: false,
     content: 'A man and his dog walked along the road.'
   },
   {
@@ -44,6 +46,7 @@ const sampleTexts: readonly TextDetails[] = [
     knownTerms: 92,
     totalTerms: 241,
     lastOpened: 'Yesterday',
+    archived: false,
     content: 'Was ich von der Geschichte des armen Werthers nur habe auffinden können.'
   },
   {
@@ -53,6 +56,7 @@ const sampleTexts: readonly TextDetails[] = [
     knownTerms: 64,
     totalTerms: 117,
     lastOpened: '3 days ago',
+    archived: false,
     content: 'Le don du sang est un geste simple et généreux.'
   }
 ];
@@ -274,7 +278,11 @@ export class MockLibraryGateway implements LibraryGateway {
     ) {
       throw new Error('Backup content is incomplete');
     }
-    this.texts.splice(0, this.texts.length, ...backup.texts);
+    this.texts.splice(
+      0,
+      this.texts.length,
+      ...backup.texts.map((text) => ({ ...text, archived: Boolean(text.archived) }))
+    );
     this.languageSettings.clear();
     backup.languageSettings.forEach(([key, value]) => this.languageSettings.set(key, value));
     this.terms.clear();
@@ -295,6 +303,7 @@ export class MockLibraryGateway implements LibraryGateway {
     return {
       languages: this.languageSettings.size,
       texts: this.texts.length,
+      archivedTexts: this.texts.filter(({ archived }) => archived).length,
       terms: this.terms.size,
       tags: this.tags.length,
       expressions: this.expressions.length,
@@ -384,6 +393,7 @@ export class MockLibraryGateway implements LibraryGateway {
       knownTerms: 0,
       totalTerms: countUniqueTerms(input.content),
       lastOpened: '',
+      archived: false,
       content: input.content,
       sourceUri: input.sourceUri
     };
@@ -421,6 +431,15 @@ export class MockLibraryGateway implements LibraryGateway {
     };
     this.texts[index] = updated;
     return this.withProgress(updated);
+  }
+
+  async setTextArchived(input: SetTextArchivedInput): Promise<void> {
+    const index = this.texts.findIndex(({ id }) => id === input.id);
+    const text = this.texts[index];
+    if (!text || index < 0) {
+      throw new Error('Text was not found');
+    }
+    this.texts[index] = { ...text, archived: input.archived };
   }
 
   async deleteText(id: number): Promise<void> {

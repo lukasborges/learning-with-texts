@@ -71,6 +71,54 @@ Include:
 
 Defer WordPress integration, server installation modes, remote multi-user support, Translate Shell, automatic online translation, and cross-device synchronization. Reintroduce optional network features only after local workflows are stable.
 
+## Migration Progress
+
+Last updated: July 22, 2026. A checked current-slice item is implemented and
+tested; completed workflows also include their commit. The current slice is
+expanded so its remaining work is visible before the next commit.
+
+### Current Slice — Archived Texts
+
+- [x] Add the SQLite schema and repository operations for archived texts.
+- [x] Preserve archive state, content, metadata, and tag assignments in backups.
+- [x] Export legacy `archivedtexts` and `archtexttags` data without loss.
+- [x] Add archive/unarchive actions and active/archive library filters.
+- [x] Add Rust, TypeScript, and legacy-export tests.
+- [x] Package and clean-install smoke-test the Linux desktop application.
+
+### Completed Desktop Workflows
+
+- [x] Static Pake/Tauri shell and offline frontend (`fce9326`).
+- [x] Native Tauri runtime with SQLite migrations (`e4c9c5d`).
+- [x] Local text import, editing, deletion, and parsing (`29c4778`–`5200c9c`).
+- [x] Interactive reading and persistent term status (`ad2bde2`).
+- [x] Term translations, romanization, and compound expressions (`fc19ff6`–`7adf096`).
+- [x] Review sessions, scheduling, and statistics (`6563386`–`4d85af8`).
+- [x] Language-specific parsing settings (`8bcbb58`).
+- [x] Portable JSON backup and transactional restore (`fdece8c`).
+- [x] Legacy PHP-to-desktop JSON exporter (`a264fb4`).
+- [x] Shared text and term tags, including legacy migration (`a633ff8`).
+
+### Remaining MVP Migration
+
+- [ ] Migrate archived texts. **In progress.**
+- [ ] Recreate legacy compound-term positions where they can be identified.
+- [ ] Import/copy local audio and other media instead of retaining references only.
+- [ ] Complete parity checks for remaining language and application settings.
+- [ ] Add packaged-app end-to-end tests for first launch, reading, review, and restore.
+
+### Distribution and Hardening
+
+- [x] Produce local Linux DEB and AppImage proof-of-concept packages.
+- [ ] Build Windows, macOS, and Linux release artifacts in CI.
+- [ ] Add upgrade tests covering older desktop schema versions.
+- [ ] Add signing/notarization, checksums, SBOM, and signed updates.
+- [ ] Validate installation, backup, upgrade, and removal with nontechnical users.
+
+Update this checklist whenever a slice is committed: check its completed tasks,
+add the commit hash to the completed list, and expand the next slice. Do not mark
+a task complete until its automated checks and packaged-app smoke test pass.
+
 ## Migration Phases
 
 ### Phase 0 — Baseline and Characterization

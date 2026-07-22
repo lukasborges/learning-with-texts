@@ -61,6 +61,7 @@ describe('MockLibraryGateway', () => {
 
   it('round-trips a portable browser-preview backup', async () => {
     const gateway = new MockLibraryGateway();
+    await gateway.setTextArchived({ id: 1, archived: true });
     const payload = await gateway.exportBackup();
     await gateway.createText({
       language: 'Portuguese',
@@ -71,8 +72,9 @@ describe('MockLibraryGateway', () => {
     const summary = await gateway.restoreBackup(payload);
     const texts = await gateway.listTexts();
 
-    expect(summary).toMatchObject({ languages: 3, texts: 3 });
+    expect(summary).toMatchObject({ languages: 3, texts: 3, archivedTexts: 1 });
     expect(texts.some(({ title }) => title === 'Temporary')).toBe(false);
+    expect(texts.find(({ id }) => id === 1)?.archived).toBe(true);
   });
 
   it('creates and assigns shared tags in browser preview', async () => {
@@ -111,6 +113,19 @@ describe('MockLibraryGateway', () => {
     expect(details.content).toContain('dog');
     expect(updated).toMatchObject({ language: 'Portuguese', title: 'Título atualizado' });
     expect(texts.some(({ id }) => id === 1)).toBe(false);
+  });
+
+  it('archives and restores a text in the preview session', async () => {
+    const gateway = new MockLibraryGateway();
+
+    await gateway.setTextArchived({ id: 1, archived: true });
+    expect((await gateway.listTexts()).find(({ id }) => id === 1)?.archived).toBe(true);
+
+    await gateway.setTextArchived({ id: 1, archived: false });
+    expect((await gateway.getText(1)).archived).toBe(false);
+    await expect(gateway.setTextArchived({ id: 999, archived: true })).rejects.toThrow(
+      'Text was not found'
+    );
   });
 
   it('opens parsed reading items and shares their status', async () => {

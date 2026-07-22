@@ -28,11 +28,6 @@ function desktop_backup_timestamp($value, $fallback) {
 	return $value;
 }
 
-function desktop_backup_count($table) {
-	global $tbpref;
-	return (int) get_first_value('select count(*) as value from ' . $tbpref . $table);
-}
-
 function desktop_backup_substitutions($value, &$ignored) {
 	$valid = array();
 	foreach (explode('|', (string) $value) as $entry) {
@@ -69,6 +64,8 @@ $languages = array();
 $language_ids = array();
 $texts = array();
 $text_ids = array();
+$active_text_ids = array();
+$archived_text_ids = array();
 $terms = array();
 $term_ids = array();
 $tags = array();
@@ -127,9 +124,36 @@ foreach ($records as $record) {
 		'sourceUri' => isset($record['TxSourceURI']) ? $record['TxSourceURI'] : null,
 		'lastOpenedAt' => null,
 		'createdAt' => $exported_at,
-		'updatedAt' => $exported_at
+		'updatedAt' => $exported_at,
+		'archived' => false
 	);
 	$text_ids[(int) $record['TxID']] = true;
+	$active_text_ids[(int) $record['TxID']] = (int) $record['TxID'];
+}
+
+$next_text_id = empty($text_ids) ? 1 : max(array_keys($text_ids)) + 1;
+$records = desktop_backup_rows('select * from ' . $tbpref . 'archivedtexts order by AtID');
+foreach ($records as $record) {
+	if (! isset($language_ids[(int) $record['AtLgID']])) {
+		$orphan_texts++;
+		continue;
+	}
+	$desktop_text_id = $next_text_id++;
+	$texts[] = array(
+		'id' => $desktop_text_id,
+		'languageId' => (int) $record['AtLgID'],
+		'title' => (string) $record['AtTitle'],
+		'content' => (string) $record['AtText'],
+		'annotatedContent' => (string) $record['AtAnnotatedText'],
+		'audioUri' => isset($record['AtAudioURI']) ? $record['AtAudioURI'] : null,
+		'sourceUri' => isset($record['AtSourceURI']) ? $record['AtSourceURI'] : null,
+		'lastOpenedAt' => null,
+		'createdAt' => $exported_at,
+		'updatedAt' => $exported_at,
+		'archived' => true
+	);
+	$text_ids[$desktop_text_id] = true;
+	$archived_text_ids[(int) $record['AtID']] = $desktop_text_id;
 }
 
 $records = desktop_backup_rows(
@@ -210,7 +234,8 @@ foreach ($records as $record) {
 }
 $records = desktop_backup_rows('select * from ' . $tbpref . 'texttags order by TtTxID, TtT2ID');
 foreach ($records as $record) {
-	$text_id = (int) $record['TtTxID'];
+	$legacy_text_id = (int) $record['TtTxID'];
+	$text_id = isset($active_text_ids[$legacy_text_id]) ? $active_text_ids[$legacy_text_id] : 0;
 	$legacy_tag_id = (int) $record['TtT2ID'];
 	$tag_id = isset($legacy_text_tag_ids[$legacy_tag_id]) ? $legacy_text_tag_ids[$legacy_tag_id] : 0;
 	if (! isset($text_ids[$text_id]) || $tag_id < 1) {
@@ -219,10 +244,17 @@ foreach ($records as $record) {
 	}
 	$text_tags[] = array('textId' => $text_id, 'tagId' => $tag_id);
 }
-
-$archived_texts = desktop_backup_count('archivedtexts');
-if ($archived_texts > 0) {
-	$warnings[] = $archived_texts . ' archived text(s) were not exported because the desktop archive is not implemented yet.';
+$records = desktop_backup_rows('select * from ' . $tbpref . 'archtexttags order by AgAtID, AgT2ID');
+foreach ($records as $record) {
+	$legacy_text_id = (int) $record['AgAtID'];
+	$text_id = isset($archived_text_ids[$legacy_text_id]) ? $archived_text_ids[$legacy_text_id] : 0;
+	$legacy_tag_id = (int) $record['AgT2ID'];
+	$tag_id = isset($legacy_text_tag_ids[$legacy_tag_id]) ? $legacy_text_tag_ids[$legacy_tag_id] : 0;
+	if (! isset($text_ids[$text_id]) || $tag_id < 1) {
+		$skipped_tag_assignments++;
+		continue;
+	}
+	$text_tags[] = array('textId' => $text_id, 'tagId' => $tag_id);
 }
 if ($skipped_tag_assignments > 0) {
 	$warnings[] = $skipped_tag_assignments . ' orphaned tag assignment(s) were skipped.';

@@ -15,6 +15,7 @@ import type {
   SavedTerm,
   SetTermStatusInput,
   SetTermTagsInput,
+  SetTextArchivedInput,
   SetTextTagsInput,
   Tag,
   TermDetails,
@@ -87,6 +88,10 @@ export class TauriLibraryGateway implements LibraryGateway {
 
   updateText(input: UpdateTextInput): Promise<LibraryText> {
     return this.invoke<LibraryText>('update_text', { input });
+  }
+
+  setTextArchived(input: SetTextArchivedInput): Promise<void> {
+    return this.invoke<void>('set_text_archived', { input });
   }
 
   deleteText(id: number): Promise<void> {

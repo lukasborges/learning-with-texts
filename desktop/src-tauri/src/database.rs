@@ -12,15 +12,17 @@ const TERM_DETAILS_MIGRATION: &str = include_str!("../migrations/0004_term_detai
 const EXPRESSIONS_MIGRATION: &str = include_str!("../migrations/0005_expressions.sql");
 const REVIEWS_MIGRATION: &str = include_str!("../migrations/0006_reviews.sql");
 const TAGS_MIGRATION: &str = include_str!("../migrations/0007_tags.sql");
-const LATEST_SCHEMA_VERSION: i64 = 7;
-const MIGRATIONS: [(i64, &str); 7] = [
+const ARCHIVED_TEXTS_MIGRATION: &str = include_str!("../migrations/0008_archived_texts.sql");
+const LATEST_SCHEMA_VERSION: i64 = 8;
+const MIGRATIONS: [(i64, &str); 8] = [
     (1, INITIAL_MIGRATION),
     (2, TEXT_PARSING_MIGRATION),
     (3, TERMS_MIGRATION),
     (4, TERM_DETAILS_MIGRATION),
     (5, EXPRESSIONS_MIGRATION),
     (6, REVIEWS_MIGRATION),
-    (LATEST_SCHEMA_VERSION, TAGS_MIGRATION),
+    (7, TAGS_MIGRATION),
+    (LATEST_SCHEMA_VERSION, ARCHIVED_TEXTS_MIGRATION),
 ];
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -32,6 +34,7 @@ pub struct LibraryText {
     pub known_terms: i64,
     pub total_terms: i64,
     pub last_opened: String,
+    pub archived: bool,
 }
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -45,6 +48,7 @@ pub struct TextDetails {
     pub last_opened: String,
     pub content: String,
     pub source_uri: Option<String>,
+    pub archived: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -64,6 +68,13 @@ pub struct UpdateTextInput {
     pub title: String,
     pub content: String,
     pub source_uri: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetTextArchivedInput {
+    pub id: i64,
+    pub archived: bool,
 }
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -293,6 +304,7 @@ pub struct SetTermTagsInput {
 pub struct BackupSummary {
     pub languages: usize,
     pub texts: usize,
+    pub archived_texts: usize,
     pub terms: usize,
     pub tags: usize,
     pub expressions: usize,
@@ -355,6 +367,8 @@ struct BackupText {
     last_opened_at: Option<String>,
     created_at: String,
     updated_at: String,
+    #[serde(default)]
+    archived: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -1029,7 +1043,8 @@ impl Database {
             let mut statement = connection
                 .prepare(
                     "SELECT id, language_id, title, content, annotated_content,
-                            audio_uri, source_uri, last_opened_at, created_at, updated_at
+                            audio_uri, source_uri, last_opened_at, created_at, updated_at,
+                            archived
                      FROM texts ORDER BY id",
                 )
                 .map_err(|error| format!("Unable to prepare backup texts: {error}"))?;
@@ -1046,6 +1061,7 @@ impl Database {
                         last_opened_at: row.get(7)?,
                         created_at: row.get(8)?,
                         updated_at: row.get(9)?,
+                        archived: row.get(10)?,
                     })
                 })
                 .map_err(|error| format!("Unable to read backup texts: {error}"))?;
@@ -1229,6 +1245,7 @@ impl Database {
         let summary = BackupSummary {
             languages: backup.languages.len(),
             texts: backup.texts.len(),
+            archived_texts: backup.texts.iter().filter(|text| text.archived).count(),
             terms: backup.terms.len(),
             tags: backup.tags.len(),
             expressions: backup.expressions.len(),
@@ -1297,8 +1314,8 @@ impl Database {
                 .execute(
                     "INSERT INTO texts
                         (id, language_id, title, content, annotated_content, audio_uri,
-                         source_uri, last_opened_at, created_at, updated_at)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                         source_uri, last_opened_at, created_at, updated_at, archived)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
                     params![
                         text.id,
                         text.language_id,
@@ -1309,7 +1326,8 @@ impl Database {
                         text.source_uri,
                         text.last_opened_at,
                         text.created_at,
-                        text.updated_at
+                        text.updated_at,
+                        text.archived
                     ],
                 )
                 .map_err(|error| format!("Unable to restore a text: {error}"))?;
@@ -1446,7 +1464,7 @@ impl Database {
                         languages.right_to_left,
                         COUNT(texts.id)
                  FROM languages
-                 LEFT JOIN texts ON texts.language_id = languages.id
+                 LEFT JOIN texts ON texts.language_id = languages.id AND texts.archived = 0
                  GROUP BY languages.id
                  ORDER BY languages.name COLLATE NOCASE",
             )
@@ -1565,7 +1583,7 @@ impl Database {
                         languages.right_to_left,
                         COUNT(texts.id)
                  FROM languages
-                 LEFT JOIN texts ON texts.language_id = languages.id
+                 LEFT JOIN texts ON texts.language_id = languages.id AND texts.archived = 0
                  WHERE languages.id = ?1
                  GROUP BY languages.id",
                 [input.id],
@@ -1611,7 +1629,8 @@ impl Database {
                          FROM text_items
                          WHERE text_items.text_id = texts.id
                            AND text_items.is_word = 1) AS total_terms,
-                        COALESCE(texts.last_opened_at, '')
+                        COALESCE(texts.last_opened_at, ''),
+                        texts.archived
                  FROM texts
                  INNER JOIN languages ON languages.id = texts.language_id
                  ORDER BY texts.last_opened_at DESC, texts.title COLLATE NOCASE",
@@ -1627,6 +1646,7 @@ impl Database {
                     known_terms: row.get(3)?,
                     total_terms: row.get(4)?,
                     last_opened: row.get(5)?,
+                    archived: row.get(6)?,
                 })
             })
             .map_err(|error| format!("Unable to read the text library: {error}"))?;
@@ -1673,6 +1693,7 @@ impl Database {
             known_terms,
             total_terms,
             last_opened: String::new(),
+            archived: false,
         })
     }
 
@@ -1704,7 +1725,8 @@ impl Database {
                            AND text_items.is_word = 1) AS total_terms,
                         COALESCE(texts.last_opened_at, ''),
                         texts.content,
-                        texts.source_uri
+                        texts.source_uri,
+                        texts.archived
                  FROM texts
                  INNER JOIN languages ON languages.id = texts.language_id
                  WHERE texts.id = ?1",
@@ -1719,6 +1741,7 @@ impl Database {
                         last_opened: row.get(5)?,
                         content: row.get(6)?,
                         source_uri: row.get(7)?,
+                        archived: row.get(8)?,
                     })
                 },
             )
@@ -1744,6 +1767,13 @@ impl Database {
             .map_err(|error| format!("Unable to start text update: {error}"))?;
         let (language_id, stored_language) =
             find_or_create_language(&transaction, &input.language)?;
+        let archived = transaction
+            .query_row("SELECT archived FROM texts WHERE id = ?1", [id], |row| {
+                row.get(0)
+            })
+            .optional()
+            .map_err(|error| format!("Unable to load the text archive state: {error}"))?
+            .ok_or_else(|| "Text was not found".to_string())?;
 
         let changed = transaction
             .execute(
@@ -1781,7 +1811,37 @@ impl Database {
             known_terms,
             total_terms,
             last_opened: String::new(),
+            archived,
         })
+    }
+
+    pub fn set_text_archived(&self, input: SetTextArchivedInput) -> Result<(), String> {
+        if input.id <= 0 {
+            return Err("Text was not found".to_string());
+        }
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| "The desktop database lock is unavailable".to_string())?;
+        let changed = connection
+            .execute(
+                "UPDATE texts
+                 SET archived = ?1, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ?2 AND archived != ?1",
+                params![input.archived, input.id],
+            )
+            .map_err(|error| format!("Unable to update the text archive state: {error}"))?;
+        if changed == 0 {
+            let exists = connection
+                .query_row("SELECT 1 FROM texts WHERE id = ?1", [input.id], |_| Ok(()))
+                .optional()
+                .map_err(|error| format!("Unable to verify the text archive state: {error}"))?
+                .is_some();
+            if !exists {
+                return Err("Text was not found".to_string());
+            }
+        }
+        Ok(())
     }
 
     pub fn get_reading_text(&self, id: i64) -> Result<ReadingText, String> {
@@ -2829,6 +2889,12 @@ mod tests {
                 rating: 2,
             })
             .expect("review should record");
+        database
+            .set_text_archived(SetTextArchivedInput {
+                id: created.id,
+                archived: true,
+            })
+            .expect("text should archive");
         let payload = database.export_backup().expect("backup should export");
 
         database
@@ -2847,12 +2913,14 @@ mod tests {
 
         assert_eq!(summary.languages, 1);
         assert_eq!(summary.texts, 1);
+        assert_eq!(summary.archived_texts, 1);
         assert_eq!(summary.terms, 1);
         assert_eq!(summary.tags, 1);
         assert_eq!(summary.expressions, 1);
         assert_eq!(summary.reviews, 1);
         assert_eq!(texts.len(), 1);
         assert_eq!(texts[0].title, "Backup");
+        assert!(texts[0].archived);
         assert_eq!(restored.expressions.len(), 1);
         assert_eq!(statistics.reviews_today, 1);
         let restored_tags = database.list_tags().expect("restored tags should load");
@@ -2884,6 +2952,28 @@ mod tests {
     }
 
     #[test]
+    fn restores_pre_archive_backups_as_active_texts() {
+        let database = Database::in_memory().expect("database should migrate");
+        let created = database
+            .create_text(text_input("English", "Older backup", "Still compatible"))
+            .expect("text should be created");
+        let payload = database.export_backup().expect("backup should export");
+        let mut value: serde_json::Value =
+            serde_json::from_str(&payload).expect("backup JSON should decode");
+        value["texts"][0]
+            .as_object_mut()
+            .expect("backup text should be an object")
+            .remove("archived");
+
+        let summary = database
+            .restore_backup(value.to_string())
+            .expect("older backup should restore");
+
+        assert_eq!(summary.archived_texts, 0);
+        assert!(!database.get_text(created.id).unwrap().archived);
+    }
+
+    #[test]
     fn imports_the_legacy_php_export_contract() {
         let database = Database::in_memory().expect("database should migrate");
         let payload = include_str!("../../tests/fixtures/legacy-backup-v1.json").to_string();
@@ -2898,19 +2988,29 @@ mod tests {
         let term = database
             .get_term_details(11, "legacy".into())
             .expect("imported term should load");
+        let archived = database
+            .get_text(12)
+            .expect("imported archived text should load");
 
         assert_eq!(summary.languages, 1);
-        assert_eq!(summary.texts, 1);
+        assert_eq!(summary.texts, 2);
+        assert_eq!(summary.archived_texts, 1);
         assert_eq!(summary.terms, 1);
         assert_eq!(summary.tags, 1);
         assert_eq!(summary.warnings.len(), 1);
-        assert_eq!(texts[0].title, "Legacy text");
+        assert_eq!(texts.len(), 2);
+        assert_eq!(
+            texts.iter().find(|text| text.id == 11).unwrap().title,
+            "Legacy text"
+        );
+        assert!(archived.archived);
+        assert_eq!(archived.title, "Archived legacy text");
         assert_eq!(reading.language, "English");
         assert_eq!(term.translation, "antigo");
         assert_eq!(term.status, 2);
         let tags = database.list_tags().expect("imported tags should load");
         assert_eq!(tags[0].term_count, 1);
-        assert_eq!(tags[0].text_count, 1);
+        assert_eq!(tags[0].text_count, 2);
     }
 
     #[test]
@@ -2974,6 +3074,39 @@ mod tests {
         assert_eq!(updated.total_terms, 2);
         assert_eq!(details.language, "French");
         assert_eq!(details.content, "New content");
+    }
+
+    #[test]
+    fn archives_and_restores_a_text() {
+        let database = Database::in_memory().expect("database should migrate");
+        let created = database
+            .create_text(text_input("English", "Archive me", "Preserve this text"))
+            .expect("text should be created");
+
+        database
+            .set_text_archived(SetTextArchivedInput {
+                id: created.id,
+                archived: true,
+            })
+            .expect("text should archive");
+        assert!(database.get_text(created.id).unwrap().archived);
+
+        database
+            .set_text_archived(SetTextArchivedInput {
+                id: created.id,
+                archived: false,
+            })
+            .expect("text should restore");
+        assert!(!database.get_text(created.id).unwrap().archived);
+        assert_eq!(
+            database
+                .set_text_archived(SetTextArchivedInput {
+                    id: 999,
+                    archived: true,
+                })
+                .unwrap_err(),
+            "Text was not found"
+        );
     }
 
     #[test]

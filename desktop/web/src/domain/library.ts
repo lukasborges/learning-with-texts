@@ -5,6 +5,7 @@ export interface LibraryText {
   readonly knownTerms: number;
   readonly totalTerms: number;
   readonly lastOpened: string;
+  readonly archived: boolean;
 }
 
 export interface CreateTextInput {
@@ -16,6 +17,11 @@ export interface CreateTextInput {
 
 export interface UpdateTextInput extends CreateTextInput {
   readonly id: number;
+}
+
+export interface SetTextArchivedInput {
+  readonly id: number;
+  readonly archived: boolean;
 }
 
 export interface TextDetails extends LibraryText {
@@ -178,6 +184,7 @@ export interface UpdateLanguageInput {
 export interface BackupSummary {
   readonly languages: number;
   readonly texts: number;
+  readonly archivedTexts: number;
   readonly terms: number;
   readonly tags: number;
   readonly expressions: number;

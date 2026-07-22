@@ -35,7 +35,21 @@
       "sourceUri": "https://example.com/source",
       "lastOpenedAt": null,
       "createdAt": "2026-07-22 12:00:00",
-      "updatedAt": "2026-07-22 12:00:00"
+      "updatedAt": "2026-07-22 12:00:00",
+      "archived": false
+    },
+    {
+      "id": 12,
+      "languageId": 7,
+      "title": "Archived legacy text",
+      "content": "Preserved archive.",
+      "annotatedContent": "",
+      "audioUri": "media/archive.mp3",
+      "sourceUri": null,
+      "lastOpenedAt": null,
+      "createdAt": "2026-07-22 12:00:00",
+      "updatedAt": "2026-07-22 12:00:00",
+      "archived": true
     }
   ],
   "terms": [
@@ -72,6 +86,10 @@
   "textTags": [
     {
       "textId": 11,
+      "tagId": 1
+    },
+    {
+      "textId": 12,
       "tagId": 1
     }
   ],

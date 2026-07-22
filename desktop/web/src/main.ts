@@ -18,6 +18,7 @@ if (!app) {
 const applicationRoot = app;
 const usesNativeDatabase = import.meta.env.MODE === 'tauri';
 const gateway = createLibraryGateway();
+let showingArchivedTexts = false;
 
 function createField(labelText: string, control: HTMLElement): HTMLLabelElement {
   const label = document.createElement('label');
@@ -1068,7 +1069,7 @@ async function renderDataManagement(): Promise<void> {
       .then((summary) => {
         const warningText =
           summary.warnings.length === 0 ? '' : ` Warnings: ${summary.warnings.join(' ')}`;
-        restoreStatus.textContent = `Restored ${summary.texts} texts, ${summary.terms} terms, ${summary.tags} tags, and ${summary.reviews} reviews.${warningText}`;
+        restoreStatus.textContent = `Restored ${summary.texts} texts (${summary.archivedTexts} archived), ${summary.terms} terms, ${summary.tags} tags, and ${summary.reviews} reviews.${warningText}`;
         selectedPayload = '';
         file.value = '';
       })
@@ -1133,6 +1134,24 @@ function createTextCard(text: LibraryText): HTMLElement {
     });
   });
 
+  const archiveButton = document.createElement('button');
+  archiveButton.type = 'button';
+  archiveButton.textContent = text.archived ? 'Restore to library' : 'Archive';
+  archiveButton.addEventListener('click', () => {
+    const action = text.archived ? 'restore' : 'archive';
+    if (!window.confirm(`${action === 'archive' ? 'Archive' : 'Restore'} “${text.title}”?`)) {
+      return;
+    }
+    archiveButton.disabled = true;
+    void gateway
+      .setTextArchived({ id: text.id, archived: !text.archived })
+      .then(() => render(`“${text.title}” was ${text.archived ? 'restored' : 'archived'}.`))
+      .catch((error: unknown) => {
+        archiveButton.disabled = false;
+        window.alert(error instanceof Error ? error.message : String(error));
+      });
+  });
+
   const deleteButton = document.createElement('button');
   deleteButton.type = 'button';
   deleteButton.className = 'button-danger';
@@ -1153,7 +1172,10 @@ function createTextCard(text: LibraryText): HTMLElement {
 
   const actions = document.createElement('div');
   actions.className = 'text-card__actions';
-  actions.append(button, editButton, deleteButton);
+  if (!text.archived) {
+    actions.append(button);
+  }
+  actions.append(editButton, archiveButton, deleteButton);
 
   card.append(heading, language);
   if (text.totalTerms > 0) {
@@ -1205,7 +1227,19 @@ async function render(message = '', editingId?: number): Promise<void> {
 
   const libraryHeading = document.createElement('h2');
   libraryHeading.className = 'section-title';
-  libraryHeading.textContent = 'Library';
+  libraryHeading.textContent = showingArchivedTexts ? 'Archived texts' : 'Library';
+  const archiveViewButton = document.createElement('button');
+  archiveViewButton.type = 'button';
+  archiveViewButton.className = 'review-start';
+  archiveViewButton.textContent = showingArchivedTexts
+    ? `Library (${texts.filter(({ archived }) => !archived).length})`
+    : `Archive (${texts.filter(({ archived }) => archived).length})`;
+  archiveViewButton.addEventListener('click', () => {
+    showingArchivedTexts = !showingArchivedTexts;
+    void render().catch((error: unknown) => {
+      window.alert(error instanceof Error ? error.message : String(error));
+    });
+  });
   const reviewButton = document.createElement('button');
   reviewButton.type = 'button';
   reviewButton.className = 'review-start';
@@ -1251,21 +1285,31 @@ async function render(message = '', editingId?: number): Promise<void> {
   });
   const libraryActions = document.createElement('div');
   libraryActions.className = 'library-actions';
-  libraryActions.append(dataButton, tagsButton, languagesButton, statisticsButton, reviewButton);
+  libraryActions.append(
+    archiveViewButton,
+    dataButton,
+    tagsButton,
+    languagesButton,
+    statisticsButton,
+    reviewButton
+  );
   const libraryHeader = document.createElement('div');
   libraryHeader.className = 'library-header';
   libraryHeader.append(libraryHeading, libraryActions);
 
   const library = document.createElement('section');
   library.className = 'library-grid';
-  library.setAttribute('aria-label', 'Text library');
-  if (texts.length === 0) {
+  library.setAttribute('aria-label', showingArchivedTexts ? 'Archived texts' : 'Text library');
+  const visibleTexts = texts.filter(({ archived }) => archived === showingArchivedTexts);
+  if (visibleTexts.length === 0) {
     const emptyState = document.createElement('p');
     emptyState.className = 'empty-state';
-    emptyState.textContent = 'Your local library is empty. Use the form above to add a text.';
+    emptyState.textContent = showingArchivedTexts
+      ? 'The text archive is empty.'
+      : 'Your local library is empty. Use the form above to add a text.';
     library.append(emptyState);
   } else {
-    library.append(...texts.map(createTextCard));
+    library.append(...visibleTexts.map(createTextCard));
   }
 
   shell.append(

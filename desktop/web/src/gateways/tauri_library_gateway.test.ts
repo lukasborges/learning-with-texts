@@ -10,7 +10,8 @@ describe('TauriLibraryGateway', () => {
         language: 'English',
         knownTerms: 0,
         totalTerms: 0,
-        lastOpened: ''
+        lastOpened: '',
+        archived: false
       }
     ];
     const invoke = vi.fn().mockResolvedValue(response);
@@ -53,6 +54,7 @@ describe('TauriLibraryGateway', () => {
     const summary = {
       languages: 1,
       texts: 2,
+      archivedTexts: 1,
       terms: 3,
       tags: 2,
       expressions: 1,
@@ -123,7 +125,8 @@ describe('TauriLibraryGateway', () => {
       language: input.language,
       knownTerms: 0,
       totalTerms: 0,
-      lastOpened: ''
+      lastOpened: '',
+      archived: false
     };
     const invoke = vi.fn().mockResolvedValue(response);
     const gateway = new TauriLibraryGateway(invoke);
@@ -140,7 +143,8 @@ describe('TauriLibraryGateway', () => {
       knownTerms: 0,
       totalTerms: 0,
       lastOpened: '',
-      content: 'Once upon a time'
+      content: 'Once upon a time',
+      archived: false
     };
     const update = {
       id: details.id,
@@ -152,15 +156,20 @@ describe('TauriLibraryGateway', () => {
       .fn()
       .mockResolvedValueOnce(details)
       .mockResolvedValueOnce({ ...details, ...update })
+      .mockResolvedValueOnce(undefined)
       .mockResolvedValueOnce(undefined);
     const gateway = new TauriLibraryGateway(invoke);
 
     await expect(gateway.getText(8)).resolves.toEqual(details);
     await expect(gateway.updateText(update)).resolves.toMatchObject(update);
+    await expect(gateway.setTextArchived({ id: 8, archived: true })).resolves.toBeUndefined();
     await expect(gateway.deleteText(8)).resolves.toBeUndefined();
     expect(invoke).toHaveBeenNthCalledWith(1, 'get_text', { id: 8 });
     expect(invoke).toHaveBeenNthCalledWith(2, 'update_text', { input: update });
-    expect(invoke).toHaveBeenNthCalledWith(3, 'delete_text', { id: 8 });
+    expect(invoke).toHaveBeenNthCalledWith(3, 'set_text_archived', {
+      input: { id: 8, archived: true }
+    });
+    expect(invoke).toHaveBeenNthCalledWith(4, 'delete_text', { id: 8 });
   });
 
   it('maps reading and term status commands to the native runtime', async () => {

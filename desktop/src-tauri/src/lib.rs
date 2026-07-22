@@ -5,8 +5,8 @@ use database::{
     BackupSummary, CreateExpressionInput, CreateTagInput, CreateTextInput, CreatedExpression,
     Database, LanguageSettings, LibraryText, ReadingText, RecordReviewInput, ReviewCard,
     ReviewOutcome, ReviewStatistics, SaveTermInput, SavedTerm, SetTermStatusInput,
-    SetTermTagsInput, SetTextTagsInput, Tag, TermDetails, TermProgress, TextDetails,
-    UpdateLanguageInput, UpdateTextInput,
+    SetTermTagsInput, SetTextArchivedInput, SetTextTagsInput, Tag, TermDetails, TermProgress,
+    TextDetails, UpdateLanguageInput, UpdateTextInput,
 };
 use tauri::Manager;
 
@@ -106,6 +106,14 @@ fn update_text(
 }
 
 #[tauri::command]
+fn set_text_archived(
+    database: tauri::State<'_, Database>,
+    input: SetTextArchivedInput,
+) -> Result<(), String> {
+    database.set_text_archived(input)
+}
+
+#[tauri::command]
 fn delete_text(database: tauri::State<'_, Database>, id: i64) -> Result<(), String> {
     database.delete_text(id)
 }
@@ -193,6 +201,7 @@ pub fn run() {
             create_text,
             get_text,
             update_text,
+            set_text_archived,
             delete_text,
             get_reading_text,
             set_term_status,
