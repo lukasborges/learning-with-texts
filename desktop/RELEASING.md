@@ -49,6 +49,10 @@ workflow creates a draft GitHub release with signed updater bundles and a
 user-visible update channel. Provisioning, approval, verification, rotation,
 and recovery procedures are in [SIGNING.md](SIGNING.md).
 
+Before publishing a production release, complete the independent
+[nontechnical user acceptance test](USER_ACCEPTANCE.md) and retain its test
+records with the release evidence.
+
 The Arch package is built natively from source and installed with
 `sudo pacman -U lwt-desktop-<version>-1-x86_64.pkg.tar.zst`. It intentionally
 uses pacman/AUR upgrades instead of Tauri's AppImage updater. Its PKGBUILD input
