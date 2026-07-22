@@ -7,6 +7,7 @@ import type {
   RecordReviewInput,
   ReviewCard,
   ReviewOutcome,
+  ReviewStatistics,
   SaveTermInput,
   SavedTerm,
   SetTermStatusInput,
@@ -29,4 +30,5 @@ export interface LibraryGateway {
   createExpression(input: CreateExpressionInput): Promise<CreatedExpression>;
   listReviewTerms(limit: number): Promise<readonly ReviewCard[]>;
   recordReview(input: RecordReviewInput): Promise<ReviewOutcome>;
+  reviewStatistics(): Promise<ReviewStatistics>;
 }

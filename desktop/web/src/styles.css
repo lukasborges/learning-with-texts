@@ -86,6 +86,12 @@ textarea {
   margin: 0;
 }
 
+.library-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
 .review-start,
 .review-reveal,
 .review-ratings button {
@@ -153,6 +159,77 @@ textarea {
 
 .review-ratings button:nth-child(4) {
   background: #386f9b;
+}
+
+.statistics-shell > h1 {
+  margin: 1.5rem 0;
+}
+
+.statistics-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 1rem;
+}
+
+.statistics-cards article {
+  display: grid;
+  gap: 0.25rem;
+  padding: 1rem;
+  border: 1px solid #d9e1e8;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(30 55 80 / 8%);
+}
+
+.statistics-cards strong {
+  color: #174d6c;
+  font-size: 1.8rem;
+}
+
+.statistics-cards span,
+.score-comparison p:last-child {
+  color: #637083;
+}
+
+.score-comparison {
+  margin: 1.5rem 0;
+  padding: 1rem 1.25rem;
+  border: 1px solid #9cc6df;
+  border-radius: 12px;
+  background: #e2f4ff;
+}
+
+.score-comparison h2,
+.score-comparison p {
+  margin: 0;
+}
+
+.score-comparison p {
+  margin-top: 0.5rem;
+}
+
+.statistics-table {
+  width: 100%;
+  border-collapse: collapse;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(30 55 80 / 8%);
+}
+
+.statistics-table th,
+.statistics-table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid #d9e1e8;
+  text-align: right;
+}
+
+.statistics-table th:first-child,
+.statistics-table td:first-child {
+  text-align: left;
+}
+
+.statistics-table tbody tr:last-child td {
+  border-bottom: 0;
 }
 
 .import-panel {
@@ -614,6 +691,31 @@ textarea {
     background: #263846;
   }
 
+  .statistics-cards article,
+  .statistics-table {
+    border-color: #344352;
+    background: #1e2a35;
+  }
+
+  .statistics-cards strong {
+    color: #bde6fa;
+  }
+
+  .statistics-cards span,
+  .score-comparison p:last-child {
+    color: #a8b7c5;
+  }
+
+  .score-comparison {
+    border-color: #275d77;
+    background: #153748;
+  }
+
+  .statistics-table th,
+  .statistics-table td {
+    border-color: #344352;
+  }
+
   .term-editor__normalized {
     color: #a8b7c5;
   }
@@ -686,5 +788,19 @@ textarea {
 
   .review-ratings {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .library-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .statistics-table {
+    font-size: 0.8rem;
+  }
+
+  .statistics-table th,
+  .statistics-table td {
+    padding: 0.5rem 0.35rem;
   }
 }

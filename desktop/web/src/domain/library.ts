@@ -128,3 +128,27 @@ export interface ReviewOutcome {
   readonly nextReviewAt: string;
   readonly dueTerms: number;
 }
+
+export interface LanguageStatistics {
+  readonly language: string;
+  readonly totalTerms: number;
+  readonly learningTerms: number;
+  readonly knownTerms: number;
+  readonly reviews: number;
+  readonly correctReviews: number;
+}
+
+export interface ReviewStatistics {
+  readonly totalTerms: number;
+  readonly learningTerms: number;
+  readonly knownTerms: number;
+  readonly ignoredTerms: number;
+  readonly dueTerms: number;
+  readonly reviewsToday: number;
+  readonly correctToday: number;
+  readonly reviewsLast7Days: number;
+  readonly correctLast7Days: number;
+  readonly legacyDueToday: number;
+  readonly legacyDueTomorrow: number;
+  readonly languages: readonly LanguageStatistics[];
+}

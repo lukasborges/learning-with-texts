@@ -129,4 +129,35 @@ describe('MockLibraryGateway', () => {
     expect(queue[0]).toMatchObject({ displayText: 'dog', translation: 'cachorro' });
     expect(outcome).toMatchObject({ status: 2, dueTerms: 0 });
   });
+
+  it('summarizes learning and review progress', async () => {
+    const gateway = new MockLibraryGateway();
+    await gateway.saveTerm({
+      textId: 1,
+      normalized: 'dog',
+      status: 1,
+      translation: 'cachorro',
+      romanization: ''
+    });
+
+    const before = await gateway.reviewStatistics();
+    const queue = await gateway.listReviewTerms(20);
+    await gateway.recordReview({ termId: queue[0]?.id ?? 0, rating: 2 });
+    const after = await gateway.reviewStatistics();
+
+    expect(before).toMatchObject({ totalTerms: 1, learningTerms: 1, dueTerms: 1 });
+    expect(after).toMatchObject({
+      totalTerms: 1,
+      learningTerms: 1,
+      dueTerms: 0,
+      reviewsToday: 1,
+      correctToday: 1
+    });
+    expect(after.languages[0]).toMatchObject({
+      language: 'english',
+      totalTerms: 1,
+      reviews: 1,
+      correctReviews: 1
+    });
+  });
 });

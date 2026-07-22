@@ -199,6 +199,45 @@ pub struct ReviewOutcome {
     pub due_terms: i64,
 }
 
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageStatistics {
+    pub language: String,
+    pub total_terms: i64,
+    pub learning_terms: i64,
+    pub known_terms: i64,
+    pub reviews: i64,
+    pub correct_reviews: i64,
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewStatistics {
+    pub total_terms: i64,
+    pub learning_terms: i64,
+    pub known_terms: i64,
+    pub ignored_terms: i64,
+    pub due_terms: i64,
+    pub reviews_today: i64,
+    pub correct_today: i64,
+    pub reviews_last_7_days: i64,
+    pub correct_last_7_days: i64,
+    pub legacy_due_today: i64,
+    pub legacy_due_tomorrow: i64,
+    pub languages: Vec<LanguageStatistics>,
+}
+
+fn legacy_score(status: i64, days_since_change: i64, tomorrow: bool) -> f64 {
+    if status > 5 {
+        return 100.0;
+    }
+    let offset = if tomorrow { 2.0 } else { 1.0 };
+    (((2.4_f64.powi(status as i32) + status as f64 - days_since_change as f64 - offset)
+        / status as f64)
+        - 2.4)
+        / 0.143_252_48
+}
+
 struct ValidatedTextInput {
     language: String,
     title: String,
@@ -1251,6 +1290,119 @@ impl Database {
         })
     }
 
+    pub fn review_statistics(&self) -> Result<ReviewStatistics, String> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| "The desktop database lock is unavailable".to_string())?;
+        let totals: (i64, i64, i64, i64, i64, i64, i64, i64, i64) = connection
+            .query_row(
+                "SELECT
+                    (SELECT COUNT(*) FROM terms WHERE status IN (1,2,3,4,5,99)),
+                    (SELECT COUNT(*) FROM terms WHERE status BETWEEN 1 AND 4),
+                    (SELECT COUNT(*) FROM terms WHERE status IN (5,99)),
+                    (SELECT COUNT(*) FROM terms WHERE status = 98),
+                    (SELECT COUNT(*) FROM terms WHERE status BETWEEN 1 AND 5
+                        AND (next_review_at IS NULL OR next_review_at <= CURRENT_TIMESTAMP)),
+                    (SELECT COUNT(*) FROM review_events WHERE date(reviewed_at) = date('now')),
+                    (SELECT COUNT(*) FROM review_events
+                        WHERE date(reviewed_at) = date('now') AND rating >= 2),
+                    (SELECT COUNT(*) FROM review_events
+                        WHERE reviewed_at >= datetime('now', '-6 days')),
+                    (SELECT COUNT(*) FROM review_events
+                        WHERE reviewed_at >= datetime('now', '-6 days') AND rating >= 2)",
+                [],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                        row.get(6)?,
+                        row.get(7)?,
+                        row.get(8)?,
+                    ))
+                },
+            )
+            .map_err(|error| format!("Unable to calculate review totals: {error}"))?;
+
+        let score_rows = {
+            let mut statement = connection
+                .prepare(
+                    "SELECT status,
+                            MAX(0, CAST(julianday('now') - julianday(
+                                COALESCE(last_reviewed_at, updated_at)) AS INTEGER))
+                     FROM terms WHERE status BETWEEN 1 AND 5",
+                )
+                .map_err(|error| format!("Unable to prepare legacy scores: {error}"))?;
+            let rows = statement
+                .query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)))
+                .map_err(|error| format!("Unable to load legacy scores: {error}"))?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|error| format!("Unable to decode legacy scores: {error}"))?
+        };
+        let legacy_due_today = score_rows
+            .iter()
+            .filter(|(status, days)| legacy_score(*status, *days, false) < 0.0)
+            .count() as i64;
+        let legacy_due_tomorrow = score_rows
+            .iter()
+            .filter(|(status, days)| legacy_score(*status, *days, true) < 0.0)
+            .count() as i64;
+
+        let languages = {
+            let mut statement = connection
+                .prepare(
+                    "SELECT languages.name,
+                            COUNT(DISTINCT CASE WHEN terms.status IN (1,2,3,4,5,99)
+                                THEN terms.id END),
+                            COUNT(DISTINCT CASE WHEN terms.status BETWEEN 1 AND 4
+                                THEN terms.id END),
+                            COUNT(DISTINCT CASE WHEN terms.status IN (5,99)
+                                THEN terms.id END),
+                            COUNT(review_events.id),
+                            SUM(CASE WHEN review_events.rating >= 2 THEN 1 ELSE 0 END)
+                     FROM languages
+                     LEFT JOIN terms ON terms.language_id = languages.id
+                     LEFT JOIN review_events ON review_events.term_id = terms.id
+                     GROUP BY languages.id
+                     ORDER BY languages.name COLLATE NOCASE",
+                )
+                .map_err(|error| format!("Unable to prepare language statistics: {error}"))?;
+            let rows = statement
+                .query_map([], |row| {
+                    Ok(LanguageStatistics {
+                        language: row.get(0)?,
+                        total_terms: row.get(1)?,
+                        learning_terms: row.get(2)?,
+                        known_terms: row.get(3)?,
+                        reviews: row.get(4)?,
+                        correct_reviews: row.get(5)?,
+                    })
+                })
+                .map_err(|error| format!("Unable to load language statistics: {error}"))?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|error| format!("Unable to decode language statistics: {error}"))?
+        };
+
+        Ok(ReviewStatistics {
+            total_terms: totals.0,
+            learning_terms: totals.1,
+            known_terms: totals.2,
+            ignored_terms: totals.3,
+            due_terms: totals.4,
+            reviews_today: totals.5,
+            correct_today: totals.6,
+            reviews_last_7_days: totals.7,
+            correct_last_7_days: totals.8,
+            legacy_due_today,
+            legacy_due_tomorrow,
+            languages,
+        })
+    }
+
     pub fn delete_text(&self, id: i64) -> Result<(), String> {
         if id <= 0 {
             return Err("Text was not found".to_string());
@@ -1793,6 +1945,15 @@ mod tests {
             )
             .expect("review counters should load");
         assert_eq!(stored, (1, 1, 1));
+        drop(connection);
+        let statistics = database
+            .review_statistics()
+            .expect("review statistics should load");
+        assert_eq!(statistics.total_terms, 1);
+        assert_eq!(statistics.learning_terms, 1);
+        assert_eq!(statistics.reviews_today, 1);
+        assert_eq!(statistics.correct_today, 1);
+        assert_eq!(statistics.languages[0].reviews, 1);
     }
 
     #[test]
@@ -1815,5 +1976,15 @@ mod tests {
             .list_review_terms(20)
             .expect("review queue should load")
             .is_empty());
+    }
+
+    #[test]
+    fn matches_legacy_score_due_thresholds() {
+        assert_eq!(legacy_score(1, 0, false).round(), 0.0);
+        assert!(legacy_score(1, 1, false) < 0.0);
+        assert!(legacy_score(2, 1, false) > 0.0);
+        assert!(legacy_score(2, 2, false) < 0.0);
+        assert!(legacy_score(5, 0, false) > 0.0);
+        assert_eq!(legacy_score(99, 10_000, false), 100.0);
     }
 }

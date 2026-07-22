@@ -623,6 +623,85 @@ async function renderReview(): Promise<void> {
   showCard();
 }
 
+async function renderStatistics(): Promise<void> {
+  const statistics = await gateway.reviewStatistics();
+  const shell = document.createElement('main');
+  shell.className = 'shell statistics-shell';
+  const toolbar = document.createElement('div');
+  toolbar.className = 'reading-toolbar';
+  const back = document.createElement('button');
+  back.type = 'button';
+  back.textContent = '← Back to library';
+  back.addEventListener('click', () => void render());
+  toolbar.append(back);
+  const heading = document.createElement('h1');
+  heading.textContent = 'Learning statistics';
+
+  const cards = document.createElement('section');
+  cards.className = 'statistics-cards';
+  for (const [label, value] of [
+    ['Saved terms', statistics.totalTerms],
+    ['Learning', statistics.learningTerms],
+    ['Known', statistics.knownTerms],
+    ['Due now', statistics.dueTerms],
+    ['Reviews today', statistics.reviewsToday],
+    [
+      'Accuracy today',
+      statistics.reviewsToday === 0
+        ? '—'
+        : `${Math.round((statistics.correctToday / statistics.reviewsToday) * 100)}%`
+    ]
+  ] as const) {
+    const card = document.createElement('article');
+    const valueElement = document.createElement('strong');
+    valueElement.textContent = String(value);
+    const labelElement = document.createElement('span');
+    labelElement.textContent = label;
+    card.append(valueElement, labelElement);
+    cards.append(card);
+  }
+
+  const comparison = document.createElement('section');
+  comparison.className = 'score-comparison';
+  const comparisonHeading = document.createElement('h2');
+  comparisonHeading.textContent = 'Scheduler comparison';
+  const comparisonText = document.createElement('p');
+  comparisonText.textContent = `Current queue: ${statistics.dueTerms} due · Legacy PHP estimate: ${statistics.legacyDueToday} today and ${statistics.legacyDueTomorrow} tomorrow.`;
+  const comparisonNote = document.createElement('p');
+  comparisonNote.textContent =
+    'The legacy estimate uses the original 2.4^status score formula. It is shown for parity analysis and does not change the current schedule.';
+  comparison.append(comparisonHeading, comparisonText, comparisonNote);
+
+  const table = document.createElement('table');
+  table.className = 'statistics-table';
+  const header = document.createElement('thead');
+  header.innerHTML =
+    '<tr><th>Language</th><th>Terms</th><th>Learning</th><th>Known</th><th>Reviews</th><th>Accuracy</th></tr>';
+  const body = document.createElement('tbody');
+  for (const language of statistics.languages) {
+    const row = document.createElement('tr');
+    const values = [
+      language.language,
+      language.totalTerms,
+      language.learningTerms,
+      language.knownTerms,
+      language.reviews,
+      language.reviews === 0
+        ? '—'
+        : `${Math.round((language.correctReviews / language.reviews) * 100)}%`
+    ];
+    for (const value of values) {
+      const cell = document.createElement('td');
+      cell.textContent = String(value);
+      row.append(cell);
+    }
+    body.append(row);
+  }
+  table.append(header, body);
+  shell.append(toolbar, heading, cards, comparison, table);
+  applicationRoot.replaceChildren(shell);
+}
+
 function createTextCard(text: LibraryText): HTMLElement {
   const card = document.createElement('article');
   card.className = 'text-card';
@@ -743,9 +822,21 @@ async function render(message = '', editingId?: number): Promise<void> {
       window.alert(error instanceof Error ? error.message : String(error));
     });
   });
+  const statisticsButton = document.createElement('button');
+  statisticsButton.type = 'button';
+  statisticsButton.className = 'review-start';
+  statisticsButton.textContent = 'Statistics';
+  statisticsButton.addEventListener('click', () => {
+    void renderStatistics().catch((error: unknown) => {
+      window.alert(error instanceof Error ? error.message : String(error));
+    });
+  });
+  const libraryActions = document.createElement('div');
+  libraryActions.className = 'library-actions';
+  libraryActions.append(statisticsButton, reviewButton);
   const libraryHeader = document.createElement('div');
   libraryHeader.className = 'library-header';
-  libraryHeader.append(libraryHeading, reviewButton);
+  libraryHeader.append(libraryHeading, libraryActions);
 
   const library = document.createElement('section');
   library.className = 'library-grid';

@@ -3,8 +3,8 @@ mod parser;
 
 use database::{
     CreateExpressionInput, CreateTextInput, CreatedExpression, Database, LibraryText, ReadingText,
-    RecordReviewInput, ReviewCard, ReviewOutcome, SaveTermInput, SavedTerm, SetTermStatusInput,
-    TermDetails, TermProgress, TextDetails, UpdateTextInput,
+    RecordReviewInput, ReviewCard, ReviewOutcome, ReviewStatistics, SaveTermInput, SavedTerm,
+    SetTermStatusInput, TermDetails, TermProgress, TextDetails, UpdateTextInput,
 };
 use tauri::Manager;
 
@@ -93,6 +93,11 @@ fn record_review(
     database.record_review(input)
 }
 
+#[tauri::command]
+fn review_statistics(database: tauri::State<'_, Database>) -> Result<ReviewStatistics, String> {
+    database.review_statistics()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -114,7 +119,8 @@ pub fn run() {
             save_term,
             create_expression,
             list_review_terms,
-            record_review
+            record_review,
+            review_statistics
         ])
         .run(tauri::generate_context!())
         .expect("error while running the LWT desktop application");

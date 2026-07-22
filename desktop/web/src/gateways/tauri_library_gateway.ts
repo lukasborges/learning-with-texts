@@ -7,6 +7,7 @@ import type {
   RecordReviewInput,
   ReviewCard,
   ReviewOutcome,
+  ReviewStatistics,
   SaveTermInput,
   SavedTerm,
   SetTermStatusInput,
@@ -71,5 +72,9 @@ export class TauriLibraryGateway implements LibraryGateway {
 
   recordReview(input: RecordReviewInput): Promise<ReviewOutcome> {
     return this.invoke<ReviewOutcome>('record_review', { input });
+  }
+
+  reviewStatistics(): Promise<ReviewStatistics> {
+    return this.invoke<ReviewStatistics>('review_statistics');
   }
 }

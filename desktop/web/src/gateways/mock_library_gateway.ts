@@ -8,6 +8,7 @@ import type {
   RecordReviewInput,
   ReviewCard,
   ReviewOutcome,
+  ReviewStatistics,
   SaveTermInput,
   SavedTerm,
   SetTermStatusInput,
@@ -88,6 +89,7 @@ export class MockLibraryGateway implements LibraryGateway {
   private readonly termIds = new Map<string, number>();
   private readonly dueTerms = new Set<string>();
   private nextTermId = 1;
+  private readonly reviewHistory: Array<{ key: string; rating: number }> = [];
 
   private termKey(language: string, normalized: string): string {
     return `${language.toLocaleLowerCase()}\u0000${normalized}`;
@@ -389,11 +391,75 @@ export class MockLibraryGateway implements LibraryGateway {
           : 5) as TermStatus;
     this.terms.set(key, { ...term, status });
     this.dueTerms.delete(key);
+    this.reviewHistory.push({ key, rating: input.rating });
     return {
       termId: input.termId,
       status,
       nextReviewAt: 'Scheduled',
       dueTerms: this.dueTerms.size
+    };
+  }
+
+  async reviewStatistics(): Promise<ReviewStatistics> {
+    const active = [...this.terms.entries()].filter(([, term]) =>
+      [1, 2, 3, 4, 5, 99].includes(term.status)
+    );
+    const languageRows = new Map<
+      string,
+      { total: number; learning: number; known: number; reviews: number; correct: number }
+    >();
+    for (const [key, term] of active) {
+      const language = key.split('\u0000')[0] ?? '';
+      const row = languageRows.get(language) ?? {
+        total: 0,
+        learning: 0,
+        known: 0,
+        reviews: 0,
+        correct: 0
+      };
+      row.total += 1;
+      row.learning += term.status >= 1 && term.status <= 4 ? 1 : 0;
+      row.known += term.status === 5 || term.status === 99 ? 1 : 0;
+      languageRows.set(language, row);
+    }
+    for (const review of this.reviewHistory) {
+      const language = review.key.split('\u0000')[0] ?? '';
+      const row = languageRows.get(language) ?? {
+        total: 0,
+        learning: 0,
+        known: 0,
+        reviews: 0,
+        correct: 0
+      };
+      row.reviews += 1;
+      row.correct += review.rating >= 2 ? 1 : 0;
+      languageRows.set(language, row);
+    }
+    const correct = this.reviewHistory.filter(({ rating }) => rating >= 2).length;
+    const due = [...this.dueTerms].filter((key) => {
+      const status = this.terms.get(key)?.status ?? 0;
+      return status >= 1 && status <= 5;
+    }).length;
+    return {
+      totalTerms: active.length,
+      learningTerms: active.filter(([, term]) => term.status <= 4).length,
+      knownTerms: active.filter(([, term]) => term.status === 5 || term.status === 99).length,
+      ignoredTerms: [...this.terms.values()].filter(({ status }) => status === 98).length,
+      dueTerms: due,
+      reviewsToday: this.reviewHistory.length,
+      correctToday: correct,
+      reviewsLast7Days: this.reviewHistory.length,
+      correctLast7Days: correct,
+      legacyDueToday: due,
+      legacyDueTomorrow: due,
+      languages: [...languageRows.entries()].map(([language, row]) => ({
+        language,
+        totalTerms: row.total,
+        learningTerms: row.learning,
+        knownTerms: row.known,
+        reviews: row.reviews,
+        correctReviews: row.correct
+      }))
     };
   }
 }

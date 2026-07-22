@@ -160,4 +160,26 @@ describe('TauriLibraryGateway', () => {
     expect(invoke).toHaveBeenNthCalledWith(1, 'list_review_terms', { limit: 20 });
     expect(invoke).toHaveBeenNthCalledWith(2, 'record_review', { input });
   });
+
+  it('loads review statistics from the native runtime', async () => {
+    const statistics = {
+      totalTerms: 12,
+      learningTerms: 8,
+      knownTerms: 4,
+      ignoredTerms: 1,
+      dueTerms: 3,
+      reviewsToday: 5,
+      correctToday: 4,
+      reviewsLast7Days: 18,
+      correctLast7Days: 14,
+      legacyDueToday: 2,
+      legacyDueTomorrow: 4,
+      languages: []
+    };
+    const invoke = vi.fn().mockResolvedValue(statistics);
+    const gateway = new TauriLibraryGateway(invoke);
+
+    await expect(gateway.reviewStatistics()).resolves.toEqual(statistics);
+    expect(invoke).toHaveBeenCalledWith('review_statistics');
+  });
 });
