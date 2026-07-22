@@ -68,6 +68,22 @@
       "nextReviewAt": null,
       "reviewCount": 0,
       "correctCount": 0
+    },
+    {
+      "id": 14,
+      "languageId": 7,
+      "displayText": "Legacy text",
+      "normalized": "legacy text",
+      "status": 3,
+      "createdAt": "2026-07-20 10:00:00",
+      "updatedAt": "2026-07-21 10:00:00",
+      "translation": "texto antigo",
+      "romanization": null,
+      "wordCount": 2,
+      "lastReviewedAt": "2026-07-21 10:00:00",
+      "nextReviewAt": null,
+      "reviewCount": 0,
+      "correctCount": 0
     }
   ],
   "tags": [
@@ -93,6 +109,14 @@
       "tagId": 1
     }
   ],
-  "expressions": [],
+  "expressions": [
+    {
+      "id": 1,
+      "termId": 14,
+      "textId": 11,
+      "sentencePosition": 1,
+      "startWord": 1
+    }
+  ],
   "reviews": []
 }

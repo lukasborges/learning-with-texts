@@ -77,13 +77,13 @@ Last updated: July 22, 2026. A checked current-slice item is implemented and
 tested; completed workflows also include their commit. The current slice is
 expanded so its remaining work is visible before the next commit.
 
-### Current Slice — Archived Texts
+### Current Slice — Legacy Compound Positions
 
-- [x] Add the SQLite schema and repository operations for archived texts.
-- [x] Preserve archive state, content, metadata, and tag assignments in backups.
-- [x] Export legacy `archivedtexts` and `archtexttags` data without loss.
-- [x] Add archive/unarchive actions and active/archive library filters.
-- [x] Add Rust, TypeScript, and legacy-export tests.
+- [x] Find saved compound occurrences in legacy `textitems` data.
+- [x] Export sentence and first-word ordinals without relying on global item offsets.
+- [x] Resolve and verify parsed desktop positions during transactional restore.
+- [x] Warn and skip unmatched occurrences instead of creating incorrect links.
+- [x] Add legacy contract and fallback tests.
 - [x] Package and clean-install smoke-test the Linux desktop application.
 
 ### Completed Desktop Workflows
@@ -98,11 +98,12 @@ expanded so its remaining work is visible before the next commit.
 - [x] Portable JSON backup and transactional restore (`fdece8c`).
 - [x] Legacy PHP-to-desktop JSON exporter (`a264fb4`).
 - [x] Shared text and term tags, including legacy migration (`a633ff8`).
+- [x] Archived texts, archive filters, and legacy archive migration (`bea63bc`).
 
 ### Remaining MVP Migration
 
-- [ ] Migrate archived texts. **In progress.**
-- [ ] Recreate legacy compound-term positions where they can be identified.
+- [x] Migrate archived texts (`bea63bc`).
+- [ ] Recreate legacy compound-term positions where they can be identified. **In progress.**
 - [ ] Import/copy local audio and other media instead of retaining references only.
 - [ ] Complete parity checks for remaining language and application settings.
 - [ ] Add packaged-app end-to-end tests for first launch, reading, review, and restore.
@@ -175,6 +176,17 @@ For each workflow, record current behavior, expose Rust commands, connect the Ty
 - Support re-import safely or clearly reject duplicate imports.
 
 **Exit criterion:** representative and real user backups migrate without silent data loss.
+
+### Phase 4.5 — Legacy Runtime Removal
+
+- [ ] Freeze the PHP application as a migration-only release.
+- [ ] Publish and document a stable PHP-to-desktop export path for existing users.
+- [ ] Preserve the legacy application and exporter in a tagged maintenance branch.
+- [ ] Confirm every MVP workflow has desktop parity and no longer invokes PHP or MySQL.
+- [ ] Remove PHP pages, MySQL connection templates, and obsolete browser dependencies from the desktop branch.
+- [ ] Verify clean builds, tests, installers, backup/restore, and upgrades without PHP or MySQL files.
+
+**Exit criterion:** the maintained desktop branch contains no PHP/MySQL runtime dependency, while the tagged legacy branch remains available for data migration and historical support.
 
 ### Phase 5 — Hardening and Distribution
 

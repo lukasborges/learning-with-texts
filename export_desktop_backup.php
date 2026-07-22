@@ -74,7 +74,8 @@ $legacy_term_tag_ids = array();
 $legacy_text_tag_ids = array();
 $term_tags = array();
 $text_tags = array();
-$compound_terms = 0;
+$expressions = array();
+$skipped_compound_occurrences = 0;
 $long_compound_terms = 0;
 $normalized_statuses = 0;
 $orphan_texts = 0;
@@ -170,7 +171,6 @@ foreach ($records as $record) {
 	$word_count = (int) $record['DesktopWordCount'];
 	if ($word_count < 1) $word_count = is_array($parts) ? count($parts) : 1;
 	if ($word_count < 1) $word_count = 1;
-	if ($word_count > 1) $compound_terms++;
 	if ($word_count > 9) {
 		$word_count = 9;
 		$long_compound_terms++;
@@ -199,6 +199,36 @@ foreach ($records as $record) {
 		'correctCount' => 0
 	);
 	$term_ids[(int) $record['WoID']] = true;
+}
+
+$records = desktop_backup_rows(
+	'select ti.TiTxID, ti.TiWordCount, w.WoID, s.SeOrder, ' .
+	'(select count(*) from ' . $tbpref . 'textitems wi ' .
+	'where wi.TiSeID = ti.TiSeID and wi.TiWordCount = 1 and wi.TiIsNotWord = 0 ' .
+	'and wi.TiOrder <= ti.TiOrder) as DesktopStartWord ' .
+	'from ' . $tbpref . 'textitems ti ' .
+	'inner join ' . $tbpref . 'words w on w.WoLgID = ti.TiLgID and w.WoTextLC = ti.TiTextLC ' .
+	'inner join ' . $tbpref . 'sentences s on s.SeID = ti.TiSeID and s.SeTxID = ti.TiTxID ' .
+	'where ti.TiWordCount between 2 and 9 and ti.TiIsNotWord = 0 ' .
+	'order by ti.TiTxID, s.SeOrder, ti.TiOrder, ti.TiWordCount'
+);
+foreach ($records as $record) {
+	$legacy_text_id = (int) $record['TiTxID'];
+	$text_id = isset($active_text_ids[$legacy_text_id]) ? $active_text_ids[$legacy_text_id] : 0;
+	$term_id = (int) $record['WoID'];
+	$sentence_position = (int) $record['SeOrder'];
+	$start_word = (int) $record['DesktopStartWord'];
+	if (! isset($text_ids[$text_id]) || ! isset($term_ids[$term_id]) || $sentence_position < 1 || $start_word < 1) {
+		$skipped_compound_occurrences++;
+		continue;
+	}
+	$expressions[] = array(
+		'id' => count($expressions) + 1,
+		'termId' => $term_id,
+		'textId' => $text_id,
+		'sentencePosition' => $sentence_position,
+		'startWord' => $start_word
+	);
 }
 
 $records = desktop_backup_rows('select * from ' . $tbpref . 'tags order by TgID');
@@ -259,8 +289,8 @@ foreach ($records as $record) {
 if ($skipped_tag_assignments > 0) {
 	$warnings[] = $skipped_tag_assignments . ' orphaned tag assignment(s) were skipped.';
 }
-if ($compound_terms > 0) {
-	$warnings[] = $compound_terms . ' compound term(s) were preserved, but their legacy text positions must be recreated in the desktop reader.';
+if ($skipped_compound_occurrences > 0) {
+	$warnings[] = $skipped_compound_occurrences . ' compound expression occurrence(s) could not be located in an active legacy text and were skipped.';
 }
 if ($long_compound_terms > 0) {
 	$warnings[] = $long_compound_terms . ' compound term(s) exceeded the desktop nine-term limit; their word count was capped at nine.';
@@ -299,7 +329,7 @@ $backup = array(
 	'tags' => $tags,
 	'termTags' => $term_tags,
 	'textTags' => $text_tags,
-	'expressions' => array(),
+	'expressions' => $expressions,
 	'reviews' => array()
 );
 

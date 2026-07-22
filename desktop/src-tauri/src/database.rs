@@ -419,8 +419,12 @@ struct BackupExpression {
     term_id: i64,
     text_id: i64,
     sentence_position: i64,
-    start_position: i64,
-    end_position: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    start_position: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    end_position: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    start_word: Option<i64>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -730,6 +734,67 @@ impl Database {
                 |row| Ok((row.get(0)?, row.get(1)?)),
             )
             .map_err(|error| format!("Unable to calculate text progress: {error}"))
+    }
+
+    fn locate_restored_expression(
+        transaction: &Transaction<'_>,
+        sentence_id: i64,
+        term_id: i64,
+        start_word: i64,
+    ) -> Result<(i64, i64), String> {
+        if start_word <= 0 {
+            return Err("Expression word position is invalid".to_string());
+        }
+        let (word_count, normalized) = transaction
+            .query_row(
+                "SELECT word_count, normalized FROM terms WHERE id = ?1",
+                [term_id],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
+            )
+            .map_err(|error| format!("Unable to load the expression term: {error}"))?;
+        let positions = {
+            let mut statement = transaction
+                .prepare(
+                    "SELECT position, normalized FROM text_items
+                     WHERE sentence_id = ?1 AND is_word = 1
+                     ORDER BY position",
+                )
+                .map_err(|error| format!("Unable to prepare expression words: {error}"))?;
+            let rows = statement
+                .query_map([sentence_id], |row| {
+                    Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+                })
+                .map_err(|error| format!("Unable to load expression words: {error}"))?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|error| format!("Unable to decode expression words: {error}"))?
+        };
+        let start_index = usize::try_from(start_word - 1)
+            .map_err(|_| "Expression word position is invalid".to_string())?;
+        let word_count = usize::try_from(word_count)
+            .map_err(|_| "Expression word count is invalid".to_string())?;
+        let end_index = start_index
+            .checked_add(word_count.saturating_sub(1))
+            .ok_or_else(|| "Expression word range is invalid".to_string())?;
+        let start_position = positions
+            .get(start_index)
+            .map(|item| item.0)
+            .ok_or_else(|| "Expression starts outside the parsed sentence".to_string())?;
+        let end_position = positions
+            .get(end_index)
+            .map(|item| item.0)
+            .ok_or_else(|| "Expression ends outside the parsed sentence".to_string())?;
+        let parsed_signature = positions[start_index..=end_index]
+            .iter()
+            .map(|item| item.1.as_str())
+            .collect::<String>();
+        let term_signature = normalized
+            .chars()
+            .filter(|character| !character.is_whitespace())
+            .collect::<String>();
+        if parsed_signature != term_signature {
+            return Err("Expression terms do not match the parsed sentence".to_string());
+        }
+        Ok((start_position, end_position))
     }
 
     fn find_text_term(
@@ -1168,8 +1233,9 @@ impl Database {
                         term_id: row.get(1)?,
                         text_id: row.get(2)?,
                         sentence_position: row.get(3)?,
-                        start_position: row.get(4)?,
-                        end_position: row.get(5)?,
+                        start_position: Some(row.get(4)?),
+                        end_position: Some(row.get(5)?),
+                        start_word: None,
                     })
                 })
                 .map_err(|error| format!("Unable to read backup expressions: {error}"))?;
@@ -1242,13 +1308,13 @@ impl Database {
                 backup.version
             ));
         }
-        let summary = BackupSummary {
+        let mut summary = BackupSummary {
             languages: backup.languages.len(),
             texts: backup.texts.len(),
             archived_texts: backup.texts.iter().filter(|text| text.archived).count(),
             terms: backup.terms.len(),
             tags: backup.tags.len(),
-            expressions: backup.expressions.len(),
+            expressions: 0,
             reviews: backup.reviews.len(),
             warnings: backup.warnings.clone(),
         };
@@ -1383,6 +1449,7 @@ impl Database {
                 )
                 .map_err(|error| format!("Unable to restore a text tag: {error}"))?;
         }
+        let mut skipped_located_expressions = 0;
         for expression in backup.expressions {
             let sentence_id = transaction
                 .query_row(
@@ -1391,8 +1458,37 @@ impl Database {
                     |row| row.get::<_, i64>(0),
                 )
                 .optional()
-                .map_err(|error| format!("Unable to match a restored expression: {error}"))?
-                .ok_or_else(|| "A restored expression references a missing sentence".to_string())?;
+                .map_err(|error| format!("Unable to match a restored expression: {error}"))?;
+            let Some(sentence_id) = sentence_id else {
+                if expression.start_word.is_some() {
+                    skipped_located_expressions += 1;
+                    continue;
+                }
+                return Err("A restored expression references a missing sentence".to_string());
+            };
+            let positions = if let Some(start_word) = expression.start_word {
+                match Self::locate_restored_expression(
+                    &transaction,
+                    sentence_id,
+                    expression.term_id,
+                    start_word,
+                ) {
+                    Ok(positions) => positions,
+                    Err(_) => {
+                        skipped_located_expressions += 1;
+                        continue;
+                    }
+                }
+            } else {
+                (
+                    expression.start_position.ok_or_else(|| {
+                        "A restored expression is missing its start position".to_string()
+                    })?,
+                    expression.end_position.ok_or_else(|| {
+                        "A restored expression is missing its end position".to_string()
+                    })?,
+                )
+            };
             transaction
                 .execute(
                     "INSERT INTO expression_occurrences
@@ -1403,11 +1499,17 @@ impl Database {
                         expression.term_id,
                         expression.text_id,
                         sentence_id,
-                        expression.start_position,
-                        expression.end_position
+                        positions.0,
+                        positions.1
                     ],
                 )
                 .map_err(|error| format!("Unable to restore an expression: {error}"))?;
+            summary.expressions += 1;
+        }
+        if skipped_located_expressions > 0 {
+            summary.warnings.push(format!(
+                "{skipped_located_expressions} legacy compound expression occurrence(s) could not be matched to the desktop parser and were skipped."
+            ));
         }
         for review in backup.reviews {
             transaction
@@ -2995,8 +3097,9 @@ mod tests {
         assert_eq!(summary.languages, 1);
         assert_eq!(summary.texts, 2);
         assert_eq!(summary.archived_texts, 1);
-        assert_eq!(summary.terms, 1);
+        assert_eq!(summary.terms, 2);
         assert_eq!(summary.tags, 1);
+        assert_eq!(summary.expressions, 1);
         assert_eq!(summary.warnings.len(), 1);
         assert_eq!(texts.len(), 2);
         assert_eq!(
@@ -3006,11 +3109,33 @@ mod tests {
         assert!(archived.archived);
         assert_eq!(archived.title, "Archived legacy text");
         assert_eq!(reading.language, "English");
+        assert_eq!(reading.expressions.len(), 1);
+        assert_eq!(reading.expressions[0].normalized, "legacy text");
+        assert_eq!(reading.expressions[0].start_position, 1);
+        assert_eq!(reading.expressions[0].end_position, 3);
         assert_eq!(term.translation, "antigo");
         assert_eq!(term.status, 2);
         let tags = database.list_tags().expect("imported tags should load");
         assert_eq!(tags[0].term_count, 1);
         assert_eq!(tags[0].text_count, 2);
+    }
+
+    #[test]
+    fn warns_and_skips_a_legacy_expression_that_cannot_be_located() {
+        let database = Database::in_memory().expect("database should migrate");
+        let mut value: serde_json::Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/legacy-backup-v1.json"))
+                .expect("legacy fixture should decode");
+        value["expressions"][0]["startWord"] = serde_json::json!(99);
+
+        let summary = database
+            .restore_backup(value.to_string())
+            .expect("backup should restore without the unmatched occurrence");
+
+        assert_eq!(summary.expressions, 0);
+        assert_eq!(summary.warnings.len(), 2);
+        assert!(summary.warnings[1].contains("could not be matched"));
+        assert_eq!(database.list_texts().unwrap().len(), 2);
     }
 
     #[test]

@@ -27,7 +27,7 @@ No PHP sidecar is used. The generic Pake package proves that navigation, static 
 
 In the legacy PHP application, open **Backup/Restore/Empty Database** and choose **Download Desktop Migration JSON**. In LWT Desktop, open **Backup**, select that JSON file, and confirm the restore. The import preserves languages, active texts, language settings, terms, translations, romanization, status dates, tags, tag assignments, and media/source references.
 
-The JSON reports unsupported data after import. Active and archived texts, their metadata, and tag assignments are preserved; colliding IDs from the two legacy text tables are remapped safely. Review-event history cannot be reconstructed, and compound terms retain their vocabulary data but not their positions in texts. Keep the original SQL backup until the migrated library has been verified.
+The JSON reports unsupported data after import. Active and archived texts, their metadata, and tag assignments are preserved; colliding IDs from the two legacy text tables are remapped safely. Saved compound-term occurrences in active texts are reconstructed from their sentence and word ordinals and verified against the desktop parser; unmatched occurrences produce a restore warning instead of an incorrect link. Review-event history cannot be reconstructed. Keep the original SQL backup until the migrated library has been verified.
 
 ## Proof-of-Concept Status
 
