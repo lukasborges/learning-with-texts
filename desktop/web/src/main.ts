@@ -1,6 +1,11 @@
 import logoUrl from '../../../img/lwt_icon_big.png';
 import { createLibraryGateway } from './gateways/create_library_gateway';
-import type { LibraryText, TextDetails } from './domain/library';
+import type {
+  LibraryText,
+  ReadingText,
+  TermStatus,
+  TextDetails
+} from './domain/library';
 import './styles.css';
 
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -165,6 +170,150 @@ function createImportPanel(message = '', editingText?: TextDetails): HTMLElement
   return panel;
 }
 
+function statusLabel(status: TermStatus): string {
+  if (status >= 1 && status <= 4) {
+    return 'Learning';
+  }
+  if (status === 5 || status === 99) {
+    return 'Known';
+  }
+  if (status === 98) {
+    return 'Ignored';
+  }
+  return 'Unknown';
+}
+
+function nextStatus(status: TermStatus): TermStatus {
+  if (status === 0) {
+    return 1;
+  }
+  if (status >= 1 && status <= 4) {
+    return 5;
+  }
+  if (status === 5 || status === 99) {
+    return 98;
+  }
+  return 0;
+}
+
+function updateTermButton(button: HTMLButtonElement, status: TermStatus): void {
+  const label = statusLabel(status);
+  button.dataset.status = String(status);
+  button.className = `reading-term reading-term--${label.toLocaleLowerCase()}`;
+  button.title = `${label}. Click to change status.`;
+  button.setAttribute('aria-label', `${button.textContent ?? ''}: ${label}`);
+}
+
+function updateReadingProgress(
+  reading: ReadingText,
+  knownTerms: number,
+  meter: HTMLProgressElement,
+  label: HTMLElement
+): void {
+  meter.max = Math.max(1, reading.totalTerms);
+  meter.value = knownTerms;
+  label.textContent = `${knownTerms} of ${reading.totalTerms} unique terms known`;
+}
+
+async function renderReading(textId: number): Promise<void> {
+  const reading = await gateway.getReadingText(textId);
+  const shell = document.createElement('main');
+  shell.className = 'shell reading-shell';
+
+  const toolbar = document.createElement('div');
+  toolbar.className = 'reading-toolbar';
+  const back = document.createElement('button');
+  back.type = 'button';
+  back.textContent = '← Back to library';
+  back.addEventListener('click', () => {
+    void render();
+  });
+  toolbar.append(back);
+
+  const header = document.createElement('header');
+  header.className = 'reading-header';
+  const title = document.createElement('h1');
+  title.textContent = reading.title;
+  const language = document.createElement('p');
+  language.textContent = reading.language;
+  const meter = document.createElement('progress');
+  const progressLabel = document.createElement('p');
+  progressLabel.className = 'reading-progress-label';
+  updateReadingProgress(reading, reading.knownTerms, meter, progressLabel);
+  header.append(title, language, meter, progressLabel);
+
+  const guide = document.createElement('aside');
+  guide.className = 'reading-guide';
+  const guideText = document.createElement('p');
+  guideText.textContent =
+    'Click a term to cycle through Unknown, Learning, Known, and Ignored.';
+  const legend = document.createElement('div');
+  legend.className = 'reading-legend';
+  for (const [label, className] of [
+    ['Unknown', 'unknown'],
+    ['Learning', 'learning'],
+    ['Known', 'known'],
+    ['Ignored', 'ignored']
+  ] as const) {
+    const item = document.createElement('span');
+    item.className = `reading-legend__item reading-term--${className}`;
+    item.textContent = label;
+    legend.append(item);
+  }
+  guide.append(guideText, legend);
+
+  const termButtons = new Map<string, HTMLButtonElement[]>();
+  const article = document.createElement('article');
+  article.className = 'reading-content';
+  for (const sentence of reading.sentences) {
+    const paragraph = document.createElement('p');
+    paragraph.dataset.position = String(sentence.position);
+    for (const item of sentence.items) {
+      if (!item.isWord) {
+        paragraph.append(document.createTextNode(item.surface));
+        continue;
+      }
+
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = item.surface;
+      updateTermButton(button, item.status);
+      const matchingButtons = termButtons.get(item.normalized) ?? [];
+      matchingButtons.push(button);
+      termButtons.set(item.normalized, matchingButtons);
+      button.addEventListener('click', () => {
+        const currentStatus = Number(button.dataset.status) as TermStatus;
+        const status = nextStatus(currentStatus);
+        const buttons = termButtons.get(item.normalized) ?? [button];
+        buttons.forEach((matchingButton) => {
+          matchingButton.disabled = true;
+        });
+        void gateway
+          .setTermStatus({ textId, normalized: item.normalized, status })
+          .then((progress) => {
+            buttons.forEach((matchingButton) => {
+              updateTermButton(matchingButton, progress.status);
+            });
+            updateReadingProgress(reading, progress.knownTerms, meter, progressLabel);
+          })
+          .catch((error: unknown) => {
+            window.alert(error instanceof Error ? error.message : String(error));
+          })
+          .finally(() => {
+            buttons.forEach((matchingButton) => {
+              matchingButton.disabled = false;
+            });
+          });
+      });
+      paragraph.append(button);
+    }
+    article.append(paragraph);
+  }
+
+  shell.append(toolbar, header, guide, article);
+  applicationRoot.replaceChildren(shell);
+}
+
 function createTextCard(text: LibraryText): HTMLElement {
   const card = document.createElement('article');
   card.className = 'text-card';
@@ -190,8 +339,11 @@ function createTextCard(text: LibraryText): HTMLElement {
   const button = document.createElement('button');
   button.type = 'button';
   button.textContent = 'Open text';
-  button.disabled = true;
-  button.title = 'Reading will be enabled after the Rust text slice is ready';
+  button.addEventListener('click', () => {
+    void renderReading(text.id).catch((error: unknown) => {
+      window.alert(error instanceof Error ? error.message : String(error));
+    });
+  });
 
   const editButton = document.createElement('button');
   editButton.type = 'button';

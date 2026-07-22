@@ -49,4 +49,24 @@ describe('MockLibraryGateway', () => {
     expect(updated).toMatchObject({ language: 'Portuguese', title: 'Título atualizado' });
     expect(texts.some(({ id }) => id === 1)).toBe(false);
   });
+
+  it('opens parsed reading items and shares their status', async () => {
+    const gateway = new MockLibraryGateway();
+
+    const reading = await gateway.getReadingText(1);
+    const progress = await gateway.setTermStatus({
+      textId: 1,
+      normalized: 'dog',
+      status: 5
+    });
+    const reopened = await gateway.getReadingText(1);
+
+    expect(reading.sentences).not.toHaveLength(0);
+    expect(progress.knownTerms).toBe(1);
+    expect(
+      reopened.sentences
+        .flatMap(({ items }) => items)
+        .find(({ normalized }) => normalized === 'dog')
+    ).toMatchObject({ status: 5 });
+  });
 });

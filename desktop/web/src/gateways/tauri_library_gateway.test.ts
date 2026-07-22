@@ -72,4 +72,29 @@ describe('TauriLibraryGateway', () => {
     expect(invoke).toHaveBeenNthCalledWith(2, 'update_text', { input: update });
     expect(invoke).toHaveBeenNthCalledWith(3, 'delete_text', { id: 8 });
   });
+
+  it('maps reading and term status commands to the native runtime', async () => {
+    const reading = {
+      id: 8,
+      title: 'Story',
+      language: 'English',
+      knownTerms: 0,
+      totalTerms: 1,
+      sentences: []
+    };
+    const input = { textId: 8, normalized: 'story', status: 5 as const };
+    const progress = {
+      normalized: 'story',
+      status: 5,
+      knownTerms: 1,
+      totalTerms: 1
+    };
+    const invoke = vi.fn().mockResolvedValueOnce(reading).mockResolvedValueOnce(progress);
+    const gateway = new TauriLibraryGateway(invoke);
+
+    await expect(gateway.getReadingText(8)).resolves.toEqual(reading);
+    await expect(gateway.setTermStatus(input)).resolves.toEqual(progress);
+    expect(invoke).toHaveBeenNthCalledWith(1, 'get_reading_text', { id: 8 });
+    expect(invoke).toHaveBeenNthCalledWith(2, 'set_term_status', { input });
+  });
 });

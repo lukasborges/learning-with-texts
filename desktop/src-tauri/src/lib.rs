@@ -1,7 +1,10 @@
 mod database;
 mod parser;
 
-use database::{CreateTextInput, Database, LibraryText, TextDetails, UpdateTextInput};
+use database::{
+    CreateTextInput, Database, LibraryText, ReadingText, SetTermStatusInput, TermProgress,
+    TextDetails, UpdateTextInput,
+};
 use tauri::Manager;
 
 #[tauri::command]
@@ -35,6 +38,19 @@ fn delete_text(database: tauri::State<'_, Database>, id: i64) -> Result<(), Stri
     database.delete_text(id)
 }
 
+#[tauri::command]
+fn get_reading_text(database: tauri::State<'_, Database>, id: i64) -> Result<ReadingText, String> {
+    database.get_reading_text(id)
+}
+
+#[tauri::command]
+fn set_term_status(
+    database: tauri::State<'_, Database>,
+    input: SetTermStatusInput,
+) -> Result<TermProgress, String> {
+    database.set_term_status(input)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -49,7 +65,9 @@ pub fn run() {
             create_text,
             get_text,
             update_text,
-            delete_text
+            delete_text,
+            get_reading_text,
+            set_term_status
         ])
         .run(tauri::generate_context!())
         .expect("error while running the LWT desktop application");

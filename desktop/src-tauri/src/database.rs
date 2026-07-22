@@ -6,10 +6,12 @@ use std::sync::Mutex;
 
 const INITIAL_MIGRATION: &str = include_str!("../migrations/0001_initial.sql");
 const TEXT_PARSING_MIGRATION: &str = include_str!("../migrations/0002_text_parsing.sql");
-const LATEST_SCHEMA_VERSION: i64 = 2;
-const MIGRATIONS: [(i64, &str); 2] = [
+const TERMS_MIGRATION: &str = include_str!("../migrations/0003_terms.sql");
+const LATEST_SCHEMA_VERSION: i64 = 3;
+const MIGRATIONS: [(i64, &str); 3] = [
     (1, INITIAL_MIGRATION),
-    (LATEST_SCHEMA_VERSION, TEXT_PARSING_MIGRATION),
+    (2, TEXT_PARSING_MIGRATION),
+    (LATEST_SCHEMA_VERSION, TERMS_MIGRATION),
 ];
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -53,6 +55,51 @@ pub struct UpdateTextInput {
     pub title: String,
     pub content: String,
     pub source_uri: Option<String>,
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadingItem {
+    pub surface: String,
+    pub normalized: String,
+    pub is_word: bool,
+    pub status: i64,
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadingSentence {
+    pub id: i64,
+    pub position: i64,
+    pub items: Vec<ReadingItem>,
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadingText {
+    pub id: i64,
+    pub title: String,
+    pub language: String,
+    pub known_terms: i64,
+    pub total_terms: i64,
+    pub sentences: Vec<ReadingSentence>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetTermStatusInput {
+    pub text_id: i64,
+    pub normalized: String,
+    pub status: i64,
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TermProgress {
+    pub normalized: String,
+    pub status: i64,
+    pub known_terms: i64,
+    pub total_terms: i64,
 }
 
 struct ValidatedTextInput {
@@ -264,16 +311,25 @@ impl Database {
         Ok(())
     }
 
-    fn text_term_count(transaction: &Transaction<'_>, text_id: i64) -> Result<i64, String> {
+    fn text_progress(transaction: &Transaction<'_>, text_id: i64) -> Result<(i64, i64), String> {
         transaction
             .query_row(
-                "SELECT COUNT(DISTINCT normalized)
-                 FROM text_items
-                 WHERE text_id = ?1 AND is_word = 1",
+                "SELECT
+                    (SELECT COUNT(DISTINCT text_items.normalized)
+                     FROM text_items
+                     INNER JOIN terms
+                        ON terms.language_id = text_items.language_id
+                       AND terms.normalized = text_items.normalized
+                     WHERE text_items.text_id = ?1
+                       AND text_items.is_word = 1
+                       AND terms.status IN (5, 99)),
+                    (SELECT COUNT(DISTINCT normalized)
+                     FROM text_items
+                     WHERE text_id = ?1 AND is_word = 1)",
                 [text_id],
-                |row| row.get(0),
+                |row| Ok((row.get(0)?, row.get(1)?)),
             )
-            .map_err(|error| format!("Unable to count parsed terms: {error}"))
+            .map_err(|error| format!("Unable to calculate text progress: {error}"))
     }
 
     pub fn list_texts(&self) -> Result<Vec<LibraryText>, String> {
@@ -286,7 +342,14 @@ impl Database {
                 "SELECT texts.id,
                         texts.title,
                         languages.name,
-                        0 AS known_terms,
+                        (SELECT COUNT(DISTINCT text_items.normalized)
+                         FROM text_items
+                         INNER JOIN terms
+                            ON terms.language_id = text_items.language_id
+                           AND terms.normalized = text_items.normalized
+                         WHERE text_items.text_id = texts.id
+                           AND text_items.is_word = 1
+                           AND terms.status IN (5, 99)) AS known_terms,
                         (SELECT COUNT(DISTINCT text_items.normalized)
                          FROM text_items
                          WHERE text_items.text_id = texts.id
@@ -339,7 +402,7 @@ impl Database {
             .map_err(|error| format!("Unable to create the text: {error}"))?;
         let id = transaction.last_insert_rowid();
         Self::persist_text_parsing(&transaction, id, language_id, &input.content)?;
-        let total_terms = Self::text_term_count(&transaction, id)?;
+        let (known_terms, total_terms) = Self::text_progress(&transaction, id)?;
 
         transaction
             .commit()
@@ -349,7 +412,7 @@ impl Database {
             id,
             title: input.title,
             language: stored_language,
-            known_terms: 0,
+            known_terms,
             total_terms,
             last_opened: String::new(),
         })
@@ -369,7 +432,14 @@ impl Database {
                 "SELECT texts.id,
                         texts.title,
                         languages.name,
-                        0 AS known_terms,
+                        (SELECT COUNT(DISTINCT text_items.normalized)
+                         FROM text_items
+                         INNER JOIN terms
+                            ON terms.language_id = text_items.language_id
+                           AND terms.normalized = text_items.normalized
+                         WHERE text_items.text_id = texts.id
+                           AND text_items.is_word = 1
+                           AND terms.status IN (5, 99)) AS known_terms,
                         (SELECT COUNT(DISTINCT text_items.normalized)
                          FROM text_items
                          WHERE text_items.text_id = texts.id
@@ -439,7 +509,7 @@ impl Database {
             return Err("Text was not found".to_string());
         }
         Self::persist_text_parsing(&transaction, id, language_id, &input.content)?;
-        let total_terms = Self::text_term_count(&transaction, id)?;
+        let (known_terms, total_terms) = Self::text_progress(&transaction, id)?;
 
         transaction
             .commit()
@@ -449,9 +519,175 @@ impl Database {
             id,
             title: input.title,
             language: stored_language,
-            known_terms: 0,
+            known_terms,
             total_terms,
             last_opened: String::new(),
+        })
+    }
+
+    pub fn get_reading_text(&self, id: i64) -> Result<ReadingText, String> {
+        if id <= 0 {
+            return Err("Text was not found".to_string());
+        }
+
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| "The desktop database lock is unavailable".to_string())?;
+        let transaction = connection
+            .transaction()
+            .map_err(|error| format!("Unable to start the reading session: {error}"))?;
+        let metadata = transaction
+            .query_row(
+                "SELECT texts.title, languages.name
+                 FROM texts
+                 INNER JOIN languages ON languages.id = texts.language_id
+                 WHERE texts.id = ?1",
+                [id],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+            )
+            .optional()
+            .map_err(|error| format!("Unable to load the reading text: {error}"))?
+            .ok_or_else(|| "Text was not found".to_string())?;
+
+        transaction
+            .execute(
+                "UPDATE texts SET last_opened_at = CURRENT_TIMESTAMP WHERE id = ?1",
+                [id],
+            )
+            .map_err(|error| format!("Unable to record the reading session: {error}"))?;
+
+        let sentence_rows = {
+            let mut statement = transaction
+                .prepare("SELECT id, position FROM sentences WHERE text_id = ?1 ORDER BY position")
+                .map_err(|error| format!("Unable to prepare the reading sentences: {error}"))?;
+            let rows = statement
+                .query_map([id], |row| {
+                    Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
+                })
+                .map_err(|error| format!("Unable to load the reading sentences: {error}"))?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|error| format!("Unable to decode the reading sentences: {error}"))?
+        };
+
+        let mut sentences = Vec::with_capacity(sentence_rows.len());
+        for (sentence_id, position) in sentence_rows {
+            let items = {
+                let mut statement = transaction
+                    .prepare(
+                        "SELECT text_items.surface,
+                                text_items.normalized,
+                                text_items.is_word,
+                                COALESCE(terms.status, 0)
+                         FROM text_items
+                         LEFT JOIN terms
+                            ON terms.language_id = text_items.language_id
+                           AND terms.normalized = text_items.normalized
+                         WHERE text_items.sentence_id = ?1
+                         ORDER BY text_items.position",
+                    )
+                    .map_err(|error| format!("Unable to prepare the reading items: {error}"))?;
+                let rows = statement
+                    .query_map([sentence_id], |row| {
+                        Ok(ReadingItem {
+                            surface: row.get(0)?,
+                            normalized: row.get(1)?,
+                            is_word: row.get(2)?,
+                            status: row.get(3)?,
+                        })
+                    })
+                    .map_err(|error| format!("Unable to load the reading items: {error}"))?;
+                rows.collect::<Result<Vec<_>, _>>()
+                    .map_err(|error| format!("Unable to decode the reading items: {error}"))?
+            };
+            sentences.push(ReadingSentence {
+                id: sentence_id,
+                position,
+                items,
+            });
+        }
+
+        let (known_terms, total_terms) = Self::text_progress(&transaction, id)?;
+        transaction
+            .commit()
+            .map_err(|error| format!("Unable to open the reading session: {error}"))?;
+
+        Ok(ReadingText {
+            id,
+            title: metadata.0,
+            language: metadata.1,
+            known_terms,
+            total_terms,
+            sentences,
+        })
+    }
+
+    pub fn set_term_status(&self, input: SetTermStatusInput) -> Result<TermProgress, String> {
+        if input.text_id <= 0 {
+            return Err("Text was not found".to_string());
+        }
+        if !matches!(input.status, 0..=5 | 98 | 99) {
+            return Err("Term status is invalid".to_string());
+        }
+        let normalized = input.normalized.trim();
+        if normalized.is_empty() || normalized.chars().count() > 250 {
+            return Err("Term is invalid".to_string());
+        }
+
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| "The desktop database lock is unavailable".to_string())?;
+        let transaction = connection
+            .transaction()
+            .map_err(|error| format!("Unable to start the term update: {error}"))?;
+        let term = transaction
+            .query_row(
+                "SELECT text_items.language_id, text_items.surface
+                 FROM text_items
+                 WHERE text_items.text_id = ?1
+                   AND text_items.normalized = ?2
+                   AND text_items.is_word = 1
+                 ORDER BY text_items.id
+                 LIMIT 1",
+                params![input.text_id, normalized],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
+            )
+            .optional()
+            .map_err(|error| format!("Unable to load the parsed term: {error}"))?
+            .ok_or_else(|| "Term was not found in this text".to_string())?;
+
+        if input.status == 0 {
+            transaction
+                .execute(
+                    "DELETE FROM terms WHERE language_id = ?1 AND normalized = ?2",
+                    params![term.0, normalized],
+                )
+                .map_err(|error| format!("Unable to reset the term status: {error}"))?;
+        } else {
+            transaction
+                .execute(
+                    "INSERT INTO terms (language_id, display_text, normalized, status)
+                     VALUES (?1, ?2, ?3, ?4)
+                     ON CONFLICT(language_id, normalized) DO UPDATE SET
+                        display_text = excluded.display_text,
+                        status = excluded.status,
+                        updated_at = CURRENT_TIMESTAMP",
+                    params![term.0, term.1, normalized, input.status],
+                )
+                .map_err(|error| format!("Unable to save the term status: {error}"))?;
+        }
+
+        let (known_terms, total_terms) = Self::text_progress(&transaction, input.text_id)?;
+        transaction
+            .commit()
+            .map_err(|error| format!("Unable to commit the term update: {error}"))?;
+
+        Ok(TermProgress {
+            normalized: normalized.to_string(),
+            status: input.status,
+            known_terms,
+            total_terms,
         })
     }
 
@@ -742,5 +978,82 @@ mod tests {
         assert_eq!(version, LATEST_SCHEMA_VERSION);
         assert_eq!(sentence_count, 2);
         assert_eq!(term_count, 3);
+    }
+
+    #[test]
+    fn opens_a_parsed_text_for_reading_and_records_the_visit() {
+        let database = Database::in_memory().expect("database should migrate");
+        let created = database
+            .create_text(text_input("English", "Reader", "One fish. Two fish!"))
+            .expect("text should be created");
+
+        let reading = database
+            .get_reading_text(created.id)
+            .expect("reading text should load");
+
+        assert_eq!(reading.sentences.len(), 2);
+        assert_eq!(reading.total_terms, 3);
+        assert!(reading.sentences[0]
+            .items
+            .iter()
+            .all(|item| item.status == 0));
+        let texts = database.list_texts().expect("library should load");
+        assert!(!texts[0].last_opened.is_empty());
+    }
+
+    #[test]
+    fn shares_term_statuses_by_language_and_can_reset_them() {
+        let database = Database::in_memory().expect("database should migrate");
+        let first = database
+            .create_text(text_input("English", "First", "One fish. Two fish."))
+            .expect("first text should be created");
+        let second = database
+            .create_text(text_input("English", "Second", "Blue fish."))
+            .expect("second text should be created");
+
+        let progress = database
+            .set_term_status(SetTermStatusInput {
+                text_id: first.id,
+                normalized: "fish".to_string(),
+                status: 5,
+            })
+            .expect("term should become known");
+        let second_reading = database
+            .get_reading_text(second.id)
+            .expect("second text should load");
+
+        assert_eq!((progress.known_terms, progress.total_terms), (1, 3));
+        assert!(second_reading
+            .sentences
+            .iter()
+            .flat_map(|sentence| &sentence.items)
+            .any(|item| item.normalized == "fish" && item.status == 5));
+
+        let reset = database
+            .set_term_status(SetTermStatusInput {
+                text_id: first.id,
+                normalized: "fish".to_string(),
+                status: 0,
+            })
+            .expect("term should reset");
+        assert_eq!(reset.known_terms, 0);
+    }
+
+    #[test]
+    fn rejects_status_updates_for_terms_outside_the_text() {
+        let database = Database::in_memory().expect("database should migrate");
+        let created = database
+            .create_text(text_input("English", "Reader", "Existing term."))
+            .expect("text should be created");
+
+        let error = database
+            .set_term_status(SetTermStatusInput {
+                text_id: created.id,
+                normalized: "missing".to_string(),
+                status: 5,
+            })
+            .expect_err("missing term should fail");
+
+        assert_eq!(error, "Term was not found in this text");
     }
 }

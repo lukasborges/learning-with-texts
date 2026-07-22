@@ -235,6 +235,118 @@ textarea {
   color: #962a2a;
 }
 
+.reading-toolbar {
+  margin-bottom: 1.25rem;
+}
+
+.reading-toolbar button {
+  padding: 0.6rem 0.85rem;
+  border: 1px solid #8ca1b2;
+  border-radius: 8px;
+  background: #fff;
+  color: #365166;
+  cursor: pointer;
+}
+
+.reading-header {
+  margin-bottom: 1.25rem;
+}
+
+.reading-header h1,
+.reading-header p {
+  margin: 0 0 0.45rem;
+}
+
+.reading-header > p:first-of-type,
+.reading-progress-label {
+  color: #637083;
+}
+
+.reading-header progress {
+  width: min(30rem, 100%);
+  accent-color: #318151;
+}
+
+.reading-guide {
+  margin-bottom: 1.25rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid #c9d6df;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.reading-guide p {
+  margin: 0 0 0.75rem;
+}
+
+.reading-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.reading-legend__item {
+  padding: 0.25rem 0.55rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.reading-content {
+  padding: clamp(1.25rem, 4vw, 3rem);
+  border: 1px solid #d9e1e8;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(30 55 80 / 8%);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.15rem, 2vw, 1.35rem);
+  line-height: 1.9;
+}
+
+.reading-content p {
+  margin: 0 0 1rem;
+}
+
+.reading-term {
+  display: inline;
+  margin: 0;
+  padding: 0.08rem 0.18rem;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.reading-term:focus-visible {
+  outline: 3px solid #246f96;
+  outline-offset: 2px;
+}
+
+.reading-term:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.reading-term--unknown {
+  background: #dceeff;
+  color: #174f79;
+}
+
+.reading-term--learning {
+  background: #fff0bd;
+  color: #714f00;
+}
+
+.reading-term--known {
+  background: #d9f2df;
+  color: #215f34;
+}
+
+.reading-term--ignored {
+  background: #e5e8eb;
+  color: #59636d;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     color: #edf3f7;
@@ -287,6 +399,39 @@ textarea {
   .text-card .button-danger {
     background: #542d32;
     color: #ffd4d4;
+  }
+
+  .reading-toolbar button,
+  .reading-guide,
+  .reading-content {
+    border-color: #344352;
+    background: #1e2a35;
+    color: #edf3f7;
+  }
+
+  .reading-header > p:first-of-type,
+  .reading-progress-label {
+    color: #a8b7c5;
+  }
+
+  .reading-term--unknown {
+    background: #214663;
+    color: #d9efff;
+  }
+
+  .reading-term--learning {
+    background: #5c4819;
+    color: #ffedb4;
+  }
+
+  .reading-term--known {
+    background: #245337;
+    color: #d7f5df;
+  }
+
+  .reading-term--ignored {
+    background: #3a4650;
+    color: #c3cbd2;
   }
 
   .text-card {

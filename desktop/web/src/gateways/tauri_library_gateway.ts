@@ -1,6 +1,9 @@
 import type {
   CreateTextInput,
   LibraryText,
+  ReadingText,
+  SetTermStatusInput,
+  TermProgress,
   TextDetails,
   UpdateTextInput
 } from '../domain/library';
@@ -32,5 +35,13 @@ export class TauriLibraryGateway implements LibraryGateway {
 
   deleteText(id: number): Promise<void> {
     return this.invoke<void>('delete_text', { id });
+  }
+
+  getReadingText(id: number): Promise<ReadingText> {
+    return this.invoke<ReadingText>('get_reading_text', { id });
+  }
+
+  setTermStatus(input: SetTermStatusInput): Promise<TermProgress> {
+    return this.invoke<TermProgress>('set_term_status', { input });
   }
 }
