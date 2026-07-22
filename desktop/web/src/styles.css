@@ -456,6 +456,24 @@ textarea {
   font-weight: 700;
 }
 
+.settings-card button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.update-card {
+  margin-top: 1rem;
+}
+
+.update-card h2,
+.update-card > p {
+  margin: 0;
+}
+
+.update-card > p:not(.form-status) {
+  color: #637083;
+}
+
 .term-editor__lookups {
   display: flex;
   flex-wrap: wrap;

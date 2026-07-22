@@ -1,4 +1,6 @@
 import logoUrl from '../../../img/lwt_icon_big.png';
+import { relaunch } from '@tauri-apps/plugin-process';
+import { check } from '@tauri-apps/plugin-updater';
 import { createLibraryGateway } from './gateways/create_library_gateway';
 import type {
   AppSettings,
@@ -18,6 +20,7 @@ if (!app) {
 
 const applicationRoot = app;
 const usesNativeDatabase = import.meta.env.MODE === 'tauri';
+const updatesEnabled = usesNativeDatabase && import.meta.env.VITE_LWT_UPDATES_ENABLED === 'true';
 const gateway = createLibraryGateway();
 let showingArchivedTexts = false;
 let libraryPage = 0;
@@ -1152,7 +1155,52 @@ async function renderAppSettings(): Promise<void> {
   note.className = 'migration-notice language-warning';
   note.textContent =
     'Legacy frame dimensions and mobile frame-set mode are intentionally omitted because the desktop interface is responsive. Term-table pagination, similar-term count, and annotation delimiters remain deferred until those legacy screens have desktop equivalents.';
-  shell.append(toolbar, heading, introduction, form, note);
+  const updateCard = document.createElement('section');
+  updateCard.className = 'settings-card update-card';
+  updateCard.hidden = !updatesEnabled;
+  const updateHeading = document.createElement('h2');
+  updateHeading.textContent = 'Application updates';
+  const updateDescription = document.createElement('p');
+  updateDescription.textContent =
+    'Check the signed stable release channel. An update is installed only after its cryptographic signature is verified.';
+  const checkForUpdates = document.createElement('button');
+  checkForUpdates.type = 'button';
+  checkForUpdates.textContent = 'Check for updates';
+  const updateStatus = document.createElement('p');
+  updateStatus.className = 'form-status';
+  updateStatus.setAttribute('role', 'status');
+  checkForUpdates.addEventListener('click', () => {
+    checkForUpdates.disabled = true;
+    updateStatus.className = 'form-status';
+    updateStatus.textContent = 'Checking the signed release channel…';
+    void check()
+      .then(async (update) => {
+        if (!update) {
+          updateStatus.textContent = 'This application is up to date.';
+          return;
+        }
+        const accepted = window.confirm(
+          `Version ${update.version} is available. Download, verify, and install it now?`
+        );
+        if (!accepted) {
+          updateStatus.textContent = `Version ${update.version} is available.`;
+          return;
+        }
+        updateStatus.textContent = `Downloading and verifying version ${update.version}…`;
+        await update.downloadAndInstall();
+        updateStatus.textContent = 'Update installed. Restarting…';
+        await relaunch();
+      })
+      .catch((error: unknown) => {
+        updateStatus.className = 'form-status form-status--error';
+        updateStatus.textContent = error instanceof Error ? error.message : String(error);
+      })
+      .finally(() => {
+        checkForUpdates.disabled = false;
+      });
+  });
+  updateCard.append(updateHeading, updateDescription, checkForUpdates, updateStatus);
+  shell.append(toolbar, heading, introduction, form, updateCard, note);
   applicationRoot.replaceChildren(shell);
 }
 

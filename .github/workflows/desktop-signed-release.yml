@@ -1,0 +1,215 @@
+name: Signed Desktop Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: ${{ matrix.artifact }}
+    runs-on: ${{ matrix.runner }}
+    environment: desktop-production
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            artifact: lwt-desktop-linux-x86_64
+            rust_target: x86_64-unknown-linux-gnu
+            build_args: --bundles deb,appimage
+            bundle_root: desktop/src-tauri/target/release/bundle
+          - runner: windows-2025
+            artifact: lwt-desktop-windows-x86_64
+            rust_target: x86_64-pc-windows-msvc
+            build_args: --bundles msi,nsis
+            bundle_root: desktop/src-tauri/target/release/bundle
+          - runner: macos-15
+            artifact: lwt-desktop-macos-aarch64
+            rust_target: aarch64-apple-darwin
+            build_args: --target aarch64-apple-darwin --bundles dmg
+            bundle_root: desktop/src-tauri/target/aarch64-apple-darwin/release/bundle
+          - runner: macos-15-intel
+            artifact: lwt-desktop-macos-x86_64
+            rust_target: x86_64-apple-darwin
+            build_args: --target x86_64-apple-darwin --bundles dmg
+            bundle_root: desktop/src-tauri/target/x86_64-apple-darwin/release/bundle
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Linux packaging dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libwebkit2gtk-4.1-dev \
+            patchelf
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20.19.0
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+          key: signed-${{ matrix.rust_target }}
+
+      - run: npm ci
+      - run: npm run desktop:check
+      - run: npm run desktop:test
+
+      - name: Validate updater signing secrets
+        shell: bash
+        env:
+          UPDATER_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          UPDATER_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          UPDATER_PUBLIC_KEY: ${{ vars.TAURI_UPDATER_PUBLIC_KEY }}
+        run: |
+          test -n "$UPDATER_PRIVATE_KEY" || { echo 'Missing TAURI_SIGNING_PRIVATE_KEY'; exit 1; }
+          test -n "$UPDATER_PRIVATE_KEY_PASSWORD" || { echo 'Missing TAURI_SIGNING_PRIVATE_KEY_PASSWORD'; exit 1; }
+          test -n "$UPDATER_PUBLIC_KEY" || { echo 'Missing TAURI_UPDATER_PUBLIC_KEY variable'; exit 1; }
+
+      - name: Import Windows signing certificate
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          if (-not $env:CERTIFICATE_BASE64 -or -not $env:CERTIFICATE_PASSWORD) {
+            throw 'Missing Windows signing certificate secrets'
+          }
+          $certificatePath = Join-Path $env:RUNNER_TEMP 'lwt-windows-signing.pfx'
+          [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($env:CERTIFICATE_BASE64))
+          $password = ConvertTo-SecureString $env:CERTIFICATE_PASSWORD -AsPlainText -Force
+          $certificate = Import-PfxCertificate -FilePath $certificatePath -CertStoreLocation Cert:\CurrentUser\My -Password $password
+          "WINDOWS_CERTIFICATE_PATH=$certificatePath" >> $env:GITHUB_ENV
+          "WINDOWS_CERTIFICATE_THUMBPRINT=$($certificate.Thumbprint)" >> $env:GITHUB_ENV
+
+      - name: Import Apple signing certificate
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+          APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+        run: |
+          test -n "$APPLE_CERTIFICATE" || { echo 'Missing APPLE_CERTIFICATE'; exit 1; }
+          test -n "$APPLE_CERTIFICATE_PASSWORD" || { echo 'Missing APPLE_CERTIFICATE_PASSWORD'; exit 1; }
+          test -n "$APPLE_KEYCHAIN_PASSWORD" || { echo 'Missing APPLE_KEYCHAIN_PASSWORD'; exit 1; }
+          test -n "$APPLE_API_PRIVATE_KEY" || { echo 'Missing APPLE_API_PRIVATE_KEY'; exit 1; }
+          test -n "$APPLE_API_ISSUER" || { echo 'Missing APPLE_API_ISSUER'; exit 1; }
+          test -n "$APPLE_API_KEY_ID" || { echo 'Missing APPLE_API_KEY_ID'; exit 1; }
+          certificate_path="$RUNNER_TEMP/lwt-apple-signing.p12"
+          keychain_path="$RUNNER_TEMP/lwt-build.keychain-db"
+          api_key_path="$RUNNER_TEMP/AuthKey.p8"
+          printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$certificate_path"
+          printf '%s' "$APPLE_API_PRIVATE_KEY" > "$api_key_path"
+          security create-keychain -p "$APPLE_KEYCHAIN_PASSWORD" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$APPLE_KEYCHAIN_PASSWORD" "$keychain_path"
+          security import "$certificate_path" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain_path"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$APPLE_KEYCHAIN_PASSWORD" "$keychain_path"
+          security list-keychains -d user -s "$keychain_path"
+          signing_identity=$(security find-identity -v -p codesigning "$keychain_path" | awk -F '"' '/Developer ID Application/ { print $2; exit }')
+          test -n "$signing_identity" || { echo 'Developer ID Application identity was not found'; exit 1; }
+          echo "APPLE_SIGNING_IDENTITY=$signing_identity" >> "$GITHUB_ENV"
+          echo "APPLE_API_KEY_PATH=$api_key_path" >> "$GITHUB_ENV"
+          echo "APPLE_KEYCHAIN_PATH=$keychain_path" >> "$GITHUB_ENV"
+          echo "APPLE_CERTIFICATE_PATH=$certificate_path" >> "$GITHUB_ENV"
+
+      - name: Create protected release configuration
+        env:
+          LWT_UPDATER_PUBLIC_KEY: ${{ vars.TAURI_UPDATER_PUBLIC_KEY }}
+        run: >-
+          node desktop/scripts/create-release-config.mjs
+          --output "${{ runner.temp }}/tauri.release.conf.json"
+
+      - name: Build, sign, notarize, and publish
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          VITE_LWT_UPDATES_ENABLED: 'true'
+          NO_STRIP: ${{ runner.os == 'Linux' && '1' || '' }}
+          APPLE_SIGNING_IDENTITY: ${{ env.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_KEY_PATH: ${{ env.APPLE_API_KEY_PATH }}
+        with:
+          projectPath: desktop
+          tagName: ${{ github.ref_name }}
+          releaseName: LWT Desktop ${{ github.ref_name }}
+          releaseBody: See the attached checksums and SBOM before installation.
+          releaseDraft: true
+          prerelease: false
+          uploadUpdaterJson: true
+          uploadUpdaterSignatures: true
+          updaterJsonPreferNsis: true
+          args: ${{ matrix.build_args }} --config ${{ runner.temp }}/tauri.release.conf.json
+
+      - name: Remove Windows signing credentials from the runner
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $certificate = "Cert:\CurrentUser\My\$env:WINDOWS_CERTIFICATE_THUMBPRINT"
+          if ($env:WINDOWS_CERTIFICATE_THUMBPRINT -and (Test-Path $certificate)) {
+            Remove-Item $certificate -Force
+          }
+          if ($env:WINDOWS_CERTIFICATE_PATH -and (Test-Path $env:WINDOWS_CERTIFICATE_PATH)) {
+            Remove-Item $env:WINDOWS_CERTIFICATE_PATH -Force
+          }
+          Remove-Item "${{ runner.temp }}/tauri.release.conf.json" -Force -ErrorAction SilentlyContinue
+
+      - name: Remove Apple signing credentials from the runner
+        if: always() && runner.os == 'macOS'
+        shell: bash
+        run: |
+          security delete-keychain "$APPLE_KEYCHAIN_PATH" 2>/dev/null || true
+          rm -f "$APPLE_CERTIFICATE_PATH" "$APPLE_API_KEY_PATH"
+          rm -f "${{ runner.temp }}/tauri.release.conf.json"
+
+      - name: Remove Linux release configuration
+        if: always() && runner.os == 'Linux'
+        run: rm -f "${{ runner.temp }}/tauri.release.conf.json"
+
+      - name: Generate release SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: ${{ matrix.bundle_root }}
+          format: cyclonedx-json
+          output-file: ${{ matrix.bundle_root }}/${{ matrix.artifact }}.cdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Generate release checksums
+        run: >-
+          node desktop/scripts/release-integrity.mjs
+          --root "${{ matrix.bundle_root }}"
+          --output "${{ matrix.bundle_root }}/${{ matrix.artifact }}.SHA256SUMS"
+
+      - name: Attach integrity metadata to draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          gh release upload "${{ github.ref_name }}"
+          "${{ matrix.bundle_root }}/${{ matrix.artifact }}.cdx.json"
+          "${{ matrix.bundle_root }}/${{ matrix.artifact }}.SHA256SUMS"
+          --clobber

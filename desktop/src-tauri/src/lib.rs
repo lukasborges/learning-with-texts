@@ -214,6 +214,8 @@ fn review_statistics(database: tauri::State<'_, Database>) -> Result<ReviewStati
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let database_path = app.path().app_data_dir()?.join("lwt.sqlite3");
             let database = Database::open(&database_path).map_err(std::io::Error::other)?;

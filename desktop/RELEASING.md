@@ -1,7 +1,7 @@
 # Desktop Release Builds
 
 The `Desktop Release Artifacts` workflow builds unsigned native installers on
-their target operating systems. It runs manually or for tags matching `v*`.
+their target operating systems. It runs only when manually dispatched.
 
 | Artifact | Runner | Bundles |
 | --- | --- | --- |
@@ -36,6 +36,11 @@ npx tauri build --bundles dmg
 These artifacts are intentionally unsigned. Do not present them as trusted
 production releases until the signing, notarization, and updater stage is
 complete.
+
+Production `v*` tags instead invoke `Signed Desktop Release`. That protected
+workflow creates a draft GitHub release with signed updater bundles and a
+user-visible update channel. Provisioning, approval, verification, rotation,
+and recovery procedures are in [SIGNING.md](SIGNING.md).
 
 ## Verify an Artifact
 

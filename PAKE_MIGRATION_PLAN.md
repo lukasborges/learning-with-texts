@@ -79,12 +79,12 @@ expanded so its remaining work is visible before the next commit.
 
 ### Current Slice — Release Integrity and Signing
 
-- [x] Generate checksums for every release artifact (this commit).
-- [x] Generate and retain a machine-readable software bill of materials (SBOM) (this commit).
-- [ ] Define least-privilege secret contracts for Windows and macOS signing.
-- [ ] Sign Windows installers and notarize macOS DMGs in CI.
-- [ ] Configure cryptographically signed application updates.
-- [ ] Document verification, key rotation, and release recovery procedures.
+- [x] Generate checksums for every release artifact (`07f4559`).
+- [x] Generate and retain a machine-readable software bill of materials (SBOM) (`07f4559`).
+- [x] Define least-privilege secret contracts for Windows and macOS signing (this commit).
+- [ ] Sign Windows installers and notarize macOS DMGs in CI. **Workflow ready; protected credentials and first CI evidence pending.**
+- [x] Configure cryptographically signed application updates (this commit).
+- [x] Document verification, key rotation, and release recovery procedures (this commit).
 
 ### Completed Desktop Workflows
 
@@ -118,8 +118,8 @@ expanded so its remaining work is visible before the next commit.
 
 - [x] Produce local Linux DEB and AppImage proof-of-concept packages.
 - [ ] Build Windows, macOS, and Linux release artifacts in CI. **Matrix ready; first remote run pending.**
-- [x] Add upgrade tests covering older desktop schema versions (this commit).
-- [ ] Add signing/notarization, checksums, SBOM, and signed updates. **In progress.**
+- [x] Add upgrade tests covering older desktop schema versions (`352a3b0`).
+- [ ] Add signing/notarization, checksums, SBOM, and signed updates. **Implementation complete; first protected CI release pending.**
 - [ ] Validate installation, backup, upgrade, and removal with nontechnical users.
 
 Update this checklist whenever a slice is committed: check its completed tasks,
