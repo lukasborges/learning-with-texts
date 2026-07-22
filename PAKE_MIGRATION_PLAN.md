@@ -77,14 +77,14 @@ Last updated: July 22, 2026. A checked current-slice item is implemented and
 tested; completed workflows also include their commit. The current slice is
 expanded so its remaining work is visible before the next commit.
 
-### Current Slice — Local Audio Media
+### Current Slice — Packaged-App End-to-End Coverage
 
-- [x] Add transactional app-data storage for text audio.
-- [x] Add typed native/frontend save, load, and remove commands.
-- [x] Add audio selection and playback to text and reading workflows.
-- [x] Include validated media bytes in portable backup and restore.
-- [x] Embed eligible local legacy audio and warn about unsupported references.
-- [x] Add tests, package, and clean-install smoke-test the application.
+- [ ] Select a packaged-app automation driver and document its prerequisites.
+- [ ] Automate first launch against an isolated app-data directory.
+- [ ] Automate text creation, reading, and term persistence.
+- [ ] Automate a review session and verify scheduling/statistics.
+- [ ] Automate backup export and transactional restore.
+- [ ] Run the suite against a packaged Linux artifact and document CI expansion.
 
 ### Completed Desktop Workflows
 
@@ -100,14 +100,16 @@ expanded so its remaining work is visible before the next commit.
 - [x] Shared text and term tags, including legacy migration (`a633ff8`).
 - [x] Archived texts, archive filters, and legacy archive migration (`bea63bc`).
 - [x] Verified reconstruction of legacy compound positions (`e14be17`).
+- [x] Local audio storage, playback, backup, and legacy embedding (`cc45046`).
+- [x] Language and application settings parity, migration, and documentation (this commit).
 
 ### Remaining MVP Migration
 
 - [x] Migrate archived texts (`bea63bc`).
 - [x] Recreate legacy compound-term positions where they can be identified (`e14be17`).
-- [ ] Import/copy local audio and other media instead of retaining references only. **In progress.**
-- [ ] Complete parity checks for remaining language and application settings.
-- [ ] Add packaged-app end-to-end tests for first launch, reading, review, and restore.
+- [x] Import/copy local audio and other media instead of retaining references only (`cc45046`).
+- [x] Complete parity checks for remaining language and application settings (this commit).
+- [ ] Add packaged-app end-to-end tests for first launch, reading, review, and restore. **In progress.**
 
 ### Distribution and Hardening
 

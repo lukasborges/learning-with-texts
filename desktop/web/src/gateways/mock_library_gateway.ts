@@ -1,4 +1,5 @@
 import type {
+  AppSettings,
   BackupSummary,
   CreateTagInput,
   CreateTextInput,
@@ -82,6 +83,7 @@ interface MockBackup {
   readonly textTagIds: Array<[number, number[]]>;
   readonly termTagIds: Array<[string, number[]]>;
   readonly media?: Array<[number, TextAudio]>;
+  readonly appSettings?: AppSettings;
 }
 
 function countUniqueTerms(content: string): number {
@@ -133,6 +135,13 @@ export class MockLibraryGateway implements LibraryGateway {
   private readonly textTagIds = new Map<number, Set<number>>();
   private readonly termTagIds = new Map<string, Set<number>>();
   private readonly media = new Map<number, TextAudio>();
+  private currentAppSettings: AppSettings = {
+    libraryPageSize: 25,
+    archivedPageSize: 25,
+    tagPageSize: 50,
+    showWordCounts: true,
+    reviewDelayMs: 0
+  };
 
   private settingsFor(language: string): LanguageSettings {
     const key = language.toLocaleLowerCase();
@@ -143,6 +152,11 @@ export class MockLibraryGateway implements LibraryGateway {
     const settings: LanguageSettings = {
       id: this.languageSettings.size + 1,
       name: language,
+      dictionaryUri1: '',
+      dictionaryUri2: undefined,
+      googleTranslateUri: undefined,
+      exportTemplate: undefined,
+      textSize: 100,
       characterSubstitutions: '',
       sentenceTerminators: '',
       splitEachCharacter: false,
@@ -215,6 +229,15 @@ export class MockLibraryGateway implements LibraryGateway {
       .sort((left, right) => left.name.localeCompare(right.name));
   }
 
+  async appSettings(): Promise<AppSettings> {
+    return { ...this.currentAppSettings };
+  }
+
+  async updateAppSettings(settings: AppSettings): Promise<AppSettings> {
+    this.currentAppSettings = { ...settings };
+    return this.appSettings();
+  }
+
   async updateLanguage(input: UpdateLanguageInput): Promise<LanguageSettings> {
     await this.listLanguages();
     const entry = [...this.languageSettings.entries()].find(([, value]) => value.id === input.id);
@@ -249,7 +272,8 @@ export class MockLibraryGateway implements LibraryGateway {
       nextTagId: this.nextTagId,
       textTagIds: [...this.textTagIds].map(([id, values]) => [id, [...values]]),
       termTagIds: [...this.termTagIds].map(([key, values]) => [key, [...values]]),
-      media: [...this.media]
+      media: [...this.media],
+      appSettings: this.currentAppSettings
     };
     return JSON.stringify(backup, null, 2);
   }
@@ -317,6 +341,13 @@ export class MockLibraryGateway implements LibraryGateway {
     this.texts.forEach((text) => {
       text.hasAudio = this.media.has(text.id);
     });
+    this.currentAppSettings = backup.appSettings ?? {
+      libraryPageSize: 25,
+      archivedPageSize: 25,
+      tagPageSize: 50,
+      showWordCounts: true,
+      reviewDelayMs: 0
+    };
     return {
       languages: this.languageSettings.size,
       texts: this.texts.length,
@@ -527,6 +558,10 @@ export class MockLibraryGateway implements LibraryGateway {
       totalTerms: progress.totalTerms,
       removeSpaces: settings.removeSpaces,
       rightToLeft: settings.rightToLeft,
+      textSize: settings.textSize,
+      dictionaryUri1: settings.dictionaryUri1,
+      dictionaryUri2: settings.dictionaryUri2,
+      googleTranslateUri: settings.googleTranslateUri,
       sentences: sentenceTexts.map((sentence, index) => ({
         id: index + 1,
         position: index + 1,

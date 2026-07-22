@@ -1,4 +1,5 @@
 import type {
+  AppSettings,
   BackupSummary,
   CreateTagInput,
   CreateTextInput,
@@ -42,6 +43,14 @@ export class TauriLibraryGateway implements LibraryGateway {
 
   listLanguages(): Promise<readonly LanguageSettings[]> {
     return this.invoke<LanguageSettings[]>('list_languages');
+  }
+
+  appSettings(): Promise<AppSettings> {
+    return this.invoke<AppSettings>('app_settings');
+  }
+
+  updateAppSettings(settings: AppSettings): Promise<AppSettings> {
+    return this.invoke<AppSettings>('update_app_settings', { settings });
   }
 
   updateLanguage(input: UpdateLanguageInput): Promise<LanguageSettings> {

@@ -394,6 +394,74 @@ textarea {
   color: #637083;
 }
 
+.pager {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 0.75rem;
+}
+
+.pager button {
+  padding: 0.55rem 0.8rem;
+  border: 1px solid #8ca1b2;
+  border-radius: 8px;
+  background: #fff;
+  color: #365166;
+  cursor: pointer;
+}
+
+.pager button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.settings-card {
+  display: grid;
+  gap: 1rem;
+  max-width: 42rem;
+  padding: 1.25rem;
+  border: 1px solid #d9e1e8;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.settings-card > label:not(.settings-checkbox) {
+  display: grid;
+  gap: 0.4rem;
+  font-weight: 650;
+}
+
+.settings-card input[type='number'] {
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #aebdca;
+  border-radius: 8px;
+}
+
+.settings-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.settings-card button {
+  justify-self: start;
+  padding: 0.65rem 0.9rem;
+  border: 0;
+  border-radius: 8px;
+  background: #246f96;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.term-editor__lookups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
 .data-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));

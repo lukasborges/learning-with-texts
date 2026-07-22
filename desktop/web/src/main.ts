@@ -1,6 +1,7 @@
 import logoUrl from '../../../img/lwt_icon_big.png';
 import { createLibraryGateway } from './gateways/create_library_gateway';
 import type {
+  AppSettings,
   LibraryText,
   ReadingText,
   Tag,
@@ -19,6 +20,8 @@ const applicationRoot = app;
 const usesNativeDatabase = import.meta.env.MODE === 'tauri';
 const gateway = createLibraryGateway();
 let showingArchivedTexts = false;
+let libraryPage = 0;
+let tagPage = 0;
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
@@ -49,12 +52,50 @@ function audioType(file: File): string {
   );
 }
 
+function externalLookupUrl(template: string | undefined, term: string): string | undefined {
+  if (!template?.trim()) {
+    return undefined;
+  }
+  try {
+    const url = new URL(template.replaceAll('###', encodeURIComponent(term)));
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function createField(labelText: string, control: HTMLElement): HTMLLabelElement {
   const label = document.createElement('label');
   const caption = document.createElement('span');
   caption.textContent = labelText;
   label.append(caption, control);
   return label;
+}
+
+function createPager(
+  total: number,
+  page: number,
+  pageSize: number,
+  onPage: (page: number) => void
+): HTMLElement {
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  const controls = document.createElement('nav');
+  controls.className = 'pager';
+  controls.setAttribute('aria-label', 'Pagination');
+  const previous = document.createElement('button');
+  previous.type = 'button';
+  previous.textContent = '← Previous';
+  previous.disabled = page <= 0;
+  previous.addEventListener('click', () => onPage(Math.max(0, page - 1)));
+  const label = document.createElement('span');
+  label.textContent = `Page ${page + 1} of ${pages}`;
+  const next = document.createElement('button');
+  next.type = 'button';
+  next.textContent = 'Next →';
+  next.disabled = page + 1 >= pages;
+  next.addEventListener('click', () => onPage(Math.min(pages - 1, page + 1)));
+  controls.append(previous, label, next);
+  return controls;
 }
 
 function createTagSelector(
@@ -417,6 +458,24 @@ async function renderReading(textId: number): Promise<void> {
         const normalizedLabel = document.createElement('p');
         normalizedLabel.className = 'term-editor__normalized';
         normalizedLabel.textContent = term.normalized;
+        const lookupLinks = document.createElement('div');
+        lookupLinks.className = 'term-editor__lookups';
+        for (const [label, template] of [
+          ['Dictionary 1', reading.dictionaryUri1],
+          ['Dictionary 2', reading.dictionaryUri2],
+          ['Translate', reading.googleTranslateUri]
+        ] as const) {
+          const url = externalLookupUrl(template, term.normalized);
+          if (!url) {
+            continue;
+          }
+          const link = document.createElement('a');
+          link.href = url;
+          link.target = '_blank';
+          link.rel = 'noreferrer';
+          link.textContent = label;
+          lookupLinks.append(link);
+        }
 
         const form = document.createElement('form');
         form.className = 'term-editor__form';
@@ -545,7 +604,7 @@ async function renderReading(textId: number): Promise<void> {
           actions,
           feedback
         );
-        editor.replaceChildren(heading, normalizedLabel, form);
+        editor.replaceChildren(heading, normalizedLabel, lookupLinks, form);
       })
       .catch((error: unknown) => {
         if (request === editorRequest) {
@@ -586,6 +645,7 @@ async function renderReading(textId: number): Promise<void> {
   const article = document.createElement('article');
   article.className = 'reading-content';
   article.dir = reading.rightToLeft ? 'rtl' : 'ltr';
+  article.style.fontSize = `${reading.textSize}%`;
   for (const sentence of reading.sentences) {
     const paragraph = document.createElement('p');
     paragraph.dataset.position = String(sentence.position);
@@ -671,7 +731,10 @@ async function renderReading(textId: number): Promise<void> {
 }
 
 async function renderReview(): Promise<void> {
-  const queue = await gateway.listReviewTerms(20);
+  const [queue, settings] = await Promise.all([
+    gateway.listReviewTerms(20),
+    gateway.appSettings()
+  ]);
   const shell = document.createElement('main');
   shell.className = 'shell review-shell';
   const toolbar = document.createElement('div');
@@ -746,7 +809,11 @@ async function renderReview(): Promise<void> {
           .recordReview({ termId: term.id, rating })
           .then(() => {
             current += 1;
-            showCard();
+            if (settings.reviewDelayMs > 0) {
+              window.setTimeout(showCard, settings.reviewDelayMs);
+            } else {
+              showCard();
+            }
           })
           .catch((error: unknown) => {
             window.alert(error instanceof Error ? error.message : String(error));
@@ -873,6 +940,26 @@ async function renderLanguages(): Promise<void> {
     name.textContent = language.name;
     const count = document.createElement('p');
     count.textContent = `${language.textCount} ${language.textCount === 1 ? 'text' : 'texts'}`;
+    const dictionary1 = document.createElement('input');
+    dictionary1.maxLength = 1_000;
+    dictionary1.placeholder = 'https://dictionary.example/?q=###';
+    dictionary1.value = language.dictionaryUri1;
+    const dictionary2 = document.createElement('input');
+    dictionary2.maxLength = 1_000;
+    dictionary2.value = language.dictionaryUri2 ?? '';
+    const googleTranslate = document.createElement('input');
+    googleTranslate.maxLength = 1_000;
+    googleTranslate.value = language.googleTranslateUri ?? '';
+    const exportTemplate = document.createElement('textarea');
+    exportTemplate.maxLength = 2_000;
+    exportTemplate.rows = 3;
+    exportTemplate.value = language.exportTemplate ?? '';
+    const textSize = document.createElement('input');
+    textSize.type = 'number';
+    textSize.min = '25';
+    textSize.max = '500';
+    textSize.required = true;
+    textSize.value = String(language.textSize);
     const terminators = document.createElement('input');
     terminators.maxLength = 500;
     terminators.placeholder = '.!?。！？';
@@ -923,6 +1010,11 @@ async function renderLanguages(): Promise<void> {
       void gateway
         .updateLanguage({
           id: language.id,
+          dictionaryUri1: dictionary1.value,
+          dictionaryUri2: dictionary2.value || undefined,
+          googleTranslateUri: googleTranslate.value || undefined,
+          exportTemplate: exportTemplate.value || undefined,
+          textSize: Number(textSize.value),
           characterSubstitutions: substitutions.value,
           sentenceTerminators: terminators.value,
           splitEachCharacter: checkboxes[0]?.[1].checked ?? false,
@@ -940,7 +1032,20 @@ async function renderLanguages(): Promise<void> {
           save.disabled = false;
         });
     });
-    form.append(name, count, terminatorField, substitutionField, options, save, feedback);
+    form.append(
+      name,
+      count,
+      createField('Primary dictionary URL template', dictionary1),
+      createField('Secondary dictionary URL template', dictionary2),
+      createField('Translation URL template', googleTranslate),
+      createField('Reading text size (%)', textSize),
+      createField('Term export template', exportTemplate),
+      terminatorField,
+      substitutionField,
+      options,
+      save,
+      feedback
+    );
     grid.append(form);
   }
 
@@ -958,8 +1063,101 @@ async function renderLanguages(): Promise<void> {
   applicationRoot.replaceChildren(shell);
 }
 
+async function renderAppSettings(): Promise<void> {
+  const settings = await gateway.appSettings();
+  const shell = document.createElement('main');
+  shell.className = 'shell settings-shell';
+  const toolbar = document.createElement('div');
+  toolbar.className = 'reading-toolbar';
+  const back = document.createElement('button');
+  back.type = 'button';
+  back.textContent = '← Back to library';
+  back.addEventListener('click', () => void render());
+  toolbar.append(back);
+  const heading = document.createElement('h1');
+  heading.textContent = 'Application settings';
+  const introduction = document.createElement('p');
+  introduction.className = 'language-introduction';
+  introduction.textContent =
+    'These preferences replace the legacy settings that still affect desktop workflows.';
+  const form = document.createElement('form');
+  form.className = 'settings-card';
+  const numberInput = (value: number, min: number, max: number): HTMLInputElement => {
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.required = true;
+    input.min = String(min);
+    input.max = String(max);
+    input.value = String(value);
+    return input;
+  };
+  const libraryPageSize = numberInput(settings.libraryPageSize, 5, 500);
+  const archivedPageSize = numberInput(settings.archivedPageSize, 5, 500);
+  const tagPageSize = numberInput(settings.tagPageSize, 5, 500);
+  const reviewDelayMs = numberInput(settings.reviewDelayMs, 0, 10_000);
+  const showWordCounts = document.createElement('input');
+  showWordCounts.type = 'checkbox';
+  showWordCounts.checked = settings.showWordCounts;
+  const showWordCountsLabel = document.createElement('label');
+  showWordCountsLabel.className = 'settings-checkbox';
+  showWordCountsLabel.append(
+    showWordCounts,
+    document.createTextNode('Show word counts and progress in the library')
+  );
+  const save = document.createElement('button');
+  save.type = 'submit';
+  save.textContent = 'Save settings';
+  const feedback = document.createElement('p');
+  feedback.className = 'form-status';
+  feedback.setAttribute('role', 'status');
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    if (!form.reportValidity()) {
+      return;
+    }
+    const updated: AppSettings = {
+      libraryPageSize: Number(libraryPageSize.value),
+      archivedPageSize: Number(archivedPageSize.value),
+      tagPageSize: Number(tagPageSize.value),
+      showWordCounts: showWordCounts.checked,
+      reviewDelayMs: Number(reviewDelayMs.value)
+    };
+    save.disabled = true;
+    feedback.textContent = 'Saving settings…';
+    void gateway
+      .updateAppSettings(updated)
+      .then(() => {
+        libraryPage = 0;
+        tagPage = 0;
+        feedback.textContent = 'Application settings saved.';
+      })
+      .catch((error: unknown) => {
+        feedback.className = 'form-status form-status--error';
+        feedback.textContent = error instanceof Error ? error.message : String(error);
+      })
+      .finally(() => {
+        save.disabled = false;
+      });
+  });
+  form.append(
+    createField('Active texts per page', libraryPageSize),
+    createField('Archived texts per page', archivedPageSize),
+    createField('Tags per page', tagPageSize),
+    createField('Delay after a review rating (milliseconds)', reviewDelayMs),
+    showWordCountsLabel,
+    save,
+    feedback
+  );
+  const note = document.createElement('aside');
+  note.className = 'migration-notice language-warning';
+  note.textContent =
+    'Legacy frame dimensions and mobile frame-set mode are intentionally omitted because the desktop interface is responsive. Term-table pagination, similar-term count, and annotation delimiters remain deferred until those legacy screens have desktop equivalents.';
+  shell.append(toolbar, heading, introduction, form, note);
+  applicationRoot.replaceChildren(shell);
+}
+
 async function renderTags(message = ''): Promise<void> {
-  const tags = await gateway.listTags();
+  const [tags, settings] = await Promise.all([gateway.listTags(), gateway.appSettings()]);
   const shell = document.createElement('main');
   shell.className = 'shell tag-shell';
   const toolbar = document.createElement('div');
@@ -1020,7 +1218,13 @@ async function renderTags(message = ''): Promise<void> {
     empty.textContent = 'No tags have been created yet.';
     list.append(empty);
   }
-  for (const tag of tags) {
+  const pageCount = Math.max(1, Math.ceil(tags.length / settings.tagPageSize));
+  tagPage = Math.min(tagPage, pageCount - 1);
+  const pageTags = tags.slice(
+    tagPage * settings.tagPageSize,
+    (tagPage + 1) * settings.tagPageSize
+  );
+  for (const tag of pageTags) {
     const card = document.createElement('article');
     card.className = 'tag-card';
     const tagName = document.createElement('h2');
@@ -1031,6 +1235,14 @@ async function renderTags(message = ''): Promise<void> {
     counts.textContent = `${tag.textCount} texts · ${tag.termCount} terms`;
     card.append(tagName, tagComment, counts);
     list.append(card);
+  }
+  if (tags.length > settings.tagPageSize) {
+    list.append(
+      createPager(tags.length, tagPage, settings.tagPageSize, (page) => {
+        tagPage = page;
+        void renderTags();
+      })
+    );
   }
   shell.append(toolbar, heading, description, form, list);
   applicationRoot.replaceChildren(shell);
@@ -1176,7 +1388,7 @@ async function renderDataManagement(): Promise<void> {
   applicationRoot.replaceChildren(shell);
 }
 
-function createTextCard(text: LibraryText): HTMLElement {
+function createTextCard(text: LibraryText, showWordCounts: boolean): HTMLElement {
   const card = document.createElement('article');
   card.className = 'text-card';
 
@@ -1191,8 +1403,9 @@ function createTextCard(text: LibraryText): HTMLElement {
 
   const details = document.createElement('p');
   details.className = 'text-card__details';
-  details.textContent =
-    text.totalTerms > 0
+  details.textContent = !showWordCounts
+    ? text.lastOpened || 'Word counts hidden in Settings'
+    : text.totalTerms > 0
       ? `${text.knownTerms} of ${text.totalTerms} terms known${
           text.lastOpened ? ` · ${text.lastOpened}` : ''
         }`
@@ -1260,7 +1473,7 @@ function createTextCard(text: LibraryText): HTMLElement {
   actions.append(editButton, archiveButton, deleteButton);
 
   card.append(heading, language);
-  if (text.totalTerms > 0) {
+  if (showWordCounts && text.totalTerms > 0) {
     const meter = document.createElement('progress');
     meter.max = 100;
     meter.value = progress;
@@ -1272,11 +1485,12 @@ function createTextCard(text: LibraryText): HTMLElement {
 }
 
 async function render(message = '', editingId?: number): Promise<void> {
-  const [texts, editingText, tags, selectedTagIds] = await Promise.all([
+  const [texts, editingText, tags, selectedTagIds, settings] = await Promise.all([
     gateway.listTexts(),
     editingId === undefined ? Promise.resolve(undefined) : gateway.getText(editingId),
     gateway.listTags(),
-    editingId === undefined ? Promise.resolve([]) : gateway.listTextTagIds(editingId)
+    editingId === undefined ? Promise.resolve([]) : gateway.listTextTagIds(editingId),
+    gateway.appSettings()
   ]);
 
   const shell = document.createElement('main');
@@ -1318,6 +1532,7 @@ async function render(message = '', editingId?: number): Promise<void> {
     : `Archive (${texts.filter(({ archived }) => archived).length})`;
   archiveViewButton.addEventListener('click', () => {
     showingArchivedTexts = !showingArchivedTexts;
+    libraryPage = 0;
     void render().catch((error: unknown) => {
       window.alert(error instanceof Error ? error.message : String(error));
     });
@@ -1365,10 +1580,20 @@ async function render(message = '', editingId?: number): Promise<void> {
       window.alert(error instanceof Error ? error.message : String(error));
     });
   });
+  const settingsButton = document.createElement('button');
+  settingsButton.type = 'button';
+  settingsButton.className = 'review-start';
+  settingsButton.textContent = 'Settings';
+  settingsButton.addEventListener('click', () => {
+    void renderAppSettings().catch((error: unknown) => {
+      window.alert(error instanceof Error ? error.message : String(error));
+    });
+  });
   const libraryActions = document.createElement('div');
   libraryActions.className = 'library-actions';
   libraryActions.append(
     archiveViewButton,
+    settingsButton,
     dataButton,
     tagsButton,
     languagesButton,
@@ -1383,6 +1608,12 @@ async function render(message = '', editingId?: number): Promise<void> {
   library.className = 'library-grid';
   library.setAttribute('aria-label', showingArchivedTexts ? 'Archived texts' : 'Text library');
   const visibleTexts = texts.filter(({ archived }) => archived === showingArchivedTexts);
+  const pageSize = showingArchivedTexts
+    ? settings.archivedPageSize
+    : settings.libraryPageSize;
+  const pageCount = Math.max(1, Math.ceil(visibleTexts.length / pageSize));
+  libraryPage = Math.min(libraryPage, pageCount - 1);
+  const pageTexts = visibleTexts.slice(libraryPage * pageSize, (libraryPage + 1) * pageSize);
   if (visibleTexts.length === 0) {
     const emptyState = document.createElement('p');
     emptyState.className = 'empty-state';
@@ -1391,7 +1622,15 @@ async function render(message = '', editingId?: number): Promise<void> {
       : 'Your local library is empty. Use the form above to add a text.';
     library.append(emptyState);
   } else {
-    library.append(...visibleTexts.map(createTextCard));
+    library.append(...pageTexts.map((text) => createTextCard(text, settings.showWordCounts)));
+    if (visibleTexts.length > pageSize) {
+      library.append(
+        createPager(visibleTexts.length, libraryPage, pageSize, (page) => {
+          libraryPage = page;
+          void render();
+        })
+      );
+    }
   }
 
   shell.append(

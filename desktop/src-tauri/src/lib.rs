@@ -2,9 +2,9 @@ mod database;
 mod parser;
 
 use database::{
-    BackupSummary, CreateExpressionInput, CreateTagInput, CreateTextInput, CreatedExpression,
-    Database, LanguageSettings, LibraryText, ReadingText, RecordReviewInput, ReviewCard,
-    ReviewOutcome, ReviewStatistics, SaveTermInput, SaveTextAudioInput, SavedTerm,
+    AppSettings, BackupSummary, CreateExpressionInput, CreateTagInput, CreateTextInput,
+    CreatedExpression, Database, LanguageSettings, LibraryText, ReadingText, RecordReviewInput,
+    ReviewCard, ReviewOutcome, ReviewStatistics, SaveTermInput, SaveTextAudioInput, SavedTerm,
     SetTermStatusInput, SetTermTagsInput, SetTextArchivedInput, SetTextTagsInput, Tag, TermDetails,
     TermProgress, TextAudio, TextDetails, UpdateLanguageInput, UpdateTextInput,
 };
@@ -18,6 +18,19 @@ fn list_texts(database: tauri::State<'_, Database>) -> Result<Vec<LibraryText>, 
 #[tauri::command]
 fn list_languages(database: tauri::State<'_, Database>) -> Result<Vec<LanguageSettings>, String> {
     database.list_languages()
+}
+
+#[tauri::command]
+fn app_settings(database: tauri::State<'_, Database>) -> Result<AppSettings, String> {
+    database.app_settings()
+}
+
+#[tauri::command]
+fn update_app_settings(
+    database: tauri::State<'_, Database>,
+    settings: AppSettings,
+) -> Result<AppSettings, String> {
+    database.update_app_settings(settings)
 }
 
 #[tauri::command]
@@ -210,6 +223,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             list_texts,
             list_languages,
+            app_settings,
+            update_app_settings,
             update_language,
             export_backup,
             restore_backup,

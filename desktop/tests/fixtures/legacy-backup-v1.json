@@ -6,6 +6,13 @@
   "warnings": [
     "The legacy database has no review-event history. Imported learning terms will be due for review immediately."
   ],
+  "settings": {
+    "libraryPageSize": 20,
+    "archivedPageSize": 30,
+    "tagPageSize": 40,
+    "showWordCounts": false,
+    "reviewDelayMs": 250
+  },
   "languages": [
     {
       "id": 7,

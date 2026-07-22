@@ -1,4 +1,5 @@
 import type {
+  AppSettings,
   BackupSummary,
   CreateTagInput,
   CreateTextInput,
@@ -30,6 +31,8 @@ import type {
 export interface LibraryGateway {
   listTexts(): Promise<readonly LibraryText[]>;
   listLanguages(): Promise<readonly LanguageSettings[]>;
+  appSettings(): Promise<AppSettings>;
+  updateAppSettings(settings: AppSettings): Promise<AppSettings>;
   updateLanguage(input: UpdateLanguageInput): Promise<LanguageSettings>;
   exportBackup(): Promise<string>;
   restoreBackup(payload: string): Promise<BackupSummary>;

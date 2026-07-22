@@ -67,6 +67,10 @@ export interface ReadingText {
   readonly totalTerms: number;
   readonly removeSpaces: boolean;
   readonly rightToLeft: boolean;
+  readonly textSize: number;
+  readonly dictionaryUri1: string;
+  readonly dictionaryUri2?: string;
+  readonly googleTranslateUri?: string;
   readonly sentences: readonly ReadingSentence[];
   readonly expressions: readonly ReadingExpression[];
 }
@@ -178,6 +182,11 @@ export interface ReviewStatistics {
 export interface LanguageSettings {
   readonly id: number;
   readonly name: string;
+  readonly dictionaryUri1: string;
+  readonly dictionaryUri2?: string;
+  readonly googleTranslateUri?: string;
+  readonly exportTemplate?: string;
+  readonly textSize: number;
   readonly characterSubstitutions: string;
   readonly sentenceTerminators: string;
   readonly splitEachCharacter: boolean;
@@ -188,11 +197,24 @@ export interface LanguageSettings {
 
 export interface UpdateLanguageInput {
   readonly id: number;
+  readonly dictionaryUri1: string;
+  readonly dictionaryUri2?: string;
+  readonly googleTranslateUri?: string;
+  readonly exportTemplate?: string;
+  readonly textSize: number;
   readonly characterSubstitutions: string;
   readonly sentenceTerminators: string;
   readonly splitEachCharacter: boolean;
   readonly removeSpaces: boolean;
   readonly rightToLeft: boolean;
+}
+
+export interface AppSettings {
+  readonly libraryPageSize: number;
+  readonly archivedPageSize: number;
+  readonly tagPageSize: number;
+  readonly showWordCounts: boolean;
+  readonly reviewDelayMs: number;
 }
 
 export interface BackupSummary {

@@ -15,8 +15,9 @@ const REVIEWS_MIGRATION: &str = include_str!("../migrations/0006_reviews.sql");
 const TAGS_MIGRATION: &str = include_str!("../migrations/0007_tags.sql");
 const ARCHIVED_TEXTS_MIGRATION: &str = include_str!("../migrations/0008_archived_texts.sql");
 const TEXT_AUDIO_MIGRATION: &str = include_str!("../migrations/0009_text_audio.sql");
-const LATEST_SCHEMA_VERSION: i64 = 9;
-const MIGRATIONS: [(i64, &str); 9] = [
+const APP_SETTINGS_MIGRATION: &str = include_str!("../migrations/0010_app_settings.sql");
+const LATEST_SCHEMA_VERSION: i64 = 10;
+const MIGRATIONS: [(i64, &str); 10] = [
     (1, INITIAL_MIGRATION),
     (2, TEXT_PARSING_MIGRATION),
     (3, TERMS_MIGRATION),
@@ -25,7 +26,8 @@ const MIGRATIONS: [(i64, &str); 9] = [
     (6, REVIEWS_MIGRATION),
     (7, TAGS_MIGRATION),
     (8, ARCHIVED_TEXTS_MIGRATION),
-    (LATEST_SCHEMA_VERSION, TEXT_AUDIO_MIGRATION),
+    (9, TEXT_AUDIO_MIGRATION),
+    (LATEST_SCHEMA_VERSION, APP_SETTINGS_MIGRATION),
 ];
 
 const MAX_AUDIO_BYTES: usize = 50_000_000;
@@ -128,6 +130,10 @@ pub struct ReadingText {
     pub total_terms: i64,
     pub remove_spaces: bool,
     pub right_to_left: bool,
+    pub text_size: i64,
+    pub dictionary_uri_1: String,
+    pub dictionary_uri_2: Option<String>,
+    pub google_translate_uri: Option<String>,
     pub sentences: Vec<ReadingSentence>,
     pub expressions: Vec<ReadingExpression>,
 }
@@ -271,6 +277,11 @@ pub struct ReviewStatistics {
 pub struct LanguageSettings {
     pub id: i64,
     pub name: String,
+    pub dictionary_uri_1: String,
+    pub dictionary_uri_2: Option<String>,
+    pub google_translate_uri: Option<String>,
+    pub export_template: Option<String>,
+    pub text_size: i64,
     pub character_substitutions: String,
     pub sentence_terminators: String,
     pub split_each_character: bool,
@@ -283,11 +294,38 @@ pub struct LanguageSettings {
 #[serde(rename_all = "camelCase")]
 pub struct UpdateLanguageInput {
     pub id: i64,
+    pub dictionary_uri_1: String,
+    pub dictionary_uri_2: Option<String>,
+    pub google_translate_uri: Option<String>,
+    pub export_template: Option<String>,
+    pub text_size: i64,
     pub character_substitutions: String,
     pub sentence_terminators: String,
     pub split_each_character: bool,
     pub remove_spaces: bool,
     pub right_to_left: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppSettings {
+    pub library_page_size: i64,
+    pub archived_page_size: i64,
+    pub tag_page_size: i64,
+    pub show_word_counts: bool,
+    pub review_delay_ms: i64,
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            library_page_size: 25,
+            archived_page_size: 25,
+            tag_page_size: 50,
+            show_word_counts: true,
+            review_delay_ms: 0,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -346,6 +384,8 @@ struct PortableBackup {
     source: Option<String>,
     #[serde(default)]
     warnings: Vec<String>,
+    #[serde(default)]
+    settings: AppSettings,
     languages: Vec<BackupLanguage>,
     texts: Vec<BackupText>,
     #[serde(default)]
@@ -570,6 +610,19 @@ fn validate_audio(
         return Err("Audio must be between 1 byte and 50 MB".to_string());
     }
     Ok((file_name, media_type, content))
+}
+
+fn validate_app_settings(settings: &AppSettings) -> Result<(), String> {
+    if !(5..=500).contains(&settings.library_page_size)
+        || !(5..=500).contains(&settings.archived_page_size)
+        || !(5..=500).contains(&settings.tag_page_size)
+    {
+        return Err("Page sizes must be between 5 and 500".to_string());
+    }
+    if !(0..=10_000).contains(&settings.review_delay_ms) {
+        return Err("Review delay must be between 0 and 10,000 milliseconds".to_string());
+    }
+    Ok(())
 }
 
 fn find_or_create_language(
@@ -1139,6 +1192,23 @@ impl Database {
         let exported_at = connection
             .query_row("SELECT CURRENT_TIMESTAMP", [], |row| row.get(0))
             .map_err(|error| format!("Unable to timestamp the backup: {error}"))?;
+        let settings = connection
+            .query_row(
+                "SELECT library_page_size, archived_page_size, tag_page_size,
+                        show_word_counts, review_delay_ms
+                 FROM app_settings WHERE id = 1",
+                [],
+                |row| {
+                    Ok(AppSettings {
+                        library_page_size: row.get(0)?,
+                        archived_page_size: row.get(1)?,
+                        tag_page_size: row.get(2)?,
+                        show_word_counts: row.get(3)?,
+                        review_delay_ms: row.get(4)?,
+                    })
+                },
+            )
+            .map_err(|error| format!("Unable to load backup settings: {error}"))?;
         let languages = {
             let mut statement = connection
                 .prepare(
@@ -1361,6 +1431,7 @@ impl Database {
             exported_at,
             source: Some("lwt-desktop".into()),
             warnings: Vec::new(),
+            settings,
             languages,
             texts,
             media,
@@ -1398,6 +1469,7 @@ impl Database {
                 backup.version
             ));
         }
+        validate_app_settings(&backup.settings)?;
         let mut summary = BackupSummary {
             languages: backup.languages.len(),
             texts: backup.texts.len(),
@@ -1417,6 +1489,24 @@ impl Database {
         let transaction = connection
             .transaction()
             .map_err(|error| format!("Unable to start backup restoration: {error}"))?;
+        transaction
+            .execute(
+                "UPDATE app_settings
+                 SET library_page_size = ?1,
+                     archived_page_size = ?2,
+                     tag_page_size = ?3,
+                     show_word_counts = ?4,
+                     review_delay_ms = ?5
+                 WHERE id = 1",
+                params![
+                    backup.settings.library_page_size,
+                    backup.settings.archived_page_size,
+                    backup.settings.tag_page_size,
+                    backup.settings.show_word_counts,
+                    backup.settings.review_delay_ms
+                ],
+            )
+            .map_err(|error| format!("Unable to restore application settings: {error}"))?;
         transaction
             .execute_batch(
                 "DELETE FROM review_events;
@@ -1661,6 +1751,11 @@ impl Database {
             .prepare(
                 "SELECT languages.id,
                         languages.name,
+                        languages.dictionary_uri_1,
+                        languages.dictionary_uri_2,
+                        languages.google_translate_uri,
+                        languages.export_template,
+                        languages.text_size,
                         languages.character_substitutions,
                         languages.regexp_split_sentences,
                         languages.split_each_character,
@@ -1678,17 +1773,73 @@ impl Database {
                 Ok(LanguageSettings {
                     id: row.get(0)?,
                     name: row.get(1)?,
-                    character_substitutions: row.get(2)?,
-                    sentence_terminators: row.get(3)?,
-                    split_each_character: row.get(4)?,
-                    remove_spaces: row.get(5)?,
-                    right_to_left: row.get(6)?,
-                    text_count: row.get(7)?,
+                    dictionary_uri_1: row.get(2)?,
+                    dictionary_uri_2: row.get(3)?,
+                    google_translate_uri: row.get(4)?,
+                    export_template: row.get(5)?,
+                    text_size: row.get(6)?,
+                    character_substitutions: row.get(7)?,
+                    sentence_terminators: row.get(8)?,
+                    split_each_character: row.get(9)?,
+                    remove_spaces: row.get(10)?,
+                    right_to_left: row.get(11)?,
+                    text_count: row.get(12)?,
                 })
             })
             .map_err(|error| format!("Unable to load language settings: {error}"))?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|error| format!("Unable to decode language settings: {error}"))
+    }
+
+    pub fn app_settings(&self) -> Result<AppSettings, String> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| "The desktop database lock is unavailable".to_string())?;
+        connection
+            .query_row(
+                "SELECT library_page_size, archived_page_size, tag_page_size,
+                        show_word_counts, review_delay_ms
+                 FROM app_settings WHERE id = 1",
+                [],
+                |row| {
+                    Ok(AppSettings {
+                        library_page_size: row.get(0)?,
+                        archived_page_size: row.get(1)?,
+                        tag_page_size: row.get(2)?,
+                        show_word_counts: row.get(3)?,
+                        review_delay_ms: row.get(4)?,
+                    })
+                },
+            )
+            .map_err(|error| format!("Unable to load application settings: {error}"))
+    }
+
+    pub fn update_app_settings(&self, settings: AppSettings) -> Result<AppSettings, String> {
+        validate_app_settings(&settings)?;
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| "The desktop database lock is unavailable".to_string())?;
+        connection
+            .execute(
+                "UPDATE app_settings
+                 SET library_page_size = ?1,
+                     archived_page_size = ?2,
+                     tag_page_size = ?3,
+                     show_word_counts = ?4,
+                     review_delay_ms = ?5
+                 WHERE id = 1",
+                params![
+                    settings.library_page_size,
+                    settings.archived_page_size,
+                    settings.tag_page_size,
+                    settings.show_word_counts,
+                    settings.review_delay_ms
+                ],
+            )
+            .map_err(|error| format!("Unable to save application settings: {error}"))?;
+        Ok(settings)
     }
 
     pub fn update_language(&self, input: UpdateLanguageInput) -> Result<LanguageSettings, String> {
@@ -1697,11 +1848,40 @@ impl Database {
         }
         let character_substitutions = input.character_substitutions.trim().to_string();
         let sentence_terminators = input.sentence_terminators.trim().to_string();
+        let dictionary_uri_1 = input.dictionary_uri_1.trim().to_string();
+        let dictionary_uri_2 = input
+            .dictionary_uri_2
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+        let google_translate_uri = input
+            .google_translate_uri
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+        let export_template = input
+            .export_template
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
         if character_substitutions.chars().count() > 500 {
             return Err("Character substitutions must not exceed 500 characters".to_string());
         }
         if sentence_terminators.chars().count() > 500 {
             return Err("Sentence terminators must not exceed 500 characters".to_string());
+        }
+        if dictionary_uri_1.chars().count() > 1_000
+            || dictionary_uri_2
+                .as_deref()
+                .is_some_and(|value| value.chars().count() > 1_000)
+            || google_translate_uri
+                .as_deref()
+                .is_some_and(|value| value.chars().count() > 1_000)
+            || export_template
+                .as_deref()
+                .is_some_and(|value| value.chars().count() > 2_000)
+        {
+            return Err("Language URI and export fields are too long".to_string());
+        }
+        if !(25..=500).contains(&input.text_size) {
+            return Err("Text size must be between 25 and 500 percent".to_string());
         }
         parse_character_substitutions(&character_substitutions)?;
 
@@ -1734,13 +1914,23 @@ impl Database {
         transaction
             .execute(
                 "UPDATE languages
-                 SET character_substitutions = ?1,
-                     regexp_split_sentences = ?2,
-                     split_each_character = ?3,
-                     remove_spaces = ?4,
-                     right_to_left = ?5
-                 WHERE id = ?6",
+                 SET dictionary_uri_1 = ?1,
+                     dictionary_uri_2 = ?2,
+                     google_translate_uri = ?3,
+                     export_template = ?4,
+                     text_size = ?5,
+                     character_substitutions = ?6,
+                     regexp_split_sentences = ?7,
+                     split_each_character = ?8,
+                     remove_spaces = ?9,
+                     right_to_left = ?10
+                 WHERE id = ?11",
                 params![
+                    dictionary_uri_1,
+                    dictionary_uri_2,
+                    google_translate_uri,
+                    export_template,
+                    input.text_size,
                     character_substitutions,
                     sentence_terminators,
                     input.split_each_character,
@@ -1780,6 +1970,11 @@ impl Database {
             .query_row(
                 "SELECT languages.id,
                         languages.name,
+                        languages.dictionary_uri_1,
+                        languages.dictionary_uri_2,
+                        languages.google_translate_uri,
+                        languages.export_template,
+                        languages.text_size,
                         languages.character_substitutions,
                         languages.regexp_split_sentences,
                         languages.split_each_character,
@@ -1795,12 +1990,17 @@ impl Database {
                     Ok(LanguageSettings {
                         id: row.get(0)?,
                         name: row.get(1)?,
-                        character_substitutions: row.get(2)?,
-                        sentence_terminators: row.get(3)?,
-                        split_each_character: row.get(4)?,
-                        remove_spaces: row.get(5)?,
-                        right_to_left: row.get(6)?,
-                        text_count: row.get(7)?,
+                        dictionary_uri_1: row.get(2)?,
+                        dictionary_uri_2: row.get(3)?,
+                        google_translate_uri: row.get(4)?,
+                        export_template: row.get(5)?,
+                        text_size: row.get(6)?,
+                        character_substitutions: row.get(7)?,
+                        sentence_terminators: row.get(8)?,
+                        split_each_character: row.get(9)?,
+                        remove_spaces: row.get(10)?,
+                        right_to_left: row.get(11)?,
+                        text_count: row.get(12)?,
                     })
                 },
             )
@@ -2167,7 +2367,11 @@ impl Database {
                 "SELECT texts.title,
                         languages.name,
                         languages.remove_spaces,
-                        languages.right_to_left
+                        languages.right_to_left,
+                        languages.text_size,
+                        languages.dictionary_uri_1,
+                        languages.dictionary_uri_2,
+                        languages.google_translate_uri
                  FROM texts
                  INNER JOIN languages ON languages.id = texts.language_id
                  WHERE texts.id = ?1",
@@ -2178,6 +2382,10 @@ impl Database {
                         row.get::<_, String>(1)?,
                         row.get::<_, bool>(2)?,
                         row.get::<_, bool>(3)?,
+                        row.get::<_, i64>(4)?,
+                        row.get::<_, String>(5)?,
+                        row.get::<_, Option<String>>(6)?,
+                        row.get::<_, Option<String>>(7)?,
                     ))
                 },
             )
@@ -2295,6 +2503,10 @@ impl Database {
             total_terms,
             remove_spaces: metadata.2,
             right_to_left: metadata.3,
+            text_size: metadata.4,
+            dictionary_uri_1: metadata.5,
+            dictionary_uri_2: metadata.6,
+            google_translate_uri: metadata.7,
             sentences,
             expressions,
         })
@@ -2911,6 +3123,34 @@ mod tests {
     }
 
     #[test]
+    fn loads_updates_and_validates_application_settings() {
+        let database = Database::in_memory().expect("database should migrate");
+        assert_eq!(database.app_settings().unwrap(), AppSettings::default());
+
+        let settings = AppSettings {
+            library_page_size: 10,
+            archived_page_size: 15,
+            tag_page_size: 20,
+            show_word_counts: false,
+            review_delay_ms: 250,
+        };
+        assert_eq!(
+            database.update_app_settings(settings.clone()).unwrap(),
+            settings
+        );
+        assert_eq!(database.app_settings().unwrap(), settings);
+
+        let invalid = AppSettings {
+            library_page_size: 4,
+            ..AppSettings::default()
+        };
+        assert_eq!(
+            database.update_app_settings(invalid).unwrap_err(),
+            "Page sizes must be between 5 and 500"
+        );
+    }
+
+    #[test]
     fn lists_texts_with_their_language() {
         let database = Database::in_memory().expect("database should migrate");
         {
@@ -3028,6 +3268,11 @@ mod tests {
         let updated = database
             .update_language(UpdateLanguageInput {
                 id: language.id,
+                dictionary_uri_1: "https://example.com/dictionary?q=###".into(),
+                dictionary_uri_2: None,
+                google_translate_uri: None,
+                export_template: None,
+                text_size: 125,
                 character_substitutions: "…=。".into(),
                 sentence_terminators: "。".into(),
                 split_each_character: true,
@@ -3042,6 +3287,12 @@ mod tests {
         assert_eq!(updated.text_count, 1);
         assert!(updated.split_each_character);
         assert!(updated.remove_spaces);
+        assert_eq!(updated.text_size, 125);
+        assert_eq!(reading.text_size, 125);
+        assert_eq!(
+            reading.dictionary_uri_1,
+            "https://example.com/dictionary?q=###"
+        );
         assert_eq!(reading.sentences.len(), 2);
         assert_eq!(reading.total_terms, 4);
         assert!(reading.remove_spaces);
@@ -3058,6 +3309,11 @@ mod tests {
         let error = database
             .update_language(UpdateLanguageInput {
                 id: 1,
+                dictionary_uri_1: "https://example.com/dictionary?q=###".into(),
+                dictionary_uri_2: None,
+                google_translate_uri: None,
+                export_template: None,
+                text_size: 100,
                 character_substitutions: "invalid".into(),
                 sentence_terminators: ".!?".into(),
                 split_each_character: false,
@@ -3152,6 +3408,16 @@ mod tests {
     #[test]
     fn exports_and_restores_a_complete_portable_backup() {
         let database = Database::in_memory().expect("database should migrate");
+        let settings = AppSettings {
+            library_page_size: 10,
+            archived_page_size: 15,
+            tag_page_size: 20,
+            show_word_counts: false,
+            review_delay_ms: 250,
+        };
+        database
+            .update_app_settings(settings.clone())
+            .expect("settings should save");
         let created = database
             .create_text(text_input("English", "Backup", "A short story."))
             .expect("text should be created");
@@ -3212,6 +3478,9 @@ mod tests {
         let payload = database.export_backup().expect("backup should export");
 
         database
+            .update_app_settings(AppSettings::default())
+            .expect("settings should change");
+        database
             .create_text(text_input("French", "Temporary", "Texte temporaire"))
             .expect("temporary text should be created");
         let summary = database
@@ -3244,6 +3513,7 @@ mod tests {
         assert_eq!(statistics.reviews_today, 1);
         assert_eq!(restored_audio.file_name, "story.mp3");
         assert_eq!(restored_audio.data_base64, "AQID");
+        assert_eq!(database.app_settings().unwrap(), settings);
         let restored_tags = database.list_tags().expect("restored tags should load");
         assert_eq!(restored_tags[0].term_count, 1);
         assert_eq!(restored_tags[0].text_count, 1);
@@ -3335,6 +3605,11 @@ mod tests {
         assert_eq!(archived.title, "Archived legacy text");
         assert_eq!(archived_audio.data_base64, "SUQz");
         assert_eq!(reading.language, "English");
+        assert_eq!(reading.text_size, 150);
+        assert_eq!(
+            reading.dictionary_uri_1,
+            "https://example.com/dictionary?q=###"
+        );
         assert_eq!(reading.expressions.len(), 1);
         assert_eq!(reading.expressions[0].normalized, "legacy text");
         assert_eq!(reading.expressions[0].start_position, 1);
@@ -3344,6 +3619,16 @@ mod tests {
         let tags = database.list_tags().expect("imported tags should load");
         assert_eq!(tags[0].term_count, 1);
         assert_eq!(tags[0].text_count, 2);
+        assert_eq!(
+            database.app_settings().unwrap(),
+            AppSettings {
+                library_page_size: 20,
+                archived_page_size: 30,
+                tag_page_size: 40,
+                show_word_counts: false,
+                review_delay_ms: 250,
+            }
+        );
     }
 
     #[test]

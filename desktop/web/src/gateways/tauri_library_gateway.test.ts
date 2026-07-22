@@ -25,6 +25,11 @@ describe('TauriLibraryGateway', () => {
     const language = {
       id: 2,
       name: 'Japanese',
+      dictionaryUri1: 'https://example.com/dictionary?q=###',
+      dictionaryUri2: undefined,
+      googleTranslateUri: undefined,
+      exportTemplate: undefined,
+      textSize: 125,
       characterSubstitutions: '…=。',
       sentenceTerminators: '。！？',
       splitEachCharacter: true,
@@ -34,6 +39,11 @@ describe('TauriLibraryGateway', () => {
     };
     const input = {
       id: language.id,
+      dictionaryUri1: language.dictionaryUri1,
+      dictionaryUri2: language.dictionaryUri2,
+      googleTranslateUri: language.googleTranslateUri,
+      exportTemplate: language.exportTemplate,
+      textSize: language.textSize,
       characterSubstitutions: language.characterSubstitutions,
       sentenceTerminators: language.sentenceTerminators,
       splitEachCharacter: language.splitEachCharacter,
@@ -47,6 +57,23 @@ describe('TauriLibraryGateway', () => {
     await expect(gateway.updateLanguage(input)).resolves.toEqual(language);
     expect(invoke).toHaveBeenNthCalledWith(1, 'list_languages');
     expect(invoke).toHaveBeenNthCalledWith(2, 'update_language', { input });
+  });
+
+  it('loads and updates application settings', async () => {
+    const settings = {
+      libraryPageSize: 25,
+      archivedPageSize: 25,
+      tagPageSize: 50,
+      showWordCounts: true,
+      reviewDelayMs: 0
+    };
+    const invoke = vi.fn().mockResolvedValue(settings);
+    const gateway = new TauriLibraryGateway(invoke);
+
+    await expect(gateway.appSettings()).resolves.toEqual(settings);
+    await expect(gateway.updateAppSettings(settings)).resolves.toEqual(settings);
+    expect(invoke).toHaveBeenNthCalledWith(1, 'app_settings');
+    expect(invoke).toHaveBeenNthCalledWith(2, 'update_app_settings', { settings });
   });
 
   it('exports and restores a portable backup', async () => {

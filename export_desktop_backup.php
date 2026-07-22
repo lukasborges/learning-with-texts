@@ -28,6 +28,13 @@ function desktop_backup_timestamp($value, $fallback) {
 	return $value;
 }
 
+function desktop_backup_setting($key, $minimum, $maximum, &$clamped) {
+	$value = (int) getSettingWithDefault($key);
+	$bounded = max($minimum, min($maximum, $value));
+	if ($value != $bounded) $clamped++;
+	return $bounded;
+}
+
 function desktop_backup_substitutions($value, &$ignored) {
 	$valid = array();
 	foreach (explode('|', (string) $value) as $entry) {
@@ -392,12 +399,25 @@ if (count($terms) > 0) {
 	$warnings[] = 'The legacy database has no review-event history. Imported learning terms will be due for review immediately.';
 }
 
+$clamped_settings = 0;
+$settings = array(
+	'libraryPageSize' => desktop_backup_setting('set-texts-per-page', 5, 500, $clamped_settings),
+	'archivedPageSize' => desktop_backup_setting('set-archivedtexts-per-page', 5, 500, $clamped_settings),
+	'tagPageSize' => desktop_backup_setting('set-tags-per-page', 5, 500, $clamped_settings),
+	'showWordCounts' => ((int) getSettingWithDefault('set-show-text-word-counts')) != 0,
+	'reviewDelayMs' => desktop_backup_setting('set-test-main-frame-waiting-time', 0, 10000, $clamped_settings)
+);
+if ($clamped_settings > 0) {
+	$warnings[] = $clamped_settings . ' application setting value(s) were outside desktop limits and were clamped.';
+}
+
 $backup = array(
 	'format' => 'lwt-desktop-backup',
 	'version' => 1,
 	'exportedAt' => $exported_at,
 	'source' => 'lwt-legacy-php',
 	'warnings' => $warnings,
+	'settings' => $settings,
 	'languages' => $languages,
 	'texts' => $texts,
 	'media' => $media,

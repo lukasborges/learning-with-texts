@@ -46,6 +46,11 @@ describe('MockLibraryGateway', () => {
 
     await gateway.updateLanguage({
       id: language.id,
+      dictionaryUri1: 'https://example.com/dictionary?q=###',
+      dictionaryUri2: undefined,
+      googleTranslateUri: undefined,
+      exportTemplate: undefined,
+      textSize: 125,
       characterSubstitutions: '…=。',
       sentenceTerminators: '。',
       splitEachCharacter: true,
@@ -61,6 +66,13 @@ describe('MockLibraryGateway', () => {
 
   it('round-trips a portable browser-preview backup', async () => {
     const gateway = new MockLibraryGateway();
+    await gateway.updateAppSettings({
+      libraryPageSize: 10,
+      archivedPageSize: 15,
+      tagPageSize: 20,
+      showWordCounts: false,
+      reviewDelayMs: 250
+    });
     await gateway.setTextArchived({ id: 1, archived: true });
     await gateway.saveTextAudio({
       textId: 1,
@@ -82,6 +94,13 @@ describe('MockLibraryGateway', () => {
     expect(texts.some(({ title }) => title === 'Temporary')).toBe(false);
     expect(texts.find(({ id }) => id === 1)?.archived).toBe(true);
     await expect(gateway.getTextAudio(1)).resolves.toMatchObject({ fileName: 'story.mp3' });
+    await expect(gateway.appSettings()).resolves.toEqual({
+      libraryPageSize: 10,
+      archivedPageSize: 15,
+      tagPageSize: 20,
+      showWordCounts: false,
+      reviewDelayMs: 250
+    });
   });
 
   it('creates and assigns shared tags in browser preview', async () => {
