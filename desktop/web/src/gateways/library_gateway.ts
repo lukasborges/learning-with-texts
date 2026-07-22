@@ -2,7 +2,10 @@ import type {
   CreateTextInput,
   LibraryText,
   ReadingText,
+  SaveTermInput,
+  SavedTerm,
   SetTermStatusInput,
+  TermDetails,
   TermProgress,
   TextDetails,
   UpdateTextInput
@@ -16,4 +19,6 @@ export interface LibraryGateway {
   deleteText(id: number): Promise<void>;
   getReadingText(id: number): Promise<ReadingText>;
   setTermStatus(input: SetTermStatusInput): Promise<TermProgress>;
+  getTermDetails(textId: number, normalized: string): Promise<TermDetails>;
+  saveTerm(input: SaveTermInput): Promise<SavedTerm>;
 }

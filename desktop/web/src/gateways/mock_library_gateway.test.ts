@@ -69,4 +69,26 @@ describe('MockLibraryGateway', () => {
         .find(({ normalized }) => normalized === 'dog')
     ).toMatchObject({ status: 5 });
   });
+
+  it('stores translation and romanization for a term', async () => {
+    const gateway = new MockLibraryGateway();
+
+    const initial = await gateway.getTermDetails(1, 'dog');
+    const saved = await gateway.saveTerm({
+      textId: 1,
+      normalized: 'dog',
+      status: 1,
+      translation: 'cachorro',
+      romanization: 'dog'
+    });
+    const loaded = await gateway.getTermDetails(1, 'dog');
+
+    expect(initial.status).toBe(0);
+    expect(saved.term.translation).toBe('cachorro');
+    expect(loaded).toMatchObject({
+      status: 1,
+      translation: 'cachorro',
+      romanization: 'dog'
+    });
+  });
 });

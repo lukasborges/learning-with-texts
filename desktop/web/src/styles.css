@@ -291,6 +291,85 @@ textarea {
   font-size: 0.9rem;
 }
 
+.term-editor {
+  margin-bottom: 1.25rem;
+  padding: 1.25rem;
+  border: 1px solid #c9d6df;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(30 55 80 / 6%);
+}
+
+.term-editor > p,
+.term-editor h2 {
+  margin: 0;
+}
+
+.term-editor__normalized {
+  margin-top: 0.25rem !important;
+  color: #637083;
+  font-size: 0.9rem;
+}
+
+.term-editor__form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.term-editor__form label {
+  display: grid;
+  gap: 0.4rem;
+  font-weight: 650;
+}
+
+.term-editor__form label:nth-child(2),
+.term-editor__actions,
+.term-editor__form .form-status {
+  grid-column: 1 / -1;
+}
+
+.term-editor__form input,
+.term-editor__form select,
+.term-editor__form textarea {
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #aebdca;
+  border-radius: 8px;
+  background: #fff;
+  color: #243142;
+  font: inherit;
+  font-weight: 400;
+}
+
+.term-editor__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.term-editor__actions button {
+  padding: 0.65rem 0.9rem;
+  border: 0;
+  border-radius: 8px;
+  background: #246f96;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.term-editor__actions .button-secondary {
+  border: 1px solid #8ca1b2;
+  background: transparent;
+  color: #365166;
+}
+
+.term-editor__actions button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
 .reading-content {
   padding: clamp(1.25rem, 4vw, 3rem);
   border: 1px solid #d9e1e8;
@@ -403,10 +482,28 @@ textarea {
 
   .reading-toolbar button,
   .reading-guide,
+  .term-editor,
   .reading-content {
     border-color: #344352;
     background: #1e2a35;
     color: #edf3f7;
+  }
+
+  .term-editor__normalized {
+    color: #a8b7c5;
+  }
+
+  .term-editor__form input,
+  .term-editor__form select,
+  .term-editor__form textarea {
+    border-color: #55687a;
+    background: #131b24;
+    color: #edf3f7;
+  }
+
+  .term-editor__actions .button-secondary {
+    border-color: #6f8293;
+    color: #d2e0ea;
   }
 
   .reading-header > p:first-of-type,
@@ -442,6 +539,10 @@ textarea {
 
 @media (max-width: 640px) {
   .text-form {
+    grid-template-columns: 1fr;
+  }
+
+  .term-editor__form {
     grid-template-columns: 1fr;
   }
 }

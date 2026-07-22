@@ -59,3 +59,25 @@ export interface TermProgress {
   readonly knownTerms: number;
   readonly totalTerms: number;
 }
+
+export interface TermDetails {
+  readonly normalized: string;
+  readonly displayText: string;
+  readonly status: TermStatus;
+  readonly translation: string;
+  readonly romanization: string;
+}
+
+export interface SaveTermInput {
+  readonly textId: number;
+  readonly normalized: string;
+  readonly status: Exclude<TermStatus, 0>;
+  readonly translation: string;
+  readonly romanization: string;
+}
+
+export interface SavedTerm {
+  readonly term: TermDetails;
+  readonly knownTerms: number;
+  readonly totalTerms: number;
+}

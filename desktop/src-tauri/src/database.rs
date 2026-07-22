@@ -7,11 +7,13 @@ use std::sync::Mutex;
 const INITIAL_MIGRATION: &str = include_str!("../migrations/0001_initial.sql");
 const TEXT_PARSING_MIGRATION: &str = include_str!("../migrations/0002_text_parsing.sql");
 const TERMS_MIGRATION: &str = include_str!("../migrations/0003_terms.sql");
-const LATEST_SCHEMA_VERSION: i64 = 3;
-const MIGRATIONS: [(i64, &str); 3] = [
+const TERM_DETAILS_MIGRATION: &str = include_str!("../migrations/0004_term_details.sql");
+const LATEST_SCHEMA_VERSION: i64 = 4;
+const MIGRATIONS: [(i64, &str); 4] = [
     (1, INITIAL_MIGRATION),
     (2, TEXT_PARSING_MIGRATION),
-    (LATEST_SCHEMA_VERSION, TERMS_MIGRATION),
+    (3, TERMS_MIGRATION),
+    (LATEST_SCHEMA_VERSION, TERM_DETAILS_MIGRATION),
 ];
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -102,6 +104,34 @@ pub struct TermProgress {
     pub total_terms: i64,
 }
 
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TermDetails {
+    pub normalized: String,
+    pub display_text: String,
+    pub status: i64,
+    pub translation: String,
+    pub romanization: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveTermInput {
+    pub text_id: i64,
+    pub normalized: String,
+    pub status: i64,
+    pub translation: String,
+    pub romanization: String,
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedTerm {
+    pub term: TermDetails,
+    pub known_terms: i64,
+    pub total_terms: i64,
+}
+
 struct ValidatedTextInput {
     language: String,
     title: String,
@@ -174,6 +204,10 @@ fn find_or_create_language(
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .map_err(|error| format!("Unable to load the text language: {error}"))
+}
+
+fn is_saved_term_status(status: i64) -> bool {
+    matches!(status, 1..=5 | 98 | 99)
 }
 
 pub struct Database {
@@ -330,6 +364,28 @@ impl Database {
                 |row| Ok((row.get(0)?, row.get(1)?)),
             )
             .map_err(|error| format!("Unable to calculate text progress: {error}"))
+    }
+
+    fn find_text_term(
+        transaction: &Transaction<'_>,
+        text_id: i64,
+        normalized: &str,
+    ) -> Result<(i64, String), String> {
+        transaction
+            .query_row(
+                "SELECT text_items.language_id, text_items.surface
+                 FROM text_items
+                 WHERE text_items.text_id = ?1
+                   AND text_items.normalized = ?2
+                   AND text_items.is_word = 1
+                 ORDER BY text_items.id
+                 LIMIT 1",
+                params![text_id, normalized],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
+            )
+            .optional()
+            .map_err(|error| format!("Unable to load the parsed term: {error}"))?
+            .ok_or_else(|| "Term was not found in this text".to_string())
     }
 
     pub fn list_texts(&self) -> Result<Vec<LibraryText>, String> {
@@ -626,7 +682,7 @@ impl Database {
         if input.text_id <= 0 {
             return Err("Text was not found".to_string());
         }
-        if !matches!(input.status, 0..=5 | 98 | 99) {
+        if input.status != 0 && !is_saved_term_status(input.status) {
             return Err("Term status is invalid".to_string());
         }
         let normalized = input.normalized.trim();
@@ -641,21 +697,7 @@ impl Database {
         let transaction = connection
             .transaction()
             .map_err(|error| format!("Unable to start the term update: {error}"))?;
-        let term = transaction
-            .query_row(
-                "SELECT text_items.language_id, text_items.surface
-                 FROM text_items
-                 WHERE text_items.text_id = ?1
-                   AND text_items.normalized = ?2
-                   AND text_items.is_word = 1
-                 ORDER BY text_items.id
-                 LIMIT 1",
-                params![input.text_id, normalized],
-                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
-            )
-            .optional()
-            .map_err(|error| format!("Unable to load the parsed term: {error}"))?
-            .ok_or_else(|| "Term was not found in this text".to_string())?;
+        let term = Self::find_text_term(&transaction, input.text_id, normalized)?;
 
         if input.status == 0 {
             transaction
@@ -686,6 +728,125 @@ impl Database {
         Ok(TermProgress {
             normalized: normalized.to_string(),
             status: input.status,
+            known_terms,
+            total_terms,
+        })
+    }
+
+    pub fn get_term_details(
+        &self,
+        text_id: i64,
+        normalized: String,
+    ) -> Result<TermDetails, String> {
+        if text_id <= 0 {
+            return Err("Text was not found".to_string());
+        }
+        let normalized = normalized.trim().to_string();
+        if normalized.is_empty() || normalized.chars().count() > 250 {
+            return Err("Term is invalid".to_string());
+        }
+
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| "The desktop database lock is unavailable".to_string())?;
+        let transaction = connection
+            .transaction()
+            .map_err(|error| format!("Unable to start the term lookup: {error}"))?;
+        let occurrence = Self::find_text_term(&transaction, text_id, &normalized)?;
+        let stored = transaction
+            .query_row(
+                "SELECT status, translation, COALESCE(romanization, '')
+                 FROM terms
+                 WHERE language_id = ?1 AND normalized = ?2",
+                params![occurrence.0, normalized],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .optional()
+            .map_err(|error| format!("Unable to load the term details: {error}"))?;
+        transaction
+            .commit()
+            .map_err(|error| format!("Unable to finish the term lookup: {error}"))?;
+
+        let (status, translation, romanization) =
+            stored.unwrap_or_else(|| (0, String::new(), String::new()));
+        Ok(TermDetails {
+            normalized,
+            display_text: occurrence.1,
+            status,
+            translation,
+            romanization,
+        })
+    }
+
+    pub fn save_term(&self, input: SaveTermInput) -> Result<SavedTerm, String> {
+        if input.text_id <= 0 {
+            return Err("Text was not found".to_string());
+        }
+        if !is_saved_term_status(input.status) {
+            return Err("Choose a saved status for the term".to_string());
+        }
+        let normalized = input.normalized.trim().to_string();
+        let translation = input.translation.trim().to_string();
+        let romanization = input.romanization.trim().to_string();
+        if normalized.is_empty() || normalized.chars().count() > 250 {
+            return Err("Term is invalid".to_string());
+        }
+        if translation.chars().count() > 500 {
+            return Err("Translation must not exceed 500 characters".to_string());
+        }
+        if romanization.chars().count() > 100 {
+            return Err("Romanization must not exceed 100 characters".to_string());
+        }
+
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| "The desktop database lock is unavailable".to_string())?;
+        let transaction = connection
+            .transaction()
+            .map_err(|error| format!("Unable to start the term save: {error}"))?;
+        let occurrence = Self::find_text_term(&transaction, input.text_id, &normalized)?;
+        transaction
+            .execute(
+                "INSERT INTO terms
+                    (language_id, display_text, normalized, status, translation, romanization)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                 ON CONFLICT(language_id, normalized) DO UPDATE SET
+                    display_text = excluded.display_text,
+                    status = excluded.status,
+                    translation = excluded.translation,
+                    romanization = excluded.romanization,
+                    updated_at = CURRENT_TIMESTAMP",
+                params![
+                    occurrence.0,
+                    occurrence.1,
+                    normalized,
+                    input.status,
+                    translation,
+                    romanization
+                ],
+            )
+            .map_err(|error| format!("Unable to save the term details: {error}"))?;
+        let (known_terms, total_terms) = Self::text_progress(&transaction, input.text_id)?;
+        transaction
+            .commit()
+            .map_err(|error| format!("Unable to commit the term details: {error}"))?;
+
+        Ok(SavedTerm {
+            term: TermDetails {
+                normalized,
+                display_text: occurrence.1,
+                status: input.status,
+                translation,
+                romanization,
+            },
             known_terms,
             total_terms,
         })
@@ -1055,5 +1216,96 @@ mod tests {
             .expect_err("missing term should fail");
 
         assert_eq!(error, "Term was not found in this text");
+    }
+
+    #[test]
+    fn saves_and_loads_shared_term_details() {
+        let database = Database::in_memory().expect("database should migrate");
+        let first = database
+            .create_text(text_input("Japanese", "First", "日本語です。"))
+            .expect("first text should be created");
+        let second = database
+            .create_text(text_input("Japanese", "Second", "日本語です。"))
+            .expect("second text should be created");
+
+        let initial = database
+            .get_term_details(first.id, "日本語です".to_string())
+            .expect("unsaved term should load");
+        let saved = database
+            .save_term(SaveTermInput {
+                text_id: first.id,
+                normalized: "日本語です".to_string(),
+                status: 5,
+                translation: "It is Japanese".to_string(),
+                romanization: "nihongo desu".to_string(),
+            })
+            .expect("term details should save");
+        let shared = database
+            .get_term_details(second.id, "日本語です".to_string())
+            .expect("shared term should load");
+
+        assert_eq!(initial.status, 0);
+        assert_eq!(saved.known_terms, 1);
+        assert_eq!(shared.status, 5);
+        assert_eq!(shared.translation, "It is Japanese");
+        assert_eq!(shared.romanization, "nihongo desu");
+    }
+
+    #[test]
+    fn validates_term_detail_lengths() {
+        let database = Database::in_memory().expect("database should migrate");
+        let created = database
+            .create_text(text_input("English", "Reader", "Term."))
+            .expect("text should be created");
+
+        let error = database
+            .save_term(SaveTermInput {
+                text_id: created.id,
+                normalized: "term".to_string(),
+                status: 1,
+                translation: "x".repeat(501),
+                romanization: String::new(),
+            })
+            .expect_err("oversized translation should fail");
+
+        assert_eq!(error, "Translation must not exceed 500 characters");
+    }
+
+    #[test]
+    fn upgrades_existing_terms_to_the_detail_schema_without_data_loss() {
+        let mut connection = Connection::open_in_memory().expect("database should open");
+        connection
+            .execute_batch(INITIAL_MIGRATION)
+            .expect("initial schema should apply");
+        connection
+            .execute_batch(TEXT_PARSING_MIGRATION)
+            .expect("parsing schema should apply");
+        connection
+            .execute_batch(TERMS_MIGRATION)
+            .expect("terms schema should apply");
+        connection
+            .pragma_update(None, "user_version", 3)
+            .expect("schema version should set");
+        connection
+            .execute("INSERT INTO languages (name) VALUES ('English')", [])
+            .expect("language should insert");
+        connection
+            .execute(
+                "INSERT INTO terms (language_id, display_text, normalized, status)
+                 VALUES (1, 'Term', 'term', 5)",
+                [],
+            )
+            .expect("term should insert");
+
+        Database::configure_and_migrate(&mut connection).expect("database should upgrade");
+
+        let stored: (i64, String, Option<String>) = connection
+            .query_row(
+                "SELECT status, translation, romanization FROM terms WHERE normalized = 'term'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .expect("upgraded term should load");
+        assert_eq!(stored, (5, String::new(), None));
     }
 }

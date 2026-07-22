@@ -2,7 +2,10 @@ import type {
   CreateTextInput,
   LibraryText,
   ReadingText,
+  SaveTermInput,
+  SavedTerm,
   SetTermStatusInput,
+  TermDetails,
   TermProgress,
   TextDetails,
   UpdateTextInput
@@ -43,5 +46,13 @@ export class TauriLibraryGateway implements LibraryGateway {
 
   setTermStatus(input: SetTermStatusInput): Promise<TermProgress> {
     return this.invoke<TermProgress>('set_term_status', { input });
+  }
+
+  getTermDetails(textId: number, normalized: string): Promise<TermDetails> {
+    return this.invoke<TermDetails>('get_term_details', { textId, normalized });
+  }
+
+  saveTerm(input: SaveTermInput): Promise<SavedTerm> {
+    return this.invoke<SavedTerm>('save_term', { input });
   }
 }

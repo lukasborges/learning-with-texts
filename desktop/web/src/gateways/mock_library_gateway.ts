@@ -3,7 +3,10 @@ import type {
   LibraryText,
   ReadingItem,
   ReadingText,
+  SaveTermInput,
+  SavedTerm,
   SetTermStatusInput,
+  TermDetails,
   TermProgress,
   TermStatus,
   TextDetails,
@@ -74,7 +77,7 @@ function createReadingItems(
 
 export class MockLibraryGateway implements LibraryGateway {
   private readonly texts = sampleTexts.map((text) => ({ ...text }));
-  private readonly termStatuses = new Map<string, TermStatus>();
+  private readonly terms = new Map<string, TermDetails>();
 
   private termKey(language: string, normalized: string): string {
     return `${language.toLocaleLowerCase()}\u0000${normalized}`;
@@ -83,7 +86,7 @@ export class MockLibraryGateway implements LibraryGateway {
   private withProgress(text: TextDetails): TextDetails {
     const terms = new Set(normalizedTerms(text.content));
     const knownTerms = [...terms].filter((term) => {
-      const status = this.termStatuses.get(this.termKey(text.language, term)) ?? 0;
+      const status = this.terms.get(this.termKey(text.language, term))?.status ?? 0;
       return status === 5 || status === 99;
     }).length;
     return { ...text, knownTerms, totalTerms: terms.size };
@@ -172,7 +175,7 @@ export class MockLibraryGateway implements LibraryGateway {
         id: index + 1,
         position: index + 1,
         items: createReadingItems(sentence, (normalized) =>
-          this.termStatuses.get(this.termKey(text.language, normalized)) ?? 0
+          this.terms.get(this.termKey(text.language, normalized))?.status ?? 0
         )
       }))
     };
@@ -189,14 +192,68 @@ export class MockLibraryGateway implements LibraryGateway {
 
     const key = this.termKey(text.language, input.normalized);
     if (input.status === 0) {
-      this.termStatuses.delete(key);
+      this.terms.delete(key);
     } else {
-      this.termStatuses.set(key, input.status);
+      const existing = this.terms.get(key);
+      const surface = createReadingItems(text.content, () => 0).find(
+        (item) => item.normalized === input.normalized
+      )?.surface;
+      this.terms.set(key, {
+        normalized: input.normalized,
+        displayText: existing?.displayText ?? surface ?? input.normalized,
+        status: input.status,
+        translation: existing?.translation ?? '',
+        romanization: existing?.romanization ?? ''
+      });
     }
     const progress = this.withProgress(text);
     return {
       normalized: input.normalized,
       status: input.status,
+      knownTerms: progress.knownTerms,
+      totalTerms: progress.totalTerms
+    };
+  }
+
+  async getTermDetails(textId: number, normalized: string): Promise<TermDetails> {
+    const text = this.texts.find((candidate) => candidate.id === textId);
+    if (!text) {
+      throw new Error('Text was not found');
+    }
+    const surface = createReadingItems(text.content, () => 0).find(
+      (item) => item.normalized === normalized
+    )?.surface;
+    if (!surface) {
+      throw new Error('Term was not found in this text');
+    }
+
+    return (
+      this.terms.get(this.termKey(text.language, normalized)) ?? {
+        normalized,
+        displayText: surface,
+        status: 0,
+        translation: '',
+        romanization: ''
+      }
+    );
+  }
+
+  async saveTerm(input: SaveTermInput): Promise<SavedTerm> {
+    const text = this.texts.find((candidate) => candidate.id === input.textId);
+    if (!text) {
+      throw new Error('Text was not found');
+    }
+    const current = await this.getTermDetails(input.textId, input.normalized);
+    const term: TermDetails = {
+      ...current,
+      status: input.status,
+      translation: input.translation.trim(),
+      romanization: input.romanization.trim()
+    };
+    this.terms.set(this.termKey(text.language, input.normalized), term);
+    const progress = this.withProgress(text);
+    return {
+      term,
       knownTerms: progress.knownTerms,
       totalTerms: progress.totalTerms
     };

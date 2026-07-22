@@ -97,4 +97,32 @@ describe('TauriLibraryGateway', () => {
     expect(invoke).toHaveBeenNthCalledWith(1, 'get_reading_text', { id: 8 });
     expect(invoke).toHaveBeenNthCalledWith(2, 'set_term_status', { input });
   });
+
+  it('loads and saves detailed term data', async () => {
+    const term = {
+      normalized: 'story',
+      displayText: 'Story',
+      status: 1,
+      translation: 'história',
+      romanization: ''
+    };
+    const input = {
+      textId: 8,
+      normalized: 'story',
+      status: 5 as const,
+      translation: 'história',
+      romanization: ''
+    };
+    const saved = { term: { ...term, status: 5 }, knownTerms: 1, totalTerms: 1 };
+    const invoke = vi.fn().mockResolvedValueOnce(term).mockResolvedValueOnce(saved);
+    const gateway = new TauriLibraryGateway(invoke);
+
+    await expect(gateway.getTermDetails(8, 'story')).resolves.toEqual(term);
+    await expect(gateway.saveTerm(input)).resolves.toEqual(saved);
+    expect(invoke).toHaveBeenNthCalledWith(1, 'get_term_details', {
+      textId: 8,
+      normalized: 'story'
+    });
+    expect(invoke).toHaveBeenNthCalledWith(2, 'save_term', { input });
+  });
 });

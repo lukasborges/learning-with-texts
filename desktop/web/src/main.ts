@@ -183,24 +183,11 @@ function statusLabel(status: TermStatus): string {
   return 'Unknown';
 }
 
-function nextStatus(status: TermStatus): TermStatus {
-  if (status === 0) {
-    return 1;
-  }
-  if (status >= 1 && status <= 4) {
-    return 5;
-  }
-  if (status === 5 || status === 99) {
-    return 98;
-  }
-  return 0;
-}
-
 function updateTermButton(button: HTMLButtonElement, status: TermStatus): void {
   const label = statusLabel(status);
   button.dataset.status = String(status);
   button.className = `reading-term reading-term--${label.toLocaleLowerCase()}`;
-  button.title = `${label}. Click to change status.`;
+  button.title = `${label}. Click to edit this term.`;
   button.setAttribute('aria-label', `${button.textContent ?? ''}: ${label}`);
 }
 
@@ -246,7 +233,7 @@ async function renderReading(textId: number): Promise<void> {
   guide.className = 'reading-guide';
   const guideText = document.createElement('p');
   guideText.textContent =
-    'Click a term to cycle through Unknown, Learning, Known, and Ignored.';
+    'Click a term to edit its status, translation, and romanization.';
   const legend = document.createElement('div');
   legend.className = 'reading-legend';
   for (const [label, className] of [
@@ -263,6 +250,155 @@ async function renderReading(textId: number): Promise<void> {
   guide.append(guideText, legend);
 
   const termButtons = new Map<string, HTMLButtonElement[]>();
+  const editor = document.createElement('section');
+  editor.className = 'term-editor';
+  const editorPlaceholder = document.createElement('p');
+  editorPlaceholder.textContent = 'Select a term in the text to open its editor.';
+  editor.append(editorPlaceholder);
+  let editorRequest = 0;
+
+  const openTermEditor = (normalized: string): void => {
+    const request = ++editorRequest;
+    editor.replaceChildren();
+    const loading = document.createElement('p');
+    loading.textContent = 'Loading term…';
+    editor.append(loading);
+
+    void gateway
+      .getTermDetails(textId, normalized)
+      .then((term) => {
+        if (request !== editorRequest) {
+          return;
+        }
+
+        const heading = document.createElement('h2');
+        heading.textContent = term.displayText;
+        const normalizedLabel = document.createElement('p');
+        normalizedLabel.className = 'term-editor__normalized';
+        normalizedLabel.textContent = term.normalized;
+
+        const form = document.createElement('form');
+        form.className = 'term-editor__form';
+        const status = document.createElement('select');
+        for (const [value, label] of [
+          [1, 'Learning'],
+          [5, 'Known'],
+          [98, 'Ignored']
+        ] as const) {
+          const option = document.createElement('option');
+          option.value = String(value);
+          option.textContent = label;
+          status.append(option);
+        }
+        status.value = String(
+          term.status >= 1 && term.status <= 4
+            ? 1
+            : term.status === 5 || term.status === 99
+              ? 5
+              : term.status === 98
+                ? 98
+                : 1
+        );
+
+        const translation = document.createElement('textarea');
+        translation.rows = 3;
+        translation.maxLength = 500;
+        translation.value = term.translation;
+        const romanization = document.createElement('input');
+        romanization.maxLength = 100;
+        romanization.value = term.romanization;
+
+        const actions = document.createElement('div');
+        actions.className = 'term-editor__actions';
+        const save = document.createElement('button');
+        save.type = 'submit';
+        save.textContent = 'Save term';
+        const reset = document.createElement('button');
+        reset.type = 'button';
+        reset.className = 'button-secondary';
+        reset.textContent = 'Reset to unknown';
+        const feedback = document.createElement('p');
+        feedback.className = 'form-status';
+        feedback.setAttribute('role', 'status');
+        actions.append(save, reset);
+
+        const applyStatus = (savedStatus: TermStatus, knownTerms: number): void => {
+          const buttons = termButtons.get(normalized) ?? [];
+          buttons.forEach((button) => updateTermButton(button, savedStatus));
+          updateReadingProgress(reading, knownTerms, meter, progressLabel);
+        };
+
+        form.addEventListener('submit', (event) => {
+          event.preventDefault();
+          save.disabled = true;
+          reset.disabled = true;
+          feedback.className = 'form-status';
+          feedback.textContent = 'Saving term…';
+          void gateway
+            .saveTerm({
+              textId,
+              normalized,
+              status: Number(status.value) as 1 | 5 | 98,
+              translation: translation.value,
+              romanization: romanization.value
+            })
+            .then((saved) => {
+              applyStatus(saved.term.status, saved.knownTerms);
+              feedback.textContent = 'Term saved.';
+            })
+            .catch((error: unknown) => {
+              feedback.className = 'form-status form-status--error';
+              feedback.textContent = error instanceof Error ? error.message : String(error);
+            })
+            .finally(() => {
+              save.disabled = false;
+              reset.disabled = false;
+            });
+        });
+
+        reset.addEventListener('click', () => {
+          save.disabled = true;
+          reset.disabled = true;
+          feedback.className = 'form-status';
+          feedback.textContent = 'Resetting term…';
+          void gateway
+            .setTermStatus({ textId, normalized, status: 0 })
+            .then((progress) => {
+              applyStatus(0, progress.knownTerms);
+              translation.value = '';
+              romanization.value = '';
+              status.value = '1';
+              feedback.textContent = 'Term reset to unknown.';
+            })
+            .catch((error: unknown) => {
+              feedback.className = 'form-status form-status--error';
+              feedback.textContent = error instanceof Error ? error.message : String(error);
+            })
+            .finally(() => {
+              save.disabled = false;
+              reset.disabled = false;
+            });
+        });
+
+        form.append(
+          createField('Status', status),
+          createField('Translation', translation),
+          createField('Romanization (optional)', romanization),
+          actions,
+          feedback
+        );
+        editor.replaceChildren(heading, normalizedLabel, form);
+      })
+      .catch((error: unknown) => {
+        if (request === editorRequest) {
+          const message = document.createElement('p');
+          message.className = 'form-status form-status--error';
+          message.textContent = error instanceof Error ? error.message : String(error);
+          editor.replaceChildren(message);
+        }
+      });
+  };
+
   const article = document.createElement('article');
   article.className = 'reading-content';
   for (const sentence of reading.sentences) {
@@ -282,35 +418,14 @@ async function renderReading(textId: number): Promise<void> {
       matchingButtons.push(button);
       termButtons.set(item.normalized, matchingButtons);
       button.addEventListener('click', () => {
-        const currentStatus = Number(button.dataset.status) as TermStatus;
-        const status = nextStatus(currentStatus);
-        const buttons = termButtons.get(item.normalized) ?? [button];
-        buttons.forEach((matchingButton) => {
-          matchingButton.disabled = true;
-        });
-        void gateway
-          .setTermStatus({ textId, normalized: item.normalized, status })
-          .then((progress) => {
-            buttons.forEach((matchingButton) => {
-              updateTermButton(matchingButton, progress.status);
-            });
-            updateReadingProgress(reading, progress.knownTerms, meter, progressLabel);
-          })
-          .catch((error: unknown) => {
-            window.alert(error instanceof Error ? error.message : String(error));
-          })
-          .finally(() => {
-            buttons.forEach((matchingButton) => {
-              matchingButton.disabled = false;
-            });
-          });
+        openTermEditor(item.normalized);
       });
       paragraph.append(button);
     }
     article.append(paragraph);
   }
 
-  shell.append(toolbar, header, guide, article);
+  shell.append(toolbar, header, guide, editor, article);
   applicationRoot.replaceChildren(shell);
 }
 

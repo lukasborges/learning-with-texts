@@ -1,0 +1,2 @@
+ALTER TABLE terms ADD COLUMN translation TEXT NOT NULL DEFAULT '';
+ALTER TABLE terms ADD COLUMN romanization TEXT;
