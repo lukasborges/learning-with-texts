@@ -94,7 +94,7 @@ jobs:
       - name: Smoke test Linux package installation and removal
         if: runner.os == 'Linux'
         run: |
-          package_path="$(find desktop/src-tauri/target/release/bundle/deb -name '*.deb' -print -quit)"
+          package_path="$(realpath "$(find desktop/src-tauri/target/release/bundle/deb -name '*.deb' -print -quit)")"
           test -n "$package_path"
           sudo apt-get install -y "$package_path"
           test -x /usr/bin/lwt-desktop
