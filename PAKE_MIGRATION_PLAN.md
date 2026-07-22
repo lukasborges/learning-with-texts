@@ -185,9 +185,9 @@ For each workflow, record current behavior, expose Rust commands, connect the Ty
 
 ### Phase 4.5 — Legacy Runtime Removal
 
-- [ ] Freeze the PHP application as a migration-only release.
-- [ ] Publish and document a stable PHP-to-desktop export path for existing users.
-- [ ] Preserve the legacy application and exporter in a tagged maintenance branch.
+- [x] Freeze the PHP application as a migration-only release (this commit).
+- [x] Publish and document a stable PHP-to-desktop export path for existing users (this commit).
+- [ ] Preserve the legacy application and exporter in a tagged maintenance branch. **Local refs are created after the freeze commit; remote publication pending.**
 - [ ] Confirm every MVP workflow has desktop parity and no longer invokes PHP or MySQL.
 - [ ] Remove PHP pages, MySQL connection templates, and obsolete browser dependencies from the desktop branch.
 - [ ] Verify clean builds, tests, installers, backup/restore, and upgrades without PHP or MySQL files.

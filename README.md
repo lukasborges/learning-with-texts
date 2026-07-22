@@ -2,6 +2,11 @@
 
 # Learning with Texts (LWT)
 
+> **Migration freeze:** this PHP/MySQL application is retained only to export
+> existing libraries to LWT Desktop. It receives no new features. Follow
+> [Migrating from Legacy PHP LWT](MIGRATING_FROM_LEGACY_PHP.md) and keep the
+> original SQL backup until the desktop migration is verified.
+
 ## This is the Official LWT Version 25.10.0 (October 25 2025)
 
 **Please note:** 

@@ -145,7 +145,7 @@ The database <i><?php echo tohtml($dbname); ?></i> <?php echo $prefinfo; ?> will
 <th class="th1 center">Desktop<br />Migration</th>
 <td class="td1">
 <p class="smallgray2">
-Export languages, active texts, terms, and language settings to a versioned JSON file accepted by LWT Desktop.<br />The export is read-only. Any unsupported legacy data is reported as a warning after import.</p>
+Export languages, active and archived texts, terms, tags, settings, and supported local audio to a versioned JSON file accepted by LWT Desktop.<br />The export is read-only. Any unsupported legacy data is reported as a warning after import.</p>
 <p class="right">&nbsp;<br /><input type="button" value="Download Desktop Migration JSON" onclick="location.href='export_desktop_backup.php';" /></p>
 </td>
 </tr>
