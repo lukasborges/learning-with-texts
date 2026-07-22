@@ -129,10 +129,12 @@ jobs:
           security list-keychains -d user -s "$keychain_path"
           signing_identity=$(security find-identity -v -p codesigning "$keychain_path" | awk -F '"' '/Developer ID Application/ { print $2; exit }')
           test -n "$signing_identity" || { echo 'Developer ID Application identity was not found'; exit 1; }
-          echo "APPLE_SIGNING_IDENTITY=$signing_identity" >> "$GITHUB_ENV"
-          echo "APPLE_API_KEY_PATH=$api_key_path" >> "$GITHUB_ENV"
-          echo "APPLE_KEYCHAIN_PATH=$keychain_path" >> "$GITHUB_ENV"
-          echo "APPLE_CERTIFICATE_PATH=$certificate_path" >> "$GITHUB_ENV"
+          {
+            echo "APPLE_SIGNING_IDENTITY=$signing_identity"
+            echo "APPLE_API_KEY_PATH=$api_key_path"
+            echo "APPLE_KEYCHAIN_PATH=$keychain_path"
+            echo "APPLE_CERTIFICATE_PATH=$certificate_path"
+          } >> "$GITHUB_ENV"
 
       - name: Create protected release configuration
         env:
