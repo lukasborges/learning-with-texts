@@ -50,9 +50,10 @@ user-visible update channel. Provisioning, approval, verification, rotation,
 and recovery procedures are in [SIGNING.md](SIGNING.md).
 
 After every signed platform and Arch job succeeds, a final integrity job
-downloads all assets from the draft, verifies a complete `SHA256SUMS` covering
-installers, updater bundles and signatures, SBOMs, per-platform manifests, and
-`latest.json`, then attaches that global manifest to the draft.
+downloads all assets from the draft and rejects incomplete platform, updater,
+SBOM, or checksum inventories. It then verifies a complete `SHA256SUMS`
+covering installers, updater bundles and signatures, SBOMs, per-platform
+manifests, and `latest.json`, and attaches that global manifest to the draft.
 
 Before publishing a production release, complete the independent
 [nontechnical user acceptance test](USER_ACCEPTANCE.md) and retain its test

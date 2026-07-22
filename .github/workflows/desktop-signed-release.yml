@@ -363,6 +363,13 @@ jobs:
           mkdir -p "${{ runner.temp }}/release-assets"
           gh release download "${{ github.ref_name }}" --dir "${{ runner.temp }}/release-assets"
 
+      - name: Validate the complete release asset inventory
+        run: |
+          version="${{ github.ref_name }}"
+          node desktop/scripts/validate-release-assets.mjs \
+            "${{ runner.temp }}/release-assets" \
+            "${version#v}"
+
       - name: Generate and verify the complete release checksum manifest
         run: |
           node desktop/scripts/release-integrity.mjs \

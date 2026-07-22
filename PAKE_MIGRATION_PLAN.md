@@ -93,6 +93,7 @@ expanded so its remaining work is visible before the next commit.
 - [x] Generate and verify a release-wide checksum manifest covering every draft asset, including updater bundles and `latest.json` (this commit).
 - [x] Reject release tags whose version differs from npm, Cargo, or Tauri manifests before signing starts (this commit).
 - [x] Fail protected releases unless Windows installers pass Authenticode verification and macOS apps/DMGs pass signature and notarization checks (this commit).
+- [x] Reject draft releases missing any required platform package, signed updater metadata, SBOM, or checksum manifest (this commit).
 
 ### Completed Desktop Workflows
 
