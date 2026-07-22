@@ -77,14 +77,14 @@ Last updated: July 22, 2026. A checked current-slice item is implemented and
 tested; completed workflows also include their commit. The current slice is
 expanded so its remaining work is visible before the next commit.
 
-### Current Slice — Desktop Schema Upgrade Coverage
+### Current Slice — Release Integrity and Signing
 
-- [ ] Inventory the data introduced by each desktop schema version.
-- [ ] Create representative populated databases at older schema versions.
-- [ ] Upgrade those databases through schema 10 without data loss.
-- [ ] Verify settings and media defaults across version boundaries.
-- [ ] Cover failed/interrupted migration rollback behavior.
-- [ ] Run all checks, package, and clean-launch the upgraded application.
+- [ ] Generate checksums for every release artifact.
+- [ ] Generate and retain a machine-readable software bill of materials (SBOM).
+- [ ] Define least-privilege secret contracts for Windows and macOS signing.
+- [ ] Sign Windows installers and notarize macOS DMGs in CI.
+- [ ] Configure cryptographically signed application updates.
+- [ ] Document verification, key rotation, and release recovery procedures.
 
 ### Completed Desktop Workflows
 
@@ -103,7 +103,8 @@ expanded so its remaining work is visible before the next commit.
 - [x] Local audio storage, playback, backup, and legacy embedding (`cc45046`).
 - [x] Language and application settings parity, migration, and documentation (`87e0a9f`).
 - [x] Packaged Linux first-launch and workflow E2E coverage (`561f494`).
-- [x] Cross-platform release matrix configured; Linux release artifacts smoke-tested (this commit).
+- [x] Cross-platform release matrix configured; Linux release artifacts smoke-tested (`a8c0024`).
+- [x] SQLite schema 1–10 upgrade and rollback coverage (this commit).
 
 ### Remaining MVP Migration
 
@@ -117,8 +118,8 @@ expanded so its remaining work is visible before the next commit.
 
 - [x] Produce local Linux DEB and AppImage proof-of-concept packages.
 - [ ] Build Windows, macOS, and Linux release artifacts in CI. **Matrix ready; first remote run pending.**
-- [ ] Add upgrade tests covering older desktop schema versions. **In progress.**
-- [ ] Add signing/notarization, checksums, SBOM, and signed updates.
+- [x] Add upgrade tests covering older desktop schema versions (this commit).
+- [ ] Add signing/notarization, checksums, SBOM, and signed updates. **In progress.**
 - [ ] Validate installation, backup, upgrade, and removal with nontechnical users.
 
 Update this checklist whenever a slice is committed: check its completed tasks,

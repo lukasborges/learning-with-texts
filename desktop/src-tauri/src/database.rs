@@ -3107,6 +3107,25 @@ impl Database {
 mod tests {
     use super::*;
 
+    fn connection_at_schema(version: i64) -> Connection {
+        let connection = Connection::open_in_memory().expect("database should open");
+        connection
+            .execute_batch("PRAGMA foreign_keys = ON")
+            .expect("foreign keys should enable");
+        for (migration_version, migration) in MIGRATIONS {
+            if migration_version > version {
+                break;
+            }
+            connection
+                .execute_batch(migration)
+                .unwrap_or_else(|error| panic!("schema {migration_version} should apply: {error}"));
+            connection
+                .pragma_update(None, "user_version", migration_version)
+                .expect("schema version should update");
+        }
+        connection
+    }
+
     #[test]
     fn migration_enables_foreign_keys_and_sets_the_schema_version() {
         let database = Database::in_memory().expect("database should migrate");
@@ -4066,6 +4085,220 @@ mod tests {
             )
             .expect("upgraded term should load");
         assert_eq!(stored, (5, String::new(), None));
+    }
+
+    #[test]
+    fn upgrades_review_and_expression_data_from_schema_six() {
+        let mut connection = connection_at_schema(6);
+        connection
+            .execute_batch(
+                "INSERT INTO languages (id, name) VALUES (1, 'English');
+                 INSERT INTO texts (id, language_id, title, content)
+                    VALUES (1, 1, 'Version six', 'Old phrase.');
+                 INSERT INTO sentences (id, language_id, text_id, position, content)
+                    VALUES (1, 1, 1, 1, 'Old phrase.');
+                 INSERT INTO text_items
+                    (id, language_id, text_id, sentence_id, position, surface, normalized, is_word)
+                    VALUES
+                    (1, 1, 1, 1, 1, 'Old', 'old', 1),
+                    (2, 1, 1, 1, 2, ' ', '', 0),
+                    (3, 1, 1, 1, 3, 'phrase', 'phrase', 1),
+                    (4, 1, 1, 1, 4, '.', '', 0);
+                 INSERT INTO terms
+                    (id, language_id, display_text, normalized, status, translation,
+                     romanization, word_count, last_reviewed_at, next_review_at,
+                     review_count, correct_count)
+                    VALUES
+                    (1, 1, 'Old phrase', 'old phrase', 3, 'frase antiga',
+                     'old phrase', 2, '2026-07-20 10:00:00', '2026-07-22 10:00:00', 4, 3);
+                 INSERT INTO expression_occurrences
+                    (term_id, text_id, sentence_id, start_position, end_position)
+                    VALUES (1, 1, 1, 1, 3);
+                 INSERT INTO review_events
+                    (term_id, rating, status_before, status_after, reviewed_at, next_review_at)
+                    VALUES (1, 2, 2, 3, '2026-07-20 10:00:00', '2026-07-22 10:00:00');",
+            )
+            .expect("version six data should insert");
+
+        Database::configure_and_migrate(&mut connection).expect("database should upgrade");
+
+        let term: (String, String, i64, i64) = connection
+            .query_row(
+                "SELECT translation, romanization, review_count, correct_count
+                 FROM terms WHERE id = 1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .expect("term should survive");
+        let counts: (i64, i64, i64, i64) = connection
+            .query_row(
+                "SELECT
+                    (SELECT COUNT(*) FROM expression_occurrences),
+                    (SELECT COUNT(*) FROM review_events),
+                    (SELECT COUNT(*) FROM tags),
+                    (SELECT COUNT(*) FROM text_audio)",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .expect("upgraded counts should load");
+        let archived: bool = connection
+            .query_row("SELECT archived FROM texts WHERE id = 1", [], |row| {
+                row.get(0)
+            })
+            .expect("archive default should load");
+        let settings: (i64, i64, i64, bool, i64) = connection
+            .query_row(
+                "SELECT library_page_size, archived_page_size, tag_page_size,
+                        show_word_counts, review_delay_ms
+                 FROM app_settings WHERE id = 1",
+                [],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                    ))
+                },
+            )
+            .expect("settings defaults should load");
+
+        assert_eq!(term, ("frase antiga".into(), "old phrase".into(), 4, 3));
+        assert_eq!(counts, (1, 1, 0, 0));
+        assert!(!archived);
+        assert_eq!(settings, (25, 25, 50, true, 0));
+    }
+
+    #[test]
+    fn upgrades_archives_and_tag_assignments_from_schema_eight() {
+        let mut connection = connection_at_schema(8);
+        connection
+            .execute_batch(
+                "INSERT INTO languages (id, name) VALUES (1, 'English');
+                 INSERT INTO texts (id, language_id, title, content, archived)
+                    VALUES (1, 1, 'Archived tagged text', 'Tagged.', 1);
+                 INSERT INTO terms
+                    (id, language_id, display_text, normalized, status, translation, word_count)
+                    VALUES (1, 1, 'Tagged', 'tagged', 5, 'marcado', 1);
+                 INSERT INTO tags (id, name, comment)
+                    VALUES (1, 'Important', 'Preserve me');
+                 INSERT INTO text_tags (text_id, tag_id) VALUES (1, 1);
+                 INSERT INTO term_tags (term_id, tag_id) VALUES (1, 1);",
+            )
+            .expect("version eight data should insert");
+
+        Database::configure_and_migrate(&mut connection).expect("database should upgrade");
+
+        let preserved: (bool, String, i64, i64) = connection
+            .query_row(
+                "SELECT texts.archived, tags.comment,
+                        (SELECT COUNT(*) FROM text_tags),
+                        (SELECT COUNT(*) FROM term_tags)
+                 FROM texts CROSS JOIN tags WHERE texts.id = 1 AND tags.id = 1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .expect("archive and tags should survive");
+        let audio_count: i64 = connection
+            .query_row("SELECT COUNT(*) FROM text_audio", [], |row| row.get(0))
+            .expect("audio table should load");
+
+        assert_eq!(preserved, (true, "Preserve me".into(), 1, 1));
+        assert_eq!(audio_count, 0);
+        assert_eq!(
+            connection
+                .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
+                .unwrap(),
+            LATEST_SCHEMA_VERSION
+        );
+    }
+
+    #[test]
+    fn upgrades_embedded_media_from_schema_nine() {
+        let mut connection = connection_at_schema(9);
+        connection
+            .execute_batch(
+                "INSERT INTO languages (id, name) VALUES (1, 'English');
+                 INSERT INTO texts (id, language_id, title, content, archived)
+                    VALUES (1, 1, 'Audio text', 'Listen.', 0);
+                 INSERT INTO text_audio (text_id, file_name, media_type, content)
+                    VALUES (1, 'lesson.mp3', 'audio/mpeg', X'494433');",
+            )
+            .expect("version nine media should insert");
+
+        Database::configure_and_migrate(&mut connection).expect("database should upgrade");
+
+        let media: (String, String, Vec<u8>) = connection
+            .query_row(
+                "SELECT file_name, media_type, content FROM text_audio WHERE text_id = 1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .expect("media should survive");
+        assert_eq!(
+            media,
+            ("lesson.mp3".into(), "audio/mpeg".into(), b"ID3".to_vec())
+        );
+        assert_eq!(
+            connection
+                .query_row("SELECT COUNT(*) FROM app_settings", [], |row| row
+                    .get::<_, i64>(0))
+                .unwrap(),
+            1
+        );
+    }
+
+    #[test]
+    fn leaves_schema_and_data_intact_when_a_migration_fails() {
+        let mut connection = connection_at_schema(9);
+        connection
+            .execute_batch(
+                "INSERT INTO languages (id, name) VALUES (1, 'English');
+                 INSERT INTO texts (id, language_id, title, content, archived)
+                    VALUES (1, 1, 'Keep me', 'Preserved.', 0);
+                 INSERT INTO text_audio (text_id, file_name, media_type, content)
+                    VALUES (1, 'keep.mp3', 'audio/mpeg', X'010203');
+                 CREATE TABLE app_settings (legacy_value TEXT NOT NULL);
+                 INSERT INTO app_settings VALUES ('conflict');",
+            )
+            .expect("conflicting version nine database should build");
+
+        let error = Database::configure_and_migrate(&mut connection)
+            .expect_err("conflicting migration should fail");
+
+        assert!(error.contains("Unable to apply schema version 10"));
+        assert_eq!(
+            connection
+                .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
+                .unwrap(),
+            9
+        );
+        assert_eq!(
+            connection
+                .query_row("SELECT title FROM texts WHERE id = 1", [], |row| row
+                    .get::<_, String>(0))
+                .unwrap(),
+            "Keep me"
+        );
+        assert_eq!(
+            connection
+                .query_row(
+                    "SELECT content FROM text_audio WHERE text_id = 1",
+                    [],
+                    |row| { row.get::<_, Vec<u8>>(0) }
+                )
+                .unwrap(),
+            vec![1, 2, 3]
+        );
+        assert_eq!(
+            connection
+                .query_row("SELECT legacy_value FROM app_settings", [], |row| {
+                    row.get::<_, String>(0)
+                })
+                .unwrap(),
+            "conflict"
+        );
     }
 
     #[test]

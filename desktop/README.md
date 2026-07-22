@@ -26,6 +26,10 @@ Release CI produces unsigned Linux, Windows, and Intel/Apple Silicon macOS
 installers. See [RELEASING.md](RELEASING.md) for the matrix, local commands, and
 current trust boundary.
 
+SQLite versions 1 through 10 have explicit upgrade and rollback coverage. See
+[SCHEMA_MIGRATIONS.md](SCHEMA_MIGRATIONS.md) for the data introduced by each
+version and its test evidence.
+
 ## Current Boundary
 
 The shell reads data through `LibraryGateway`. `MockLibraryGateway` supports browser development and automated tests without PHP. Tauri-mode builds use `TauriLibraryGateway` and the native `list_texts` command backed by SQLite.
