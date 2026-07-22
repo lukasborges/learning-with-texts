@@ -17,7 +17,7 @@
     "desktop:test": "npm run desktop:test:web && npm run desktop:test:rust && npm run desktop:test:release",
     "desktop:test:web": "vitest run --config desktop/vitest.config.ts",
     "desktop:test:rust": "cargo test --manifest-path desktop/src-tauri/Cargo.toml",
-    "desktop:test:release": "node --test desktop/scripts/*.test.mjs",
+    "desktop:test:release": "node --test desktop/scripts/create-release-config.test.mjs desktop/scripts/package-arch.test.mjs desktop/scripts/release-integrity.test.mjs desktop/scripts/runtime-boundary.test.mjs desktop/scripts/tauri-config.test.mjs",
     "desktop:e2e:build": "cd desktop && tauri build --debug --bundles deb",
     "desktop:test:e2e": "node --test desktop/e2e/app.test.mjs",
     "desktop:e2e": "npm run desktop:e2e:build && npm run desktop:test:e2e",
