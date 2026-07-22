@@ -21,7 +21,8 @@ core workflows through the native WebView.
 
 ## Local Build
 
-Install the platform prerequisites, run `npm ci`, and build from `desktop/`:
+Install the platform prerequisites, run `npm ci`, and build from `desktop/`.
+Linux AppImage builds also require `patchelf` (the CI workflows install it):
 
 ```bash
 # Linux

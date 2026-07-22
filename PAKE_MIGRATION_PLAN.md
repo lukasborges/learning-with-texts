@@ -77,14 +77,17 @@ Last updated: July 22, 2026. A checked current-slice item is implemented and
 tested; completed workflows also include their commit. The current slice is
 expanded so its remaining work is visible before the next commit.
 
-### Current Slice — Release Integrity and Signing
+### Current Slice — Installer Verification
 
 - [x] Generate checksums for every release artifact (`07f4559`).
 - [x] Generate and retain a machine-readable software bill of materials (SBOM) (`07f4559`).
-- [x] Define least-privilege secret contracts for Windows and macOS signing (this commit).
+- [x] Define least-privilege secret contracts for Windows and macOS signing (`812d57a`).
 - [ ] Sign Windows installers and notarize macOS DMGs in CI. **Workflow ready; protected credentials and first CI evidence pending.**
-- [x] Configure cryptographically signed application updates (this commit).
-- [x] Document verification, key rotation, and release recovery procedures (this commit).
+- [x] Configure cryptographically signed application updates (`812d57a`).
+- [x] Document verification, key rotation, and release recovery procedures (`812d57a`).
+- [x] Build and inspect PHP-free DEB, AppImage, and Arch Linux packages (`ee667a3` and this commit).
+- [x] Run packaged first-launch, persistence, backup, and restore E2E after PHP removal (this commit).
+- [x] Keep the updater inert in local and distribution-managed builds while preserving signed release overrides (this commit).
 
 ### Completed Desktop Workflows
 
@@ -104,7 +107,7 @@ expanded so its remaining work is visible before the next commit.
 - [x] Language and application settings parity, migration, and documentation (`87e0a9f`).
 - [x] Packaged Linux first-launch and workflow E2E coverage (`561f494`).
 - [x] Cross-platform release matrix configured; Linux release artifacts smoke-tested (`a8c0024`).
-- [x] SQLite schema 1–10 upgrade and rollback coverage (this commit).
+- [x] SQLite schema 1–10 upgrade and rollback coverage (`352a3b0`).
 
 ### Remaining MVP Migration
 
@@ -117,7 +120,7 @@ expanded so its remaining work is visible before the next commit.
 ### Distribution and Hardening
 
 - [x] Produce local Linux DEB and AppImage proof-of-concept packages.
-- [x] Produce and validate a native Arch Linux pacman package (this commit).
+- [x] Produce and validate a native Arch Linux pacman package (`ee667a3`).
 - [ ] Build Windows, macOS, and Linux release artifacts in CI. **Matrix ready; first remote run pending.**
 - [x] Add upgrade tests covering older desktop schema versions (`352a3b0`).
 - [ ] Add signing/notarization, checksums, SBOM, and signed updates. **Implementation complete; first protected CI release pending.**
@@ -186,12 +189,12 @@ For each workflow, record current behavior, expose Rust commands, connect the Ty
 
 ### Phase 4.5 — Legacy Runtime Removal
 
-- [x] Freeze the PHP application as a migration-only release (this commit).
-- [x] Publish and document a stable PHP-to-desktop export path for existing users (this commit).
+- [x] Freeze the PHP application as a migration-only release (`01d534a`).
+- [x] Publish and document a stable PHP-to-desktop export path for existing users (`01d534a`).
 - [ ] Preserve the legacy application and exporter in a tagged maintenance branch. **Local branch and annotated tag point to `01d534a`; remote publication pending.**
-- [x] Confirm every MVP workflow has desktop parity and no longer invokes PHP or MySQL (this commit).
-- [x] Remove PHP pages, MySQL connection templates, and obsolete browser dependencies from the desktop branch (this commit).
-- [ ] Verify clean builds, tests, installers, backup/restore, and upgrades without PHP or MySQL files.
+- [x] Confirm every MVP workflow has desktop parity and no longer invokes PHP or MySQL (`7da80bd`).
+- [x] Remove PHP pages, MySQL connection templates, and obsolete browser dependencies from the desktop branch (`9fbac1a`).
+- [x] Verify clean builds, tests, installers, backup/restore, and upgrades without PHP or MySQL files (this commit).
 
 **Exit criterion:** the maintained desktop branch contains no PHP/MySQL runtime dependency, while the tagged legacy branch remains available for data migration and historical support.
 
