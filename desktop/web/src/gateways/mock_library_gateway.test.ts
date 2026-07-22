@@ -26,7 +26,8 @@ describe('MockLibraryGateway', () => {
     expect(created).toMatchObject({
       id: 4,
       language: 'Portuguese',
-      title: 'Um conto'
+      title: 'Um conto',
+      totalTerms: 3
     });
     expect(texts[0]).toEqual(created);
   });

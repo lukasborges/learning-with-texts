@@ -36,6 +36,13 @@ const sampleTexts: readonly TextDetails[] = [
   }
 ];
 
+function countUniqueTerms(content: string): number {
+  const terms = content
+    .toLocaleLowerCase()
+    .match(/[\p{L}\p{N}_]+(?:['’‐‑-][\p{L}\p{N}_]+)*/gu);
+  return new Set(terms ?? []).size;
+}
+
 export class MockLibraryGateway implements LibraryGateway {
   private readonly texts = sampleTexts.map((text) => ({ ...text }));
 
@@ -49,7 +56,7 @@ export class MockLibraryGateway implements LibraryGateway {
       title: input.title.trim(),
       language: input.language.trim(),
       knownTerms: 0,
-      totalTerms: 0,
+      totalTerms: countUniqueTerms(input.content),
       lastOpened: '',
       content: input.content,
       sourceUri: input.sourceUri
@@ -81,7 +88,9 @@ export class MockLibraryGateway implements LibraryGateway {
       language: input.language.trim(),
       title: input.title.trim(),
       content: input.content,
-      sourceUri: input.sourceUri
+      sourceUri: input.sourceUri,
+      knownTerms: 0,
+      totalTerms: countUniqueTerms(input.content)
     };
     this.texts[index] = updated;
     return updated;

@@ -182,8 +182,10 @@ function createTextCard(text: LibraryText): HTMLElement {
   details.className = 'text-card__details';
   details.textContent =
     text.totalTerms > 0
-      ? `${text.knownTerms} of ${text.totalTerms} terms known · ${text.lastOpened}`
-      : 'Term analysis pending';
+      ? `${text.knownTerms} of ${text.totalTerms} terms known${
+          text.lastOpened ? ` · ${text.lastOpened}` : ''
+        }`
+      : 'No terms detected';
 
   const button = document.createElement('button');
   button.type = 'button';

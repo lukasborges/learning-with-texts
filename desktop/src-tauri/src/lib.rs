@@ -1,4 +1,5 @@
 mod database;
+mod parser;
 
 use database::{CreateTextInput, Database, LibraryText, TextDetails, UpdateTextInput};
 use tauri::Manager;

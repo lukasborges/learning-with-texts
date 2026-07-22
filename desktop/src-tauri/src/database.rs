@@ -1,10 +1,16 @@
+use crate::parser::parse_text;
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension, Transaction};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Mutex;
 
 const INITIAL_MIGRATION: &str = include_str!("../migrations/0001_initial.sql");
-const INITIAL_SCHEMA_VERSION: i64 = 1;
+const TEXT_PARSING_MIGRATION: &str = include_str!("../migrations/0002_text_parsing.sql");
+const LATEST_SCHEMA_VERSION: i64 = 2;
+const MIGRATIONS: [(i64, &str); 2] = [
+    (1, INITIAL_MIGRATION),
+    (LATEST_SCHEMA_VERSION, TEXT_PARSING_MIGRATION),
+];
 
 #[derive(Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -161,16 +167,22 @@ impl Database {
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .map_err(|error| format!("Unable to read the schema version: {error}"))?;
 
-        if current_version < INITIAL_SCHEMA_VERSION {
+        for (version, migration) in MIGRATIONS {
+            if current_version >= version {
+                continue;
+            }
             let transaction = connection
                 .transaction()
                 .map_err(|error| format!("Unable to start the schema migration: {error}"))?;
 
             transaction
-                .execute_batch(INITIAL_MIGRATION)
-                .map_err(|error| format!("Unable to apply the initial schema: {error}"))?;
+                .execute_batch(migration)
+                .map_err(|error| format!("Unable to apply schema version {version}: {error}"))?;
+            if version == 2 {
+                Self::backfill_text_parsing(&transaction)?;
+            }
             transaction
-                .pragma_update(None, "user_version", INITIAL_SCHEMA_VERSION)
+                .pragma_update(None, "user_version", version)
                 .map_err(|error| format!("Unable to record the schema version: {error}"))?;
             transaction
                 .commit()
@@ -178,6 +190,90 @@ impl Database {
         }
 
         Ok(())
+    }
+
+    fn backfill_text_parsing(transaction: &Transaction<'_>) -> Result<(), String> {
+        let texts = {
+            let mut statement = transaction
+                .prepare("SELECT id, language_id, content FROM texts ORDER BY id")
+                .map_err(|error| format!("Unable to prepare the text parsing backfill: {error}"))?;
+            let rows = statement
+                .query_map([], |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, i64>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                })
+                .map_err(|error| format!("Unable to read texts for parsing: {error}"))?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|error| format!("Unable to decode texts for parsing: {error}"))?
+        };
+
+        for (text_id, language_id, content) in texts {
+            Self::persist_text_parsing(transaction, text_id, language_id, &content)?;
+        }
+        Ok(())
+    }
+
+    fn persist_text_parsing(
+        transaction: &Transaction<'_>,
+        text_id: i64,
+        language_id: i64,
+        content: &str,
+    ) -> Result<(), String> {
+        transaction
+            .execute("DELETE FROM sentences WHERE text_id = ?1", [text_id])
+            .map_err(|error| format!("Unable to clear the previous text analysis: {error}"))?;
+
+        for (sentence_index, sentence) in parse_text(content).into_iter().enumerate() {
+            transaction
+                .execute(
+                    "INSERT INTO sentences (language_id, text_id, position, content)
+                     VALUES (?1, ?2, ?3, ?4)",
+                    params![
+                        language_id,
+                        text_id,
+                        (sentence_index + 1) as i64,
+                        sentence.content
+                    ],
+                )
+                .map_err(|error| format!("Unable to save a parsed sentence: {error}"))?;
+            let sentence_id = transaction.last_insert_rowid();
+
+            for (item_index, item) in sentence.items.into_iter().enumerate() {
+                transaction
+                    .execute(
+                        "INSERT INTO text_items
+                            (language_id, text_id, sentence_id, position, surface, normalized, is_word)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                        params![
+                            language_id,
+                            text_id,
+                            sentence_id,
+                            (item_index + 1) as i64,
+                            item.surface,
+                            item.normalized,
+                            item.is_word
+                        ],
+                    )
+                    .map_err(|error| format!("Unable to save a parsed text item: {error}"))?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn text_term_count(transaction: &Transaction<'_>, text_id: i64) -> Result<i64, String> {
+        transaction
+            .query_row(
+                "SELECT COUNT(DISTINCT normalized)
+                 FROM text_items
+                 WHERE text_id = ?1 AND is_word = 1",
+                [text_id],
+                |row| row.get(0),
+            )
+            .map_err(|error| format!("Unable to count parsed terms: {error}"))
     }
 
     pub fn list_texts(&self) -> Result<Vec<LibraryText>, String> {
@@ -191,7 +287,10 @@ impl Database {
                         texts.title,
                         languages.name,
                         0 AS known_terms,
-                        0 AS total_terms,
+                        (SELECT COUNT(DISTINCT text_items.normalized)
+                         FROM text_items
+                         WHERE text_items.text_id = texts.id
+                           AND text_items.is_word = 1) AS total_terms,
                         COALESCE(texts.last_opened_at, '')
                  FROM texts
                  INNER JOIN languages ON languages.id = texts.language_id
@@ -239,6 +338,8 @@ impl Database {
             )
             .map_err(|error| format!("Unable to create the text: {error}"))?;
         let id = transaction.last_insert_rowid();
+        Self::persist_text_parsing(&transaction, id, language_id, &input.content)?;
+        let total_terms = Self::text_term_count(&transaction, id)?;
 
         transaction
             .commit()
@@ -249,7 +350,7 @@ impl Database {
             title: input.title,
             language: stored_language,
             known_terms: 0,
-            total_terms: 0,
+            total_terms,
             last_opened: String::new(),
         })
     }
@@ -269,7 +370,10 @@ impl Database {
                         texts.title,
                         languages.name,
                         0 AS known_terms,
-                        0 AS total_terms,
+                        (SELECT COUNT(DISTINCT text_items.normalized)
+                         FROM text_items
+                         WHERE text_items.text_id = texts.id
+                           AND text_items.is_word = 1) AS total_terms,
                         COALESCE(texts.last_opened_at, ''),
                         texts.content,
                         texts.source_uri
@@ -334,6 +438,8 @@ impl Database {
         if changed == 0 {
             return Err("Text was not found".to_string());
         }
+        Self::persist_text_parsing(&transaction, id, language_id, &input.content)?;
+        let total_terms = Self::text_term_count(&transaction, id)?;
 
         transaction
             .commit()
@@ -344,7 +450,7 @@ impl Database {
             title: input.title,
             language: stored_language,
             known_terms: 0,
-            total_terms: 0,
+            total_terms,
             last_opened: String::new(),
         })
     }
@@ -395,7 +501,7 @@ mod tests {
             .expect("schema version should be readable");
 
         assert_eq!(foreign_keys, 1);
-        assert_eq!(version, INITIAL_SCHEMA_VERSION);
+        assert_eq!(version, LATEST_SCHEMA_VERSION);
     }
 
     #[test]
@@ -461,6 +567,7 @@ mod tests {
         assert_eq!(created.id, 1);
         assert_eq!(created.language, "English");
         assert_eq!(created.title, "A local story");
+        assert_eq!(created.total_terms, 2);
 
         let connection = database.connection.lock().expect("database should lock");
         let stored: (String, String, String) = connection
@@ -558,6 +665,7 @@ mod tests {
             .expect("updated text should load");
 
         assert_eq!(updated.title, "Updated");
+        assert_eq!(updated.total_terms, 2);
         assert_eq!(details.language, "French");
         assert_eq!(details.content, "New content");
     }
@@ -586,5 +694,53 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM languages", [], |row| row.get(0))
             .expect("language count should be readable");
         assert_eq!(language_count, 1);
+        let sentence_count: i64 = connection
+            .query_row("SELECT COUNT(*) FROM sentences", [], |row| row.get(0))
+            .expect("sentence count should be readable");
+        let item_count: i64 = connection
+            .query_row("SELECT COUNT(*) FROM text_items", [], |row| row.get(0))
+            .expect("item count should be readable");
+        assert_eq!((sentence_count, item_count), (0, 0));
+    }
+
+    #[test]
+    fn upgrades_and_parses_texts_from_schema_version_one() {
+        let mut connection = Connection::open_in_memory().expect("database should open");
+        connection
+            .execute_batch(INITIAL_MIGRATION)
+            .expect("initial schema should apply");
+        connection
+            .pragma_update(None, "user_version", 1)
+            .expect("schema version should set");
+        connection
+            .execute("INSERT INTO languages (name) VALUES ('English')", [])
+            .expect("language should insert");
+        connection
+            .execute(
+                "INSERT INTO texts (language_id, title, content)
+                 VALUES (1, 'Existing', 'First sentence. Second sentence!')",
+                [],
+            )
+            .expect("text should insert");
+
+        Database::configure_and_migrate(&mut connection).expect("database should upgrade");
+
+        let version: i64 = connection
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .expect("schema version should be readable");
+        let sentence_count: i64 = connection
+            .query_row("SELECT COUNT(*) FROM sentences", [], |row| row.get(0))
+            .expect("sentences should be readable");
+        let term_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(DISTINCT normalized) FROM text_items WHERE is_word = 1",
+                [],
+                |row| row.get(0),
+            )
+            .expect("terms should be readable");
+
+        assert_eq!(version, LATEST_SCHEMA_VERSION);
+        assert_eq!(sentence_count, 2);
+        assert_eq!(term_count, 3);
     }
 }
