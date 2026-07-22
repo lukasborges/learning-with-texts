@@ -56,7 +56,11 @@ test('desktop runtime has no PHP, server, shell, or MySQL sidecar', async () => 
 });
 
 test('maintained branch tracks no legacy server or browser runtime', async () => {
-  const { stdout } = await executeFile('git', ['ls-files'], { cwd: repositoryRoot });
+  const { stdout } = await executeFile(
+    'git',
+    ['-c', `safe.directory=${repositoryRoot}`, 'ls-files'],
+    { cwd: repositoryRoot }
+  );
   const files = stdout.trim().split('\n');
   const legacyFiles = files.filter(
     (file) =>
