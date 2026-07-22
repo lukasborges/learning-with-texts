@@ -2,7 +2,7 @@
 
 Production releases are created only by `Signed Desktop Release` for a `v*`
 tag. The workflow targets the protected `desktop-production` GitHub Environment,
-creates a draft release, signs update bundles on every platform, Authenticode
+creates a draft release, signs supported update bundles, Authenticode
 signs Windows installers, and signs/notarizes macOS DMGs. The manual `Desktop
 Release Artifacts` workflow is an unsigned packaging test and must never be
 promoted as a trusted release.
@@ -40,7 +40,8 @@ SBOM action runs.
    `tauri.conf.json`; commit it before creating `vX.Y.Z`.
 2. Push the tag and approve all four jobs in `desktop-production`.
 3. Keep the GitHub release as a draft until every job succeeds. Confirm that
-   installers, updater bundles, `.sig` files, `latest.json`, per-platform
+   installers (including the Arch `.pkg.tar.zst`), updater bundles, `.sig`
+   files, `latest.json`, per-platform
    `*.SHA256SUMS`, and CycloneDX SBOMs are attached.
 4. Verify hashes with `sha256sum --check <platform>.SHA256SUMS`. On Windows run
    `Get-AuthenticodeSignature <installer>` and require `Status: Valid`. On macOS
@@ -48,6 +49,10 @@ SBOM action runs.
    <dmg>`, and `xcrun stapler validate <dmg>`.
 5. Install the draft on clean target systems, test backup/restore and an update
    from the previous version, then publish it.
+
+Arch installations are updated by pacman/AUR, not by the AppImage updater. The
+package is built only after all signed platform jobs succeed and is attached to
+the same protected draft with its checksum and SBOM.
 
 ## Rotation and Recovery
 

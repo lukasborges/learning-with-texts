@@ -6,6 +6,7 @@ their target operating systems. It runs only when manually dispatched.
 | Artifact | Runner | Bundles |
 | --- | --- | --- |
 | `lwt-desktop-linux-x86_64` | Ubuntu 24.04 | DEB, AppImage |
+| `lwt-desktop-arch-x86_64` | Arch Linux container | pacman `.pkg.tar.zst` |
 | `lwt-desktop-windows-x86_64` | Windows 2025 | MSI, NSIS setup |
 | `lwt-desktop-macos-aarch64` | macOS 15 ARM | DMG |
 | `lwt-desktop-macos-x86_64` | macOS 15 Intel | DMG |
@@ -26,6 +27,9 @@ Install the platform prerequisites, run `npm ci`, and build from `desktop/`:
 # Linux
 NO_STRIP=1 npx tauri build --bundles deb,appimage
 
+# Arch Linux (run from the repository root)
+npm run desktop:package:arch
+
 # Windows
 npx tauri build --bundles msi,nsis
 
@@ -41,6 +45,12 @@ Production `v*` tags instead invoke `Signed Desktop Release`. That protected
 workflow creates a draft GitHub release with signed updater bundles and a
 user-visible update channel. Provisioning, approval, verification, rotation,
 and recovery procedures are in [SIGNING.md](SIGNING.md).
+
+The Arch package is built natively from source and installed with
+`sudo pacman -U lwt-desktop-<version>-1-x86_64.pkg.tar.zst`. It intentionally
+uses pacman/AUR upgrades instead of Tauri's AppImage updater. Its PKGBUILD input
+files are hashed, and the resulting package is covered by the release checksum
+and SBOM like every other artifact.
 
 ## Verify an Artifact
 

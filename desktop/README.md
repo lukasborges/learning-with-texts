@@ -14,6 +14,7 @@ npm run desktop:test
 npm run desktop:e2e
 npm run desktop:build
 npm run desktop:package:debug
+npm run desktop:package:arch
 npm run desktop:tauri:dev
 npm run desktop:tauri:build
 ```

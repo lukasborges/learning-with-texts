@@ -11,6 +11,7 @@ const RELEASE_SUFFIXES = [
   '.dmg',
   '.msi',
   '.nsis.zip',
+  '.pkg.tar.zst',
   '.sig',
   '-setup.exe'
 ];

@@ -112,3 +112,60 @@ jobs:
           path: ${{ matrix.paths }}
           if-no-files-found: error
           retention-days: 30
+
+  arch:
+    name: lwt-desktop-arch-x86_64
+    runs-on: ubuntu-24.04
+    container: archlinux:base-devel
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Arch build dependencies
+        run: >-
+          pacman -Syu --noconfirm
+          git nodejs npm rustup webkit2gtk-4.1
+          cairo desktop-file-utils gdk-pixbuf2 glib2 gtk3 hicolor-icon-theme
+          libayatana-appindicator librsvg libsoup3 pango patchelf
+
+      - name: Configure Rust
+        run: rustup default stable
+
+      - run: npm ci
+      - run: npm run desktop:check
+      - run: npm run desktop:test
+      - run: cd desktop && npx tauri build --no-bundle
+
+      - name: Build pacman package as an unprivileged user
+        run: |
+          useradd --create-home packagebuilder
+          chown -R packagebuilder:packagebuilder "$GITHUB_WORKSPACE"
+          runuser -u packagebuilder -- npm run desktop:package:arch:staged
+
+      - name: Generate Arch package SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: desktop/artifacts/arch
+          format: cyclonedx-json
+          output-file: desktop/artifacts/arch/lwt-desktop-arch-x86_64.cdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Generate Arch package checksums
+        run: >-
+          node desktop/scripts/release-integrity.mjs
+          --root desktop/artifacts/arch
+          --output desktop/artifacts/arch/SHA256SUMS
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: lwt-desktop-arch-x86_64
+          path: |
+            desktop/artifacts/arch/*.pkg.tar.zst
+            desktop/artifacts/arch/.SRCINFO
+            desktop/artifacts/arch/*.cdx.json
+            desktop/artifacts/arch/SHA256SUMS
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30

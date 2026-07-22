@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Learning with Texts
+Comment=Local-first language reading and vocabulary practice
+Exec=lwt-desktop
+Icon=lwt-desktop
+Terminal=false
+Categories=Education;
+StartupNotify=true

@@ -213,3 +213,62 @@ jobs:
           "${{ matrix.bundle_root }}/${{ matrix.artifact }}.cdx.json"
           "${{ matrix.bundle_root }}/${{ matrix.artifact }}.SHA256SUMS"
           --clobber
+
+  arch:
+    name: lwt-desktop-arch-x86_64
+    needs: release
+    runs-on: ubuntu-24.04
+    container: archlinux:base-devel
+    environment: desktop-production
+    timeout-minutes: 45
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Arch build dependencies
+        run: >-
+          pacman -Syu --noconfirm
+          git github-cli nodejs npm rustup webkit2gtk-4.1
+          cairo desktop-file-utils gdk-pixbuf2 glib2 gtk3 hicolor-icon-theme
+          libayatana-appindicator librsvg libsoup3 pango patchelf
+
+      - name: Configure Rust
+        run: rustup default stable
+
+      - run: npm ci
+      - run: npm run desktop:check
+      - run: npm run desktop:test
+      - run: cd desktop && npx tauri build --no-bundle
+
+      - name: Build pacman package as an unprivileged user
+        run: |
+          useradd --create-home packagebuilder
+          chown -R packagebuilder:packagebuilder "$GITHUB_WORKSPACE"
+          runuser -u packagebuilder -- npm run desktop:package:arch:staged
+
+      - name: Generate Arch package SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: desktop/artifacts/arch
+          format: cyclonedx-json
+          output-file: desktop/artifacts/arch/lwt-desktop-arch-x86_64.cdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Generate Arch package checksums
+        run: >-
+          node desktop/scripts/release-integrity.mjs
+          --root desktop/artifacts/arch
+          --output desktop/artifacts/arch/lwt-desktop-arch-x86_64.SHA256SUMS
+
+      - name: Attach Arch package and integrity metadata
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          gh release upload "${{ github.ref_name }}"
+          desktop/artifacts/arch/*.pkg.tar.zst
+          desktop/artifacts/arch/lwt-desktop-arch-x86_64.cdx.json
+          desktop/artifacts/arch/lwt-desktop-arch-x86_64.SHA256SUMS
+          --clobber

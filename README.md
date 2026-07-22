@@ -13,6 +13,9 @@ use artifacts from the manual workflow only for testing; those artifacts are
 explicitly unsigned. Release and verification details are in
 [desktop/RELEASING.md](desktop/RELEASING.md).
 
+Arch Linux users can install the native package with
+`sudo pacman -U lwt-desktop-<version>-1-x86_64.pkg.tar.zst`.
+
 Application data is stored in the operating system's per-user application-data
 directory. Use **Backup** in the application to create a portable JSON snapshot
 before upgrading or moving to another computer.

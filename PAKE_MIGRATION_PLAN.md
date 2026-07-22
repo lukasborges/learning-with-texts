@@ -117,6 +117,7 @@ expanded so its remaining work is visible before the next commit.
 ### Distribution and Hardening
 
 - [x] Produce local Linux DEB and AppImage proof-of-concept packages.
+- [x] Produce and validate a native Arch Linux pacman package (this commit).
 - [ ] Build Windows, macOS, and Linux release artifacts in CI. **Matrix ready; first remote run pending.**
 - [x] Add upgrade tests covering older desktop schema versions (`352a3b0`).
 - [ ] Add signing/notarization, checksums, SBOM, and signed updates. **Implementation complete; first protected CI release pending.**

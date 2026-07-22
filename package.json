@@ -23,6 +23,8 @@
     "desktop:e2e": "npm run desktop:e2e:build && npm run desktop:test:e2e",
     "desktop:package": "npm run desktop:build && node desktop/scripts/package.mjs",
     "desktop:package:debug": "npm run desktop:build && node desktop/scripts/package.mjs --debug --iterative-build",
+    "desktop:package:arch": "cd desktop && tauri build --no-bundle && cd .. && npm run desktop:package:arch:staged",
+    "desktop:package:arch:staged": "node desktop/scripts/package-arch.mjs --binary desktop/src-tauri/target/release/lwt-desktop --output desktop/artifacts/arch --build",
     "desktop:tauri:dev": "cd desktop && tauri dev",
     "desktop:tauri:build": "cd desktop && tauri build"
   },
