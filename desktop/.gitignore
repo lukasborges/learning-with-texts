@@ -1,0 +1,8 @@
+*.AppImage
+*.deb
+*.dmg
+*.msi
+*.rpm
+*.pkg.tar.zst
+*.app/
+*-binary

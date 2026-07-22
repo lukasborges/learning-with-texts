@@ -1,0 +1,27 @@
+{
+  "name": "learning-with-texts-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "desktop:dev": "vite --config desktop/vite.config.ts",
+    "desktop:build": "vite build --config desktop/vite.config.ts",
+    "desktop:check": "tsc --noEmit -p desktop/tsconfig.json",
+    "desktop:test": "vitest run --config desktop/vitest.config.ts",
+    "desktop:package": "npm run desktop:build && node desktop/scripts/package.mjs",
+    "desktop:package:debug": "npm run desktop:build && node desktop/scripts/package.mjs --debug --iterative-build"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.1",
+    "pake-cli": "3.15.3",
+    "typescript": "7.0.2",
+    "vite": "8.1.5",
+    "vitest": "4.1.10"
+  },
+  "overrides": {
+    "sharp": "0.35.3"
+  }
+}
