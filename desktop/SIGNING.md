@@ -46,8 +46,10 @@ SBOM action runs.
 3. Keep the GitHub release as a draft until every job succeeds. Confirm that
    installers (including the Arch `.pkg.tar.zst`), updater bundles, `.sig`
    files, `latest.json`, per-platform
-   `*.SHA256SUMS`, and CycloneDX SBOMs are attached.
-4. Verify hashes with `sha256sum --check <platform>.SHA256SUMS`. On Windows run
+   `*.SHA256SUMS`, the release-wide `SHA256SUMS`, and CycloneDX SBOMs are
+   attached.
+4. Verify every attached asset with `sha256sum --check SHA256SUMS`; use the
+   platform manifests for focused checks. On Windows run
    `Get-AuthenticodeSignature <installer>` and require `Status: Valid`. On macOS
    run `codesign --verify --deep --strict <app>`, `spctl --assess --type open
    <dmg>`, and `xcrun stapler validate <dmg>`.

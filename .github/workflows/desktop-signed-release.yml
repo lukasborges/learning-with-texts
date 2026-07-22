@@ -297,3 +297,43 @@ jobs:
           desktop/artifacts/arch/lwt-desktop-arch-x86_64.cdx.json
           desktop/artifacts/arch/lwt-desktop-arch-x86_64.SHA256SUMS
           --clobber
+
+  integrity:
+    name: complete-release-integrity
+    needs: [release, arch]
+    runs-on: ubuntu-24.04
+    environment: desktop-production
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20.19.0
+          cache: npm
+
+      - name: Download every draft release asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p "${{ runner.temp }}/release-assets"
+          gh release download "${{ github.ref_name }}" --dir "${{ runner.temp }}/release-assets"
+
+      - name: Generate and verify the complete release checksum manifest
+        run: |
+          node desktop/scripts/release-integrity.mjs \
+            --root "${{ runner.temp }}/release-assets" \
+            --output "${{ runner.temp }}/release-assets/SHA256SUMS" \
+            --all-files
+          cd "${{ runner.temp }}/release-assets"
+          sha256sum --check SHA256SUMS
+
+      - name: Attach complete checksum manifest to draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          gh release upload "${{ github.ref_name }}"
+          "${{ runner.temp }}/release-assets/SHA256SUMS"
+          --clobber
