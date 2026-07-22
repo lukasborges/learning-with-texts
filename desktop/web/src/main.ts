@@ -20,6 +20,35 @@ const usesNativeDatabase = import.meta.env.MODE === 'tauri';
 const gateway = createLibraryGateway();
 let showingArchivedTexts = false;
 
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  const chunks: string[] = [];
+  const chunkSize = 32_768;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    chunks.push(String.fromCharCode(...bytes.subarray(offset, offset + chunkSize)));
+  }
+  return btoa(chunks.join(''));
+}
+
+function audioType(file: File): string {
+  if (file.type) {
+    return file.type.toLocaleLowerCase();
+  }
+  const extension = file.name.split('.').pop()?.toLocaleLowerCase();
+  return (
+    {
+      mp3: 'audio/mpeg',
+      m4a: 'audio/mp4',
+      mp4: 'audio/mp4',
+      ogg: 'audio/ogg',
+      oga: 'audio/ogg',
+      wav: 'audio/wav',
+      webm: 'audio/webm',
+      flac: 'audio/flac'
+    }[extension ?? ''] ?? 'application/octet-stream'
+  );
+}
+
 function createField(labelText: string, control: HTMLElement): HTMLLabelElement {
   const label = document.createElement('label');
   const caption = document.createElement('span');
@@ -97,6 +126,10 @@ function createImportPanel(
   file.type = 'file';
   file.accept = '.txt,text/plain';
 
+  const audioFile = document.createElement('input');
+  audioFile.type = 'file';
+  audioFile.accept = '.mp3,.m4a,.mp4,.ogg,.oga,.wav,.webm,.flac,audio/*';
+
   const content = document.createElement('textarea');
   content.name = 'content';
   content.required = true;
@@ -132,6 +165,26 @@ function createImportPanel(
   cancel.hidden = !editingText;
   cancel.addEventListener('click', () => {
     void render();
+  });
+
+  const removeAudio = document.createElement('button');
+  removeAudio.type = 'button';
+  removeAudio.className = 'button-secondary';
+  removeAudio.textContent = 'Remove saved audio';
+  removeAudio.hidden = !editingText?.hasAudio;
+  removeAudio.addEventListener('click', () => {
+    if (!editingText) {
+      return;
+    }
+    removeAudio.disabled = true;
+    void gateway
+      .removeTextAudio(editingText.id)
+      .then(() => render('Saved audio was removed.', editingText.id))
+      .catch((error: unknown) => {
+        removeAudio.disabled = false;
+        status.className = 'form-status form-status--error';
+        status.textContent = error instanceof Error ? error.message : String(error);
+      });
   });
 
   file.addEventListener('change', () => {
@@ -180,6 +233,22 @@ function createImportPanel(
       .then((saved) =>
         gateway.setTextTags({ textId: saved.id, tagIds: tagSelector.selected() }).then(() => saved)
       )
+      .then(async (saved) => {
+        const selectedAudio = audioFile.files?.[0];
+        if (!selectedAudio) {
+          return saved;
+        }
+        if (selectedAudio.size === 0 || selectedAudio.size > 50_000_000) {
+          throw new Error('Audio must be between 1 byte and 50 MB');
+        }
+        await gateway.saveTextAudio({
+          textId: saved.id,
+          fileName: selectedAudio.name,
+          mediaType: audioType(selectedAudio),
+          dataBase64: arrayBufferToBase64(await selectedAudio.arrayBuffer())
+        });
+        return saved;
+      })
       .then((saved) =>
         render(
           editingText
@@ -199,11 +268,12 @@ function createImportPanel(
   contentField.append(contentHelp);
   const actions = document.createElement('div');
   actions.className = 'text-form__actions';
-  actions.append(submit, cancel);
+  actions.append(submit, cancel, removeAudio);
   form.append(
     createField('Language', language),
     createField('Title', title),
     createField('Load a .txt file', file),
+    createField(editingText?.hasAudio ? 'Replace audio (optional)' : 'Audio (optional)', audioFile),
     contentField,
     createField('Source URL (optional)', sourceUri),
     tagSelector.element,
@@ -247,7 +317,11 @@ function updateReadingProgress(
 }
 
 async function renderReading(textId: number): Promise<void> {
-  const [reading, tags] = await Promise.all([gateway.getReadingText(textId), gateway.listTags()]);
+  const [reading, tags, audio] = await Promise.all([
+    gateway.getReadingText(textId),
+    gateway.listTags(),
+    gateway.getTextAudio(textId)
+  ]);
   const shell = document.createElement('main');
   shell.className = 'shell reading-shell';
 
@@ -272,6 +346,14 @@ async function renderReading(textId: number): Promise<void> {
   progressLabel.className = 'reading-progress-label';
   updateReadingProgress(reading, reading.knownTerms, meter, progressLabel);
   header.append(title, language, meter, progressLabel);
+  if (audio) {
+    const player = document.createElement('audio');
+    player.controls = true;
+    player.preload = 'metadata';
+    player.src = `data:${audio.mediaType};base64,${audio.dataBase64}`;
+    player.setAttribute('aria-label', `Audio for ${reading.title}`);
+    header.append(player);
+  }
 
   const guide = document.createElement('aside');
   guide.className = 'reading-guide';
@@ -1069,7 +1151,7 @@ async function renderDataManagement(): Promise<void> {
       .then((summary) => {
         const warningText =
           summary.warnings.length === 0 ? '' : ` Warnings: ${summary.warnings.join(' ')}`;
-        restoreStatus.textContent = `Restored ${summary.texts} texts (${summary.archivedTexts} archived), ${summary.terms} terms, ${summary.tags} tags, and ${summary.reviews} reviews.${warningText}`;
+        restoreStatus.textContent = `Restored ${summary.texts} texts (${summary.archivedTexts} archived), ${summary.terms} terms, ${summary.tags} tags, ${summary.media} audio files, and ${summary.reviews} reviews.${warningText}`;
         selectedPayload = '';
         file.value = '';
       })

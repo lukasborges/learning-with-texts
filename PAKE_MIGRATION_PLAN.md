@@ -77,14 +77,14 @@ Last updated: July 22, 2026. A checked current-slice item is implemented and
 tested; completed workflows also include their commit. The current slice is
 expanded so its remaining work is visible before the next commit.
 
-### Current Slice — Legacy Compound Positions
+### Current Slice — Local Audio Media
 
-- [x] Find saved compound occurrences in legacy `textitems` data.
-- [x] Export sentence and first-word ordinals without relying on global item offsets.
-- [x] Resolve and verify parsed desktop positions during transactional restore.
-- [x] Warn and skip unmatched occurrences instead of creating incorrect links.
-- [x] Add legacy contract and fallback tests.
-- [x] Package and clean-install smoke-test the Linux desktop application.
+- [x] Add transactional app-data storage for text audio.
+- [x] Add typed native/frontend save, load, and remove commands.
+- [x] Add audio selection and playback to text and reading workflows.
+- [x] Include validated media bytes in portable backup and restore.
+- [x] Embed eligible local legacy audio and warn about unsupported references.
+- [x] Add tests, package, and clean-install smoke-test the application.
 
 ### Completed Desktop Workflows
 
@@ -99,12 +99,13 @@ expanded so its remaining work is visible before the next commit.
 - [x] Legacy PHP-to-desktop JSON exporter (`a264fb4`).
 - [x] Shared text and term tags, including legacy migration (`a633ff8`).
 - [x] Archived texts, archive filters, and legacy archive migration (`bea63bc`).
+- [x] Verified reconstruction of legacy compound positions (`e14be17`).
 
 ### Remaining MVP Migration
 
 - [x] Migrate archived texts (`bea63bc`).
-- [ ] Recreate legacy compound-term positions where they can be identified. **In progress.**
-- [ ] Import/copy local audio and other media instead of retaining references only.
+- [x] Recreate legacy compound-term positions where they can be identified (`e14be17`).
+- [ ] Import/copy local audio and other media instead of retaining references only. **In progress.**
 - [ ] Complete parity checks for remaining language and application settings.
 - [ ] Add packaged-app end-to-end tests for first launch, reading, review, and restore.
 

@@ -52,6 +52,14 @@
       "archived": true
     }
   ],
+  "media": [
+    {
+      "textId": 12,
+      "fileName": "archive.mp3",
+      "mediaType": "audio/mpeg",
+      "dataBase64": "SUQz"
+    }
+  ],
   "terms": [
     {
       "id": 13,

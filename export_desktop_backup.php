@@ -58,12 +58,77 @@ function desktop_backup_register_tag(&$tags, &$keys, $name, $comment) {
 	return $id;
 }
 
+function desktop_backup_audio_type($path) {
+	$extension = mb_strtolower(pathinfo($path, PATHINFO_EXTENSION), 'UTF-8');
+	$types = array(
+		'mp3' => 'audio/mpeg',
+		'm4a' => 'audio/mp4',
+		'mp4' => 'audio/mp4',
+		'ogg' => 'audio/ogg',
+		'oga' => 'audio/ogg',
+		'wav' => 'audio/wav',
+		'webm' => 'audio/webm',
+		'flac' => 'audio/flac'
+	);
+	return isset($types[$extension]) ? $types[$extension] : null;
+}
+
+function desktop_backup_local_audio($uri, $text_id, &$media_bytes, &$external, &$unsupported) {
+	$uri = trim((string) $uri);
+	if ($uri == '') return null;
+	$scheme = parse_url($uri, PHP_URL_SCHEME);
+	if ($scheme !== null && $scheme !== '') {
+		$external++;
+		return null;
+	}
+	$path = parse_url($uri, PHP_URL_PATH);
+	if (! is_string($path) || $path == '') {
+		$unsupported++;
+		return null;
+	}
+	$path = rawurldecode($path);
+	$candidate = __DIR__ . DIRECTORY_SEPARATOR . ltrim($path, '/\\');
+	$root = realpath(__DIR__);
+	$resolved = realpath($candidate);
+	if ($root === false || $resolved === false || ! is_file($resolved) || strpos($resolved, $root . DIRECTORY_SEPARATOR) !== 0) {
+		$unsupported++;
+		return null;
+	}
+	$type = desktop_backup_audio_type($resolved);
+	$size = filesize($resolved);
+	if ($type === null || $size === false || $size < 1 || $size > 50000000 || $media_bytes + $size > 100000000) {
+		$unsupported++;
+		return null;
+	}
+	$content = file_get_contents($resolved);
+	if ($content === false) {
+		$unsupported++;
+		return null;
+	}
+	$file_name = basename($resolved);
+	if ($file_name == '' || mb_strlen($file_name, 'UTF-8') > 255) {
+		$unsupported++;
+		return null;
+	}
+	$media_bytes += $size;
+	return array(
+		'textId' => $text_id,
+		'fileName' => $file_name,
+		'mediaType' => $type,
+		'dataBase64' => base64_encode($content)
+	);
+}
+
 $exported_at = gmdate('Y-m-d H:i:s');
 $warnings = array();
 $languages = array();
 $language_ids = array();
 $texts = array();
 $text_ids = array();
+$media = array();
+$media_bytes = 0;
+$external_media = 0;
+$unsupported_media = 0;
 $active_text_ids = array();
 $archived_text_ids = array();
 $terms = array();
@@ -130,6 +195,8 @@ foreach ($records as $record) {
 	);
 	$text_ids[(int) $record['TxID']] = true;
 	$active_text_ids[(int) $record['TxID']] = (int) $record['TxID'];
+	$audio = desktop_backup_local_audio($record['TxAudioURI'], (int) $record['TxID'], $media_bytes, $external_media, $unsupported_media);
+	if ($audio !== null) $media[] = $audio;
 }
 
 $next_text_id = empty($text_ids) ? 1 : max(array_keys($text_ids)) + 1;
@@ -155,6 +222,8 @@ foreach ($records as $record) {
 	);
 	$text_ids[$desktop_text_id] = true;
 	$archived_text_ids[(int) $record['AtID']] = $desktop_text_id;
+	$audio = desktop_backup_local_audio($record['AtAudioURI'], $desktop_text_id, $media_bytes, $external_media, $unsupported_media);
+	if ($audio !== null) $media[] = $audio;
 }
 
 $records = desktop_backup_rows(
@@ -292,6 +361,12 @@ if ($skipped_tag_assignments > 0) {
 if ($skipped_compound_occurrences > 0) {
 	$warnings[] = $skipped_compound_occurrences . ' compound expression occurrence(s) could not be located in an active legacy text and were skipped.';
 }
+if ($external_media > 0) {
+	$warnings[] = $external_media . ' remote audio reference(s) were retained as links and were not embedded.';
+}
+if ($unsupported_media > 0) {
+	$warnings[] = $unsupported_media . ' local audio file(s) were missing, outside the LWT directory, too large, or used an unsupported format and were not embedded.';
+}
 if ($long_compound_terms > 0) {
 	$warnings[] = $long_compound_terms . ' compound term(s) exceeded the desktop nine-term limit; their word count was capped at nine.';
 }
@@ -325,6 +400,7 @@ $backup = array(
 	'warnings' => $warnings,
 	'languages' => $languages,
 	'texts' => $texts,
+	'media' => $media,
 	'terms' => $terms,
 	'tags' => $tags,
 	'termTags' => $term_tags,

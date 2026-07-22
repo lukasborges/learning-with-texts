@@ -1,4 +1,5 @@
 use crate::parser::{parse_text_with_config, ParserConfig};
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension, Transaction};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -13,8 +14,9 @@ const EXPRESSIONS_MIGRATION: &str = include_str!("../migrations/0005_expressions
 const REVIEWS_MIGRATION: &str = include_str!("../migrations/0006_reviews.sql");
 const TAGS_MIGRATION: &str = include_str!("../migrations/0007_tags.sql");
 const ARCHIVED_TEXTS_MIGRATION: &str = include_str!("../migrations/0008_archived_texts.sql");
-const LATEST_SCHEMA_VERSION: i64 = 8;
-const MIGRATIONS: [(i64, &str); 8] = [
+const TEXT_AUDIO_MIGRATION: &str = include_str!("../migrations/0009_text_audio.sql");
+const LATEST_SCHEMA_VERSION: i64 = 9;
+const MIGRATIONS: [(i64, &str); 9] = [
     (1, INITIAL_MIGRATION),
     (2, TEXT_PARSING_MIGRATION),
     (3, TERMS_MIGRATION),
@@ -22,8 +24,11 @@ const MIGRATIONS: [(i64, &str); 8] = [
     (5, EXPRESSIONS_MIGRATION),
     (6, REVIEWS_MIGRATION),
     (7, TAGS_MIGRATION),
-    (LATEST_SCHEMA_VERSION, ARCHIVED_TEXTS_MIGRATION),
+    (8, ARCHIVED_TEXTS_MIGRATION),
+    (LATEST_SCHEMA_VERSION, TEXT_AUDIO_MIGRATION),
 ];
+
+const MAX_AUDIO_BYTES: usize = 50_000_000;
 
 #[derive(Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -49,6 +54,7 @@ pub struct TextDetails {
     pub content: String,
     pub source_uri: Option<String>,
     pub archived: bool,
+    pub has_audio: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -75,6 +81,23 @@ pub struct UpdateTextInput {
 pub struct SetTextArchivedInput {
     pub id: i64,
     pub archived: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveTextAudioInput {
+    pub text_id: i64,
+    pub file_name: String,
+    pub media_type: String,
+    pub data_base64: String,
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TextAudio {
+    pub file_name: String,
+    pub media_type: String,
+    pub data_base64: String,
 }
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -305,6 +328,7 @@ pub struct BackupSummary {
     pub languages: usize,
     pub texts: usize,
     pub archived_texts: usize,
+    pub media: usize,
     pub terms: usize,
     pub tags: usize,
     pub expressions: usize,
@@ -324,6 +348,8 @@ struct PortableBackup {
     warnings: Vec<String>,
     languages: Vec<BackupLanguage>,
     texts: Vec<BackupText>,
+    #[serde(default)]
+    media: Vec<BackupMedia>,
     terms: Vec<BackupTerm>,
     #[serde(default)]
     tags: Vec<BackupTag>,
@@ -369,6 +395,15 @@ struct BackupText {
     updated_at: String,
     #[serde(default)]
     archived: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BackupMedia {
+    text_id: i64,
+    file_name: String,
+    media_type: String,
+    data_base64: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -501,6 +536,40 @@ fn validate_text_input(
         content,
         source_uri,
     })
+}
+
+fn validate_audio(
+    file_name: String,
+    media_type: String,
+    data_base64: String,
+) -> Result<(String, String, Vec<u8>), String> {
+    let file_name = file_name.trim().to_string();
+    let media_type = media_type.trim().to_ascii_lowercase();
+    if file_name.is_empty()
+        || file_name.chars().count() > 255
+        || file_name.contains(['/', '\\', '\0'])
+    {
+        return Err("Audio file name is invalid".to_string());
+    }
+    if !matches!(
+        media_type.as_str(),
+        "audio/mpeg"
+            | "audio/mp4"
+            | "audio/ogg"
+            | "audio/wav"
+            | "audio/x-wav"
+            | "audio/webm"
+            | "audio/flac"
+    ) {
+        return Err("Audio type is not supported".to_string());
+    }
+    let content = BASE64
+        .decode(data_base64)
+        .map_err(|_| "Audio data is not valid base64".to_string())?;
+    if content.is_empty() || content.len() > MAX_AUDIO_BYTES {
+        return Err("Audio must be between 1 byte and 50 MB".to_string());
+    }
+    Ok((file_name, media_type, content))
 }
 
 fn find_or_create_language(
@@ -1133,6 +1202,26 @@ impl Database {
             rows.collect::<Result<Vec<_>, _>>()
                 .map_err(|error| format!("Unable to decode backup texts: {error}"))?
         };
+        let media = {
+            let mut statement = connection
+                .prepare(
+                    "SELECT text_id, file_name, media_type, content
+                     FROM text_audio ORDER BY text_id",
+                )
+                .map_err(|error| format!("Unable to prepare backup media: {error}"))?;
+            let rows = statement
+                .query_map([], |row| {
+                    Ok(BackupMedia {
+                        text_id: row.get(0)?,
+                        file_name: row.get(1)?,
+                        media_type: row.get(2)?,
+                        data_base64: BASE64.encode(row.get::<_, Vec<u8>>(3)?),
+                    })
+                })
+                .map_err(|error| format!("Unable to read backup media: {error}"))?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|error| format!("Unable to decode backup media: {error}"))?
+        };
         let terms = {
             let mut statement = connection
                 .prepare(
@@ -1274,6 +1363,7 @@ impl Database {
             warnings: Vec::new(),
             languages,
             texts,
+            media,
             terms,
             tags,
             term_tags,
@@ -1312,6 +1402,7 @@ impl Database {
             languages: backup.languages.len(),
             texts: backup.texts.len(),
             archived_texts: backup.texts.iter().filter(|text| text.archived).count(),
+            media: backup.media.len(),
             terms: backup.terms.len(),
             tags: backup.tags.len(),
             expressions: 0,
@@ -1405,6 +1496,17 @@ impl Database {
                 &text.content,
                 &config,
             )?;
+        }
+        for media in backup.media {
+            let (file_name, media_type, content) =
+                validate_audio(media.file_name, media.media_type, media.data_base64)?;
+            transaction
+                .execute(
+                    "INSERT INTO text_audio (text_id, file_name, media_type, content)
+                     VALUES (?1, ?2, ?3, ?4)",
+                    params![media.text_id, file_name, media_type, content],
+                )
+                .map_err(|error| format!("Unable to restore text audio: {error}"))?;
         }
         for term in backup.terms {
             transaction
@@ -1799,6 +1901,106 @@ impl Database {
         })
     }
 
+    pub fn save_text_audio(&self, input: SaveTextAudioInput) -> Result<TextAudio, String> {
+        if input.text_id <= 0 {
+            return Err("Text was not found".to_string());
+        }
+        let text_id = input.text_id;
+        let (file_name, media_type, content) =
+            validate_audio(input.file_name, input.media_type, input.data_base64)?;
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| "The desktop database lock is unavailable".to_string())?;
+        let exists = connection
+            .query_row("SELECT 1 FROM texts WHERE id = ?1", [text_id], |_| Ok(()))
+            .optional()
+            .map_err(|error| format!("Unable to verify the audio text: {error}"))?
+            .is_some();
+        if !exists {
+            return Err("Text was not found".to_string());
+        }
+        connection
+            .execute(
+                "INSERT INTO text_audio (text_id, file_name, media_type, content)
+                 VALUES (?1, ?2, ?3, ?4)
+                 ON CONFLICT(text_id) DO UPDATE SET
+                    file_name = excluded.file_name,
+                    media_type = excluded.media_type,
+                    content = excluded.content,
+                    updated_at = CURRENT_TIMESTAMP",
+                params![text_id, file_name, media_type, content],
+            )
+            .map_err(|error| format!("Unable to save the text audio: {error}"))?;
+        Ok(TextAudio {
+            file_name,
+            media_type,
+            data_base64: BASE64.encode(content),
+        })
+    }
+
+    pub fn get_text_audio(&self, text_id: i64) -> Result<Option<TextAudio>, String> {
+        if text_id <= 0 {
+            return Err("Text was not found".to_string());
+        }
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| "The desktop database lock is unavailable".to_string())?;
+        let audio = connection
+            .query_row(
+                "SELECT file_name, media_type, content FROM text_audio WHERE text_id = ?1",
+                [text_id],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, Vec<u8>>(2)?,
+                    ))
+                },
+            )
+            .optional()
+            .map_err(|error| format!("Unable to load the text audio: {error}"))?;
+        if let Some((file_name, media_type, content)) = audio {
+            return Ok(Some(TextAudio {
+                file_name,
+                media_type,
+                data_base64: BASE64.encode(content),
+            }));
+        }
+        let exists = connection
+            .query_row("SELECT 1 FROM texts WHERE id = ?1", [text_id], |_| Ok(()))
+            .optional()
+            .map_err(|error| format!("Unable to verify the audio text: {error}"))?
+            .is_some();
+        if !exists {
+            return Err("Text was not found".to_string());
+        }
+        Ok(None)
+    }
+
+    pub fn remove_text_audio(&self, text_id: i64) -> Result<(), String> {
+        if text_id <= 0 {
+            return Err("Text was not found".to_string());
+        }
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| "The desktop database lock is unavailable".to_string())?;
+        connection
+            .execute("DELETE FROM text_audio WHERE text_id = ?1", [text_id])
+            .map_err(|error| format!("Unable to remove the text audio: {error}"))?;
+        let exists = connection
+            .query_row("SELECT 1 FROM texts WHERE id = ?1", [text_id], |_| Ok(()))
+            .optional()
+            .map_err(|error| format!("Unable to verify the audio text: {error}"))?
+            .is_some();
+        if !exists {
+            return Err("Text was not found".to_string());
+        }
+        Ok(())
+    }
+
     pub fn get_text(&self, id: i64) -> Result<TextDetails, String> {
         if id <= 0 {
             return Err("Text was not found".to_string());
@@ -1828,7 +2030,8 @@ impl Database {
                         COALESCE(texts.last_opened_at, ''),
                         texts.content,
                         texts.source_uri,
-                        texts.archived
+                        texts.archived,
+                        EXISTS(SELECT 1 FROM text_audio WHERE text_audio.text_id = texts.id)
                  FROM texts
                  INNER JOIN languages ON languages.id = texts.language_id
                  WHERE texts.id = ?1",
@@ -1844,6 +2047,7 @@ impl Database {
                         content: row.get(6)?,
                         source_uri: row.get(7)?,
                         archived: row.get(8)?,
+                        has_audio: row.get(9)?,
                     })
                 },
             )
@@ -2951,6 +3155,14 @@ mod tests {
         let created = database
             .create_text(text_input("English", "Backup", "A short story."))
             .expect("text should be created");
+        database
+            .save_text_audio(SaveTextAudioInput {
+                text_id: created.id,
+                file_name: "story.mp3".into(),
+                media_type: "audio/mpeg".into(),
+                data_base64: "AQID".into(),
+            })
+            .expect("audio should save");
         let reading = database
             .get_reading_text(created.id)
             .expect("reading should open");
@@ -3012,10 +3224,15 @@ mod tests {
         let statistics = database
             .review_statistics()
             .expect("restored statistics should load");
+        let restored_audio = database
+            .get_text_audio(created.id)
+            .expect("restored audio should load")
+            .expect("restored audio should exist");
 
         assert_eq!(summary.languages, 1);
         assert_eq!(summary.texts, 1);
         assert_eq!(summary.archived_texts, 1);
+        assert_eq!(summary.media, 1);
         assert_eq!(summary.terms, 1);
         assert_eq!(summary.tags, 1);
         assert_eq!(summary.expressions, 1);
@@ -3025,6 +3242,8 @@ mod tests {
         assert!(texts[0].archived);
         assert_eq!(restored.expressions.len(), 1);
         assert_eq!(statistics.reviews_today, 1);
+        assert_eq!(restored_audio.file_name, "story.mp3");
+        assert_eq!(restored_audio.data_base64, "AQID");
         let restored_tags = database.list_tags().expect("restored tags should load");
         assert_eq!(restored_tags[0].term_count, 1);
         assert_eq!(restored_tags[0].text_count, 1);
@@ -3093,10 +3312,15 @@ mod tests {
         let archived = database
             .get_text(12)
             .expect("imported archived text should load");
+        let archived_audio = database
+            .get_text_audio(12)
+            .expect("imported audio should load")
+            .expect("imported audio should exist");
 
         assert_eq!(summary.languages, 1);
         assert_eq!(summary.texts, 2);
         assert_eq!(summary.archived_texts, 1);
+        assert_eq!(summary.media, 1);
         assert_eq!(summary.terms, 2);
         assert_eq!(summary.tags, 1);
         assert_eq!(summary.expressions, 1);
@@ -3107,7 +3331,9 @@ mod tests {
             "Legacy text"
         );
         assert!(archived.archived);
+        assert!(archived.has_audio);
         assert_eq!(archived.title, "Archived legacy text");
+        assert_eq!(archived_audio.data_base64, "SUQz");
         assert_eq!(reading.language, "English");
         assert_eq!(reading.expressions.len(), 1);
         assert_eq!(reading.expressions[0].normalized, "legacy text");
@@ -3235,11 +3461,88 @@ mod tests {
     }
 
     #[test]
+    fn saves_loads_and_removes_text_audio() {
+        let database = Database::in_memory().expect("database should migrate");
+        let created = database
+            .create_text(text_input("English", "Audio", "Listen to this"))
+            .expect("text should be created");
+        assert!(database.get_text_audio(created.id).unwrap().is_none());
+
+        let saved = database
+            .save_text_audio(SaveTextAudioInput {
+                text_id: created.id,
+                file_name: "lesson.ogg".into(),
+                media_type: "audio/ogg".into(),
+                data_base64: "T2dnUw==".into(),
+            })
+            .expect("audio should save");
+
+        assert_eq!(saved.file_name, "lesson.ogg");
+        assert_eq!(database.get_text_audio(created.id).unwrap(), Some(saved));
+        assert!(database.get_text(created.id).unwrap().has_audio);
+        database
+            .remove_text_audio(created.id)
+            .expect("audio should be removed");
+        assert!(database.get_text_audio(created.id).unwrap().is_none());
+        assert!(!database.get_text(created.id).unwrap().has_audio);
+    }
+
+    #[test]
+    fn validates_text_audio_inputs() {
+        let database = Database::in_memory().expect("database should migrate");
+        let created = database
+            .create_text(text_input("English", "Audio", "Listen"))
+            .expect("text should be created");
+
+        assert_eq!(
+            database
+                .save_text_audio(SaveTextAudioInput {
+                    text_id: created.id,
+                    file_name: "lesson.exe".into(),
+                    media_type: "application/octet-stream".into(),
+                    data_base64: "AQID".into(),
+                })
+                .unwrap_err(),
+            "Audio type is not supported"
+        );
+        assert_eq!(
+            database
+                .save_text_audio(SaveTextAudioInput {
+                    text_id: created.id,
+                    file_name: "../lesson.mp3".into(),
+                    media_type: "audio/mpeg".into(),
+                    data_base64: "AQID".into(),
+                })
+                .unwrap_err(),
+            "Audio file name is invalid"
+        );
+        assert_eq!(
+            database
+                .save_text_audio(SaveTextAudioInput {
+                    text_id: created.id,
+                    file_name: "lesson.mp3".into(),
+                    media_type: "audio/mpeg".into(),
+                    data_base64: "not base64".into(),
+                })
+                .unwrap_err(),
+            "Audio data is not valid base64"
+        );
+    }
+
+    #[test]
     fn deletes_a_text_but_preserves_its_language() {
         let database = Database::in_memory().expect("database should migrate");
         let created = database
             .create_text(text_input("English", "Disposable", "Content"))
             .expect("text should be created");
+        database
+            .save_text_audio(SaveTextAudioInput {
+                text_id: created.id,
+                file_name: "disposable.mp3".into(),
+                media_type: "audio/mpeg".into(),
+                data_base64: "AQID".into(),
+            })
+            .expect("audio should save");
 
         database
             .delete_text(created.id)
@@ -3264,7 +3567,11 @@ mod tests {
         let item_count: i64 = connection
             .query_row("SELECT COUNT(*) FROM text_items", [], |row| row.get(0))
             .expect("item count should be readable");
+        let audio_count: i64 = connection
+            .query_row("SELECT COUNT(*) FROM text_audio", [], |row| row.get(0))
+            .expect("audio count should be readable");
         assert_eq!((sentence_count, item_count), (0, 0));
+        assert_eq!(audio_count, 0);
     }
 
     #[test]

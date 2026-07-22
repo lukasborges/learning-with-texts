@@ -640,6 +640,12 @@ textarea {
   accent-color: #318151;
 }
 
+.reading-header audio {
+  display: block;
+  width: min(32rem, 100%);
+  margin-top: 0.75rem;
+}
+
 .reading-guide {
   margin-bottom: 1.25rem;
   padding: 1rem 1.25rem;

@@ -62,6 +62,12 @@ describe('MockLibraryGateway', () => {
   it('round-trips a portable browser-preview backup', async () => {
     const gateway = new MockLibraryGateway();
     await gateway.setTextArchived({ id: 1, archived: true });
+    await gateway.saveTextAudio({
+      textId: 1,
+      fileName: 'story.mp3',
+      mediaType: 'audio/mpeg',
+      dataBase64: 'AQID'
+    });
     const payload = await gateway.exportBackup();
     await gateway.createText({
       language: 'Portuguese',
@@ -72,9 +78,10 @@ describe('MockLibraryGateway', () => {
     const summary = await gateway.restoreBackup(payload);
     const texts = await gateway.listTexts();
 
-    expect(summary).toMatchObject({ languages: 3, texts: 3, archivedTexts: 1 });
+    expect(summary).toMatchObject({ languages: 3, texts: 3, archivedTexts: 1, media: 1 });
     expect(texts.some(({ title }) => title === 'Temporary')).toBe(false);
     expect(texts.find(({ id }) => id === 1)?.archived).toBe(true);
+    await expect(gateway.getTextAudio(1)).resolves.toMatchObject({ fileName: 'story.mp3' });
   });
 
   it('creates and assigns shared tags in browser preview', async () => {
@@ -126,6 +133,32 @@ describe('MockLibraryGateway', () => {
     await expect(gateway.setTextArchived({ id: 999, archived: true })).rejects.toThrow(
       'Text was not found'
     );
+  });
+
+  it('saves and removes text audio in the preview session', async () => {
+    const gateway = new MockLibraryGateway();
+    const input = {
+      textId: 1,
+      fileName: 'story.ogg',
+      mediaType: 'audio/ogg',
+      dataBase64: 'T2dnUw=='
+    };
+
+    await expect(gateway.saveTextAudio(input)).resolves.toMatchObject({
+      fileName: input.fileName,
+      mediaType: input.mediaType,
+      dataBase64: input.dataBase64
+    });
+    await expect(gateway.getTextAudio(1)).resolves.toMatchObject({
+      fileName: input.fileName,
+      mediaType: input.mediaType,
+      dataBase64: input.dataBase64
+    });
+    expect((await gateway.getText(1)).hasAudio).toBe(true);
+
+    await gateway.removeTextAudio(1);
+    await expect(gateway.getTextAudio(1)).resolves.toBeNull();
+    expect((await gateway.getText(1)).hasAudio).toBe(false);
   });
 
   it('opens parsed reading items and shares their status', async () => {

@@ -13,6 +13,7 @@ import type {
   ReviewOutcome,
   ReviewStatistics,
   SaveTermInput,
+  SaveTextAudioInput,
   SavedTerm,
   SetTermStatusInput,
   SetTermTagsInput,
@@ -23,6 +24,7 @@ import type {
   TermProgress,
   TermStatus,
   TextDetails,
+  TextAudio,
   UpdateLanguageInput,
   UpdateTextInput
 } from '../domain/library';
@@ -37,6 +39,7 @@ const sampleTexts: readonly TextDetails[] = [
     totalTerms: 184,
     lastOpened: 'Today',
     archived: false,
+    hasAudio: false,
     content: 'A man and his dog walked along the road.'
   },
   {
@@ -47,6 +50,7 @@ const sampleTexts: readonly TextDetails[] = [
     totalTerms: 241,
     lastOpened: 'Yesterday',
     archived: false,
+    hasAudio: false,
     content: 'Was ich von der Geschichte des armen Werthers nur habe auffinden können.'
   },
   {
@@ -57,6 +61,7 @@ const sampleTexts: readonly TextDetails[] = [
     totalTerms: 117,
     lastOpened: '3 days ago',
     archived: false,
+    hasAudio: false,
     content: 'Le don du sang est un geste simple et généreux.'
   }
 ];
@@ -76,6 +81,7 @@ interface MockBackup {
   readonly nextTagId: number;
   readonly textTagIds: Array<[number, number[]]>;
   readonly termTagIds: Array<[string, number[]]>;
+  readonly media?: Array<[number, TextAudio]>;
 }
 
 function countUniqueTerms(content: string): number {
@@ -126,6 +132,7 @@ export class MockLibraryGateway implements LibraryGateway {
   private nextTagId = 1;
   private readonly textTagIds = new Map<number, Set<number>>();
   private readonly termTagIds = new Map<string, Set<number>>();
+  private readonly media = new Map<number, TextAudio>();
 
   private settingsFor(language: string): LanguageSettings {
     const key = language.toLocaleLowerCase();
@@ -241,7 +248,8 @@ export class MockLibraryGateway implements LibraryGateway {
       tags: this.tags,
       nextTagId: this.nextTagId,
       textTagIds: [...this.textTagIds].map(([id, values]) => [id, [...values]]),
-      termTagIds: [...this.termTagIds].map(([key, values]) => [key, [...values]])
+      termTagIds: [...this.termTagIds].map(([key, values]) => [key, [...values]]),
+      media: [...this.media]
     };
     return JSON.stringify(backup, null, 2);
   }
@@ -281,7 +289,11 @@ export class MockLibraryGateway implements LibraryGateway {
     this.texts.splice(
       0,
       this.texts.length,
-      ...backup.texts.map((text) => ({ ...text, archived: Boolean(text.archived) }))
+      ...backup.texts.map((text) => ({
+        ...text,
+        archived: Boolean(text.archived),
+        hasAudio: false
+      }))
     );
     this.languageSettings.clear();
     backup.languageSettings.forEach(([key, value]) => this.languageSettings.set(key, value));
@@ -300,10 +312,16 @@ export class MockLibraryGateway implements LibraryGateway {
     backup.textTagIds.forEach(([id, values]) => this.textTagIds.set(id, new Set(values)));
     this.termTagIds.clear();
     backup.termTagIds.forEach(([key, values]) => this.termTagIds.set(key, new Set(values)));
+    this.media.clear();
+    (backup.media ?? []).forEach(([textId, audio]) => this.media.set(textId, audio));
+    this.texts.forEach((text) => {
+      text.hasAudio = this.media.has(text.id);
+    });
     return {
       languages: this.languageSettings.size,
       texts: this.texts.length,
       archivedTexts: this.texts.filter(({ archived }) => archived).length,
+      media: this.media.size,
       terms: this.terms.size,
       tags: this.tags.length,
       expressions: this.expressions.length,
@@ -394,6 +412,7 @@ export class MockLibraryGateway implements LibraryGateway {
       totalTerms: countUniqueTerms(input.content),
       lastOpened: '',
       archived: false,
+      hasAudio: false,
       content: input.content,
       sourceUri: input.sourceUri
     };
@@ -442,12 +461,44 @@ export class MockLibraryGateway implements LibraryGateway {
     this.texts[index] = { ...text, archived: input.archived };
   }
 
+  async saveTextAudio(input: SaveTextAudioInput): Promise<TextAudio> {
+    const text = this.texts.find(({ id }) => id === input.textId);
+    if (!text) {
+      throw new Error('Text was not found');
+    }
+    const audio = {
+      fileName: input.fileName,
+      mediaType: input.mediaType,
+      dataBase64: input.dataBase64
+    };
+    this.media.set(input.textId, audio);
+    text.hasAudio = true;
+    return audio;
+  }
+
+  async getTextAudio(textId: number): Promise<TextAudio | null> {
+    if (!this.texts.some(({ id }) => id === textId)) {
+      throw new Error('Text was not found');
+    }
+    return this.media.get(textId) ?? null;
+  }
+
+  async removeTextAudio(textId: number): Promise<void> {
+    const text = this.texts.find(({ id }) => id === textId);
+    if (!text) {
+      throw new Error('Text was not found');
+    }
+    this.media.delete(textId);
+    text.hasAudio = false;
+  }
+
   async deleteText(id: number): Promise<void> {
     const index = this.texts.findIndex((candidate) => candidate.id === id);
     if (index < 0) {
       throw new Error('Text was not found');
     }
     this.texts.splice(index, 1);
+    this.media.delete(id);
   }
 
   async getReadingText(id: number): Promise<ReadingText> {

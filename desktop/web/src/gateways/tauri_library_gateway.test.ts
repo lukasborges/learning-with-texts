@@ -55,6 +55,7 @@ describe('TauriLibraryGateway', () => {
       languages: 1,
       texts: 2,
       archivedTexts: 1,
+      media: 1,
       terms: 3,
       tags: 2,
       expressions: 1,
@@ -144,7 +145,8 @@ describe('TauriLibraryGateway', () => {
       totalTerms: 0,
       lastOpened: '',
       content: 'Once upon a time',
-      archived: false
+      archived: false,
+      hasAudio: false
     };
     const update = {
       id: details.id,
@@ -170,6 +172,33 @@ describe('TauriLibraryGateway', () => {
       input: { id: 8, archived: true }
     });
     expect(invoke).toHaveBeenNthCalledWith(4, 'delete_text', { id: 8 });
+  });
+
+  it('maps text audio commands to the native runtime', async () => {
+    const input = {
+      textId: 8,
+      fileName: 'story.mp3',
+      mediaType: 'audio/mpeg',
+      dataBase64: 'AQID'
+    };
+    const audio = {
+      fileName: input.fileName,
+      mediaType: input.mediaType,
+      dataBase64: input.dataBase64
+    };
+    const invoke = vi
+      .fn()
+      .mockResolvedValueOnce(audio)
+      .mockResolvedValueOnce(audio)
+      .mockResolvedValueOnce(undefined);
+    const gateway = new TauriLibraryGateway(invoke);
+
+    await expect(gateway.saveTextAudio(input)).resolves.toEqual(audio);
+    await expect(gateway.getTextAudio(8)).resolves.toEqual(audio);
+    await expect(gateway.removeTextAudio(8)).resolves.toBeUndefined();
+    expect(invoke).toHaveBeenNthCalledWith(1, 'save_text_audio', { input });
+    expect(invoke).toHaveBeenNthCalledWith(2, 'get_text_audio', { textId: 8 });
+    expect(invoke).toHaveBeenNthCalledWith(3, 'remove_text_audio', { textId: 8 });
   });
 
   it('maps reading and term status commands to the native runtime', async () => {

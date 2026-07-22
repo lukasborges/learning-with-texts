@@ -12,6 +12,7 @@ import type {
   ReviewOutcome,
   ReviewStatistics,
   SaveTermInput,
+  SaveTextAudioInput,
   SavedTerm,
   SetTermStatusInput,
   SetTermTagsInput,
@@ -21,6 +22,7 @@ import type {
   TermDetails,
   TermProgress,
   TextDetails,
+  TextAudio,
   UpdateLanguageInput,
   UpdateTextInput
 } from '../domain/library';
@@ -41,6 +43,9 @@ export interface LibraryGateway {
   getText(id: number): Promise<TextDetails>;
   updateText(input: UpdateTextInput): Promise<LibraryText>;
   setTextArchived(input: SetTextArchivedInput): Promise<void>;
+  saveTextAudio(input: SaveTextAudioInput): Promise<TextAudio>;
+  getTextAudio(textId: number): Promise<TextAudio | null>;
+  removeTextAudio(textId: number): Promise<void>;
   deleteText(id: number): Promise<void>;
   getReadingText(id: number): Promise<ReadingText>;
   setTermStatus(input: SetTermStatusInput): Promise<TermProgress>;

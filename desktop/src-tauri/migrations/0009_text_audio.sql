@@ -1,0 +1,9 @@
+CREATE TABLE text_audio (
+    text_id INTEGER PRIMARY KEY,
+    file_name TEXT NOT NULL,
+    media_type TEXT NOT NULL,
+    content BLOB NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (text_id) REFERENCES texts (id) ON DELETE CASCADE
+);

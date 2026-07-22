@@ -4,9 +4,9 @@ mod parser;
 use database::{
     BackupSummary, CreateExpressionInput, CreateTagInput, CreateTextInput, CreatedExpression,
     Database, LanguageSettings, LibraryText, ReadingText, RecordReviewInput, ReviewCard,
-    ReviewOutcome, ReviewStatistics, SaveTermInput, SavedTerm, SetTermStatusInput,
-    SetTermTagsInput, SetTextArchivedInput, SetTextTagsInput, Tag, TermDetails, TermProgress,
-    TextDetails, UpdateLanguageInput, UpdateTextInput,
+    ReviewOutcome, ReviewStatistics, SaveTermInput, SaveTextAudioInput, SavedTerm,
+    SetTermStatusInput, SetTermTagsInput, SetTextArchivedInput, SetTextTagsInput, Tag, TermDetails,
+    TermProgress, TextAudio, TextDetails, UpdateLanguageInput, UpdateTextInput,
 };
 use tauri::Manager;
 
@@ -114,6 +114,27 @@ fn set_text_archived(
 }
 
 #[tauri::command]
+fn save_text_audio(
+    database: tauri::State<'_, Database>,
+    input: SaveTextAudioInput,
+) -> Result<TextAudio, String> {
+    database.save_text_audio(input)
+}
+
+#[tauri::command]
+fn get_text_audio(
+    database: tauri::State<'_, Database>,
+    text_id: i64,
+) -> Result<Option<TextAudio>, String> {
+    database.get_text_audio(text_id)
+}
+
+#[tauri::command]
+fn remove_text_audio(database: tauri::State<'_, Database>, text_id: i64) -> Result<(), String> {
+    database.remove_text_audio(text_id)
+}
+
+#[tauri::command]
 fn delete_text(database: tauri::State<'_, Database>, id: i64) -> Result<(), String> {
     database.delete_text(id)
 }
@@ -202,6 +223,9 @@ pub fn run() {
             get_text,
             update_text,
             set_text_archived,
+            save_text_audio,
+            get_text_audio,
+            remove_text_audio,
             delete_text,
             get_reading_text,
             set_term_status,

@@ -12,6 +12,7 @@ import type {
   ReviewOutcome,
   ReviewStatistics,
   SaveTermInput,
+  SaveTextAudioInput,
   SavedTerm,
   SetTermStatusInput,
   SetTermTagsInput,
@@ -21,6 +22,7 @@ import type {
   TermDetails,
   TermProgress,
   TextDetails,
+  TextAudio,
   UpdateLanguageInput,
   UpdateTextInput
 } from '../domain/library';
@@ -92,6 +94,18 @@ export class TauriLibraryGateway implements LibraryGateway {
 
   setTextArchived(input: SetTextArchivedInput): Promise<void> {
     return this.invoke<void>('set_text_archived', { input });
+  }
+
+  saveTextAudio(input: SaveTextAudioInput): Promise<TextAudio> {
+    return this.invoke<TextAudio>('save_text_audio', { input });
+  }
+
+  getTextAudio(textId: number): Promise<TextAudio | null> {
+    return this.invoke<TextAudio | null>('get_text_audio', { textId });
+  }
+
+  removeTextAudio(textId: number): Promise<void> {
+    return this.invoke<void>('remove_text_audio', { textId });
   }
 
   deleteText(id: number): Promise<void> {

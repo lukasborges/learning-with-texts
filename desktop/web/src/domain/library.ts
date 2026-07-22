@@ -27,6 +27,20 @@ export interface SetTextArchivedInput {
 export interface TextDetails extends LibraryText {
   readonly content: string;
   readonly sourceUri?: string;
+  readonly hasAudio: boolean;
+}
+
+export interface SaveTextAudioInput {
+  readonly textId: number;
+  readonly fileName: string;
+  readonly mediaType: string;
+  readonly dataBase64: string;
+}
+
+export interface TextAudio {
+  readonly fileName: string;
+  readonly mediaType: string;
+  readonly dataBase64: string;
 }
 
 export type TermStatus = 0 | 1 | 2 | 3 | 4 | 5 | 98 | 99;
@@ -185,6 +199,7 @@ export interface BackupSummary {
   readonly languages: number;
   readonly texts: number;
   readonly archivedTexts: number;
+  readonly media: number;
   readonly terms: number;
   readonly tags: number;
   readonly expressions: number;
