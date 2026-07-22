@@ -75,6 +75,16 @@ progress {
   gap: 1rem;
 }
 
+.empty-state {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 2rem;
+  border: 1px dashed #9aabb9;
+  border-radius: 14px;
+  text-align: center;
+  color: #637083;
+}
+
 .text-card {
   display: grid;
   gap: 0.8rem;

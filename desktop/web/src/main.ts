@@ -1,5 +1,5 @@
 import logoUrl from '../../../img/lwt_icon_big.png';
-import { MockLibraryGateway } from './gateways/mock_library_gateway';
+import { createLibraryGateway } from './gateways/create_library_gateway';
 import type { LibraryText } from './domain/library';
 import './styles.css';
 
@@ -10,6 +10,7 @@ if (!app) {
 }
 
 const applicationRoot = app;
+const usesNativeDatabase = import.meta.env.MODE === 'tauri';
 
 function createTextCard(text: LibraryText): HTMLElement {
   const card = document.createElement('article');
@@ -43,7 +44,7 @@ function createTextCard(text: LibraryText): HTMLElement {
 }
 
 async function render(): Promise<void> {
-  const gateway = new MockLibraryGateway();
+  const gateway = createLibraryGateway();
   const texts = await gateway.listTexts();
 
   const shell = document.createElement('main');
@@ -62,14 +63,17 @@ async function render(): Promise<void> {
   const title = document.createElement('h1');
   title.textContent = 'Learning with Texts';
   const subtitle = document.createElement('p');
-  subtitle.textContent = 'Desktop foundation · offline fixture mode';
+  subtitle.textContent = usesNativeDatabase
+    ? 'Desktop foundation · local SQLite mode'
+    : 'Desktop foundation · offline fixture mode';
   titleGroup.append(title, subtitle);
   header.append(logo, titleGroup);
 
   const notice = document.createElement('aside');
   notice.className = 'migration-notice';
-  notice.textContent =
-    'This shell is running without PHP or MySQL. Data is currently read from a typed fixture gateway.';
+  notice.textContent = usesNativeDatabase
+    ? 'This shell is running without PHP or MySQL. Library data is loaded from the local SQLite database.'
+    : 'This shell is running without PHP or MySQL. Data is currently read from a typed fixture gateway.';
 
   const libraryHeading = document.createElement('h2');
   libraryHeading.className = 'section-title';
@@ -78,7 +82,15 @@ async function render(): Promise<void> {
   const library = document.createElement('section');
   library.className = 'library-grid';
   library.setAttribute('aria-label', 'Text library');
-  library.append(...texts.map(createTextCard));
+  if (texts.length === 0) {
+    const emptyState = document.createElement('p');
+    emptyState.className = 'empty-state';
+    emptyState.textContent =
+      'Your local library is empty. Text creation is the next migration slice.';
+    library.append(emptyState);
+  } else {
+    library.append(...texts.map(createTextCard));
+  }
 
   shell.append(header, notice, libraryHeading, library);
   applicationRoot.replaceChildren(shell);
