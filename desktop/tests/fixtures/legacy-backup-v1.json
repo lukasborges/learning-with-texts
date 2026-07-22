@@ -1,0 +1,61 @@
+{
+  "format": "lwt-desktop-backup",
+  "version": 1,
+  "exportedAt": "2026-07-22 12:00:00",
+  "source": "lwt-legacy-php",
+  "warnings": [
+    "The legacy database has no review-event history. Imported learning terms will be due for review immediately."
+  ],
+  "languages": [
+    {
+      "id": 7,
+      "name": "English",
+      "dictionaryUri1": "https://example.com/dictionary?q=###",
+      "dictionaryUri2": null,
+      "googleTranslateUri": null,
+      "exportTemplate": null,
+      "textSize": 150,
+      "characterSubstitutions": "…=.",
+      "regexpSplitSentences": ".!?",
+      "exceptionsSplitSentences": "Mr.|Dr.",
+      "regexpWordCharacters": "a-zA-Z",
+      "removeSpaces": false,
+      "splitEachCharacter": false,
+      "rightToLeft": false
+    }
+  ],
+  "texts": [
+    {
+      "id": 11,
+      "languageId": 7,
+      "title": "Legacy text",
+      "content": "Legacy text.",
+      "annotatedContent": "",
+      "audioUri": null,
+      "sourceUri": "https://example.com/source",
+      "lastOpenedAt": null,
+      "createdAt": "2026-07-22 12:00:00",
+      "updatedAt": "2026-07-22 12:00:00"
+    }
+  ],
+  "terms": [
+    {
+      "id": 13,
+      "languageId": 7,
+      "displayText": "Legacy",
+      "normalized": "legacy",
+      "status": 2,
+      "createdAt": "2026-07-20 10:00:00",
+      "updatedAt": "2026-07-21 10:00:00",
+      "translation": "antigo",
+      "romanization": null,
+      "wordCount": 1,
+      "lastReviewedAt": "2026-07-21 10:00:00",
+      "nextReviewAt": null,
+      "reviewCount": 0,
+      "correctCount": 0
+    }
+  ],
+  "expressions": [],
+  "reviews": []
+}

@@ -23,6 +23,12 @@ The shell reads data through `LibraryGateway`. `MockLibraryGateway` supports bro
 
 No PHP sidecar is used. The generic Pake package proves that navigation, static assets, and typed contracts can run independently of the legacy runtime; the custom Tauri package adds native SQLite access.
 
+## Legacy Data Migration
+
+In the legacy PHP application, open **Backup/Restore/Empty Database** and choose **Download Desktop Migration JSON**. In LWT Desktop, open **Backup**, select that JSON file, and confirm the restore. The import preserves languages, active texts, language settings, terms, translations, romanization, status dates, and media/source references.
+
+The JSON reports unsupported data after import. Archived texts and tag assignments currently remain in the legacy database, review-event history cannot be reconstructed, and compound terms retain their vocabulary data but not their positions in texts. Keep the original SQL backup until the migrated library has been verified.
+
 ## Proof-of-Concept Status
 
 The first Linux Pake packaging run completed successfully on July 22, 2026, producing both DEB and AppImage artifacts. PHP and MySQL are not started or bundled.

@@ -181,4 +181,5 @@ export interface BackupSummary {
   readonly terms: number;
   readonly expressions: number;
   readonly reviews: number;
+  readonly warnings: readonly string[];
 }

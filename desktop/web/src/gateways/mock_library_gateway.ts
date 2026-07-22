@@ -271,7 +271,8 @@ export class MockLibraryGateway implements LibraryGateway {
       texts: this.texts.length,
       terms: this.terms.size,
       expressions: this.expressions.length,
-      reviews: this.reviewHistory.length
+      reviews: this.reviewHistory.length,
+      warnings: []
     };
   }
 

@@ -50,7 +50,14 @@ describe('TauriLibraryGateway', () => {
 
   it('exports and restores a portable backup', async () => {
     const payload = '{"format":"lwt-desktop-backup","version":1}';
-    const summary = { languages: 1, texts: 2, terms: 3, expressions: 1, reviews: 4 };
+    const summary = {
+      languages: 1,
+      texts: 2,
+      terms: 3,
+      expressions: 1,
+      reviews: 4,
+      warnings: []
+    };
     const invoke = vi.fn().mockResolvedValueOnce(payload).mockResolvedValueOnce(summary);
     const gateway = new TauriLibraryGateway(invoke);
 

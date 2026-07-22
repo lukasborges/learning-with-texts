@@ -931,7 +931,9 @@ async function renderDataManagement(): Promise<void> {
     void gateway
       .restoreBackup(selectedPayload)
       .then((summary) => {
-        restoreStatus.textContent = `Restored ${summary.texts} texts, ${summary.terms} terms, and ${summary.reviews} reviews.`;
+        const warningText =
+          summary.warnings.length === 0 ? '' : ` Warnings: ${summary.warnings.join(' ')}`;
+        restoreStatus.textContent = `Restored ${summary.texts} texts, ${summary.terms} terms, and ${summary.reviews} reviews.${warningText}`;
         selectedPayload = '';
         file.value = '';
       })

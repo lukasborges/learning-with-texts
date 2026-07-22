@@ -261,6 +261,7 @@ pub struct BackupSummary {
     pub terms: usize,
     pub expressions: usize,
     pub reviews: usize,
+    pub warnings: Vec<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -269,6 +270,10 @@ struct PortableBackup {
     format: String,
     version: u32,
     exported_at: String,
+    #[serde(default)]
+    source: Option<String>,
+    #[serde(default)]
+    warnings: Vec<String>,
     languages: Vec<BackupLanguage>,
     texts: Vec<BackupText>,
     terms: Vec<BackupTerm>,
@@ -843,6 +848,8 @@ impl Database {
             format: "lwt-desktop-backup".into(),
             version: 1,
             exported_at,
+            source: Some("lwt-desktop".into()),
+            warnings: Vec::new(),
             languages,
             texts,
             terms,
@@ -882,6 +889,7 @@ impl Database {
             terms: backup.terms.len(),
             expressions: backup.expressions.len(),
             reviews: backup.reviews.len(),
+            warnings: backup.warnings.clone(),
         };
 
         let mut connection = self
@@ -2401,6 +2409,32 @@ mod tests {
         assert!(error.contains("Unable to restore a text"));
         assert_eq!(texts.len(), 1);
         assert_eq!(texts[0].title, "Keep");
+    }
+
+    #[test]
+    fn imports_the_legacy_php_export_contract() {
+        let database = Database::in_memory().expect("database should migrate");
+        let payload = include_str!("../../tests/fixtures/legacy-backup-v1.json").to_string();
+
+        let summary = database
+            .restore_backup(payload)
+            .expect("legacy backup should restore");
+        let texts = database.list_texts().expect("imported texts should load");
+        let reading = database
+            .get_reading_text(11)
+            .expect("imported reading should load");
+        let term = database
+            .get_term_details(11, "legacy".into())
+            .expect("imported term should load");
+
+        assert_eq!(summary.languages, 1);
+        assert_eq!(summary.texts, 1);
+        assert_eq!(summary.terms, 1);
+        assert_eq!(summary.warnings.len(), 1);
+        assert_eq!(texts[0].title, "Legacy text");
+        assert_eq!(reading.language, "English");
+        assert_eq!(term.translation, "antigo");
+        assert_eq!(term.status, 2);
     }
 
     #[test]
