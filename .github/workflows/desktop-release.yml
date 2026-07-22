@@ -120,14 +120,14 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      - uses: actions/checkout@v6
-
       - name: Install Arch build dependencies
         run: >-
           pacman -Syu --noconfirm
           git nodejs npm rustup webkit2gtk-4.1
           cairo desktop-file-utils gdk-pixbuf2 glib2 gtk3 hicolor-icon-theme
           libayatana-appindicator librsvg libsoup3 pango patchelf
+
+      - uses: actions/checkout@v6
 
       - name: Configure Rust
         run: rustup default stable
