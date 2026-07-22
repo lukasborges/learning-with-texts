@@ -32,6 +32,33 @@ describe('MockLibraryGateway', () => {
     expect(texts[0]).toEqual(created);
   });
 
+  it('applies language settings to browser-preview reading', async () => {
+    const gateway = new MockLibraryGateway();
+    const created = await gateway.createText({
+      language: 'Japanese',
+      title: '短い話',
+      content: '日本語… 次'
+    });
+    const language = (await gateway.listLanguages()).find(({ name }) => name === 'Japanese');
+    if (!language) {
+      throw new Error('Japanese fixture language is missing');
+    }
+
+    await gateway.updateLanguage({
+      id: language.id,
+      characterSubstitutions: '…=。',
+      sentenceTerminators: '。',
+      splitEachCharacter: true,
+      removeSpaces: true,
+      rightToLeft: false
+    });
+    const reading = await gateway.getReadingText(created.id);
+
+    expect(reading).toMatchObject({ removeSpaces: true, rightToLeft: false });
+    expect(reading.totalTerms).toBe(4);
+    expect(reading.sentences).toHaveLength(2);
+  });
+
   it('loads, updates, and deletes a text in the preview session', async () => {
     const gateway = new MockLibraryGateway();
 

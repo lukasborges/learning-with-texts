@@ -1,4 +1,4 @@
-use crate::parser::parse_text;
+use crate::parser::{parse_text_with_config, ParserConfig};
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension, Transaction};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -89,6 +89,8 @@ pub struct ReadingText {
     pub language: String,
     pub known_terms: i64,
     pub total_terms: i64,
+    pub remove_spaces: bool,
+    pub right_to_left: bool,
     pub sentences: Vec<ReadingSentence>,
     pub expressions: Vec<ReadingExpression>,
 }
@@ -227,6 +229,30 @@ pub struct ReviewStatistics {
     pub languages: Vec<LanguageStatistics>,
 }
 
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageSettings {
+    pub id: i64,
+    pub name: String,
+    pub character_substitutions: String,
+    pub sentence_terminators: String,
+    pub split_each_character: bool,
+    pub remove_spaces: bool,
+    pub right_to_left: bool,
+    pub text_count: i64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateLanguageInput {
+    pub id: i64,
+    pub character_substitutions: String,
+    pub sentence_terminators: String,
+    pub split_each_character: bool,
+    pub remove_spaces: bool,
+    pub right_to_left: bool,
+}
+
 fn legacy_score(status: i64, days_since_change: i64, tomorrow: bool) -> f64 {
     if status > 5 {
         return 100.0;
@@ -316,6 +342,24 @@ fn is_saved_term_status(status: i64) -> bool {
     matches!(status, 1..=5 | 98 | 99)
 }
 
+fn parse_character_substitutions(value: &str) -> Result<Vec<(String, String)>, String> {
+    value
+        .split('|')
+        .filter(|entry| !entry.trim().is_empty())
+        .map(|entry| {
+            let (from, to) = entry
+                .split_once('=')
+                .ok_or_else(|| "Character substitutions must use from=to pairs".to_string())?;
+            let from = from.trim();
+            let to = to.trim();
+            if from.is_empty() {
+                return Err("Character substitution sources must not be empty".to_string());
+            }
+            Ok((from.to_string(), to.to_string()))
+        })
+        .collect()
+}
+
 pub struct Database {
     connection: Mutex<Connection>,
 }
@@ -398,9 +442,39 @@ impl Database {
         };
 
         for (text_id, language_id, content) in texts {
-            Self::persist_text_parsing(transaction, text_id, language_id, &content)?;
+            let config = Self::parser_config(transaction, language_id)?;
+            Self::persist_text_parsing(transaction, text_id, language_id, &content, &config)?;
         }
         Ok(())
+    }
+
+    fn parser_config(
+        transaction: &Transaction<'_>,
+        language_id: i64,
+    ) -> Result<ParserConfig, String> {
+        let values = transaction
+            .query_row(
+                "SELECT character_substitutions,
+                        regexp_split_sentences,
+                        split_each_character
+                 FROM languages WHERE id = ?1",
+                [language_id],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, bool>(2)?,
+                    ))
+                },
+            )
+            .optional()
+            .map_err(|error| format!("Unable to load language parsing settings: {error}"))?
+            .ok_or_else(|| "Language was not found".to_string())?;
+        Ok(ParserConfig {
+            character_substitutions: parse_character_substitutions(&values.0)?,
+            sentence_terminators: values.1,
+            split_each_character: values.2,
+        })
     }
 
     fn persist_text_parsing(
@@ -408,12 +482,16 @@ impl Database {
         text_id: i64,
         language_id: i64,
         content: &str,
+        config: &ParserConfig,
     ) -> Result<(), String> {
         transaction
             .execute("DELETE FROM sentences WHERE text_id = ?1", [text_id])
             .map_err(|error| format!("Unable to clear the previous text analysis: {error}"))?;
 
-        for (sentence_index, sentence) in parse_text(content).into_iter().enumerate() {
+        for (sentence_index, sentence) in parse_text_with_config(content, config)
+            .into_iter()
+            .enumerate()
+        {
             transaction
                 .execute(
                     "INSERT INTO sentences (language_id, text_id, position, content)
@@ -511,6 +589,165 @@ impl Database {
             .ok_or_else(|| "Term was not found in this text".to_string())
     }
 
+    pub fn list_languages(&self) -> Result<Vec<LanguageSettings>, String> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| "The desktop database lock is unavailable".to_string())?;
+        let mut statement = connection
+            .prepare(
+                "SELECT languages.id,
+                        languages.name,
+                        languages.character_substitutions,
+                        languages.regexp_split_sentences,
+                        languages.split_each_character,
+                        languages.remove_spaces,
+                        languages.right_to_left,
+                        COUNT(texts.id)
+                 FROM languages
+                 LEFT JOIN texts ON texts.language_id = languages.id
+                 GROUP BY languages.id
+                 ORDER BY languages.name COLLATE NOCASE",
+            )
+            .map_err(|error| format!("Unable to prepare language settings: {error}"))?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok(LanguageSettings {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    character_substitutions: row.get(2)?,
+                    sentence_terminators: row.get(3)?,
+                    split_each_character: row.get(4)?,
+                    remove_spaces: row.get(5)?,
+                    right_to_left: row.get(6)?,
+                    text_count: row.get(7)?,
+                })
+            })
+            .map_err(|error| format!("Unable to load language settings: {error}"))?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| format!("Unable to decode language settings: {error}"))
+    }
+
+    pub fn update_language(&self, input: UpdateLanguageInput) -> Result<LanguageSettings, String> {
+        if input.id <= 0 {
+            return Err("Language was not found".to_string());
+        }
+        let character_substitutions = input.character_substitutions.trim().to_string();
+        let sentence_terminators = input.sentence_terminators.trim().to_string();
+        if character_substitutions.chars().count() > 500 {
+            return Err("Character substitutions must not exceed 500 characters".to_string());
+        }
+        if sentence_terminators.chars().count() > 500 {
+            return Err("Sentence terminators must not exceed 500 characters".to_string());
+        }
+        parse_character_substitutions(&character_substitutions)?;
+
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| "The desktop database lock is unavailable".to_string())?;
+        let transaction = connection
+            .transaction()
+            .map_err(|error| format!("Unable to start the language update: {error}"))?;
+        let previous = transaction
+            .query_row(
+                "SELECT character_substitutions,
+                        regexp_split_sentences,
+                        split_each_character
+                 FROM languages WHERE id = ?1",
+                [input.id],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, bool>(2)?,
+                    ))
+                },
+            )
+            .optional()
+            .map_err(|error| format!("Unable to load the language: {error}"))?
+            .ok_or_else(|| "Language was not found".to_string())?;
+
+        transaction
+            .execute(
+                "UPDATE languages
+                 SET character_substitutions = ?1,
+                     regexp_split_sentences = ?2,
+                     split_each_character = ?3,
+                     remove_spaces = ?4,
+                     right_to_left = ?5
+                 WHERE id = ?6",
+                params![
+                    character_substitutions,
+                    sentence_terminators,
+                    input.split_each_character,
+                    input.remove_spaces,
+                    input.right_to_left,
+                    input.id
+                ],
+            )
+            .map_err(|error| format!("Unable to update the language: {error}"))?;
+
+        let parsing_changed = previous
+            != (
+                character_substitutions.clone(),
+                sentence_terminators.clone(),
+                input.split_each_character,
+            );
+        if parsing_changed {
+            let texts = {
+                let mut statement = transaction
+                    .prepare("SELECT id, content FROM texts WHERE language_id = ?1 ORDER BY id")
+                    .map_err(|error| format!("Unable to prepare texts for reparsing: {error}"))?;
+                let rows = statement
+                    .query_map([input.id], |row| {
+                        Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+                    })
+                    .map_err(|error| format!("Unable to load texts for reparsing: {error}"))?;
+                rows.collect::<Result<Vec<_>, _>>()
+                    .map_err(|error| format!("Unable to decode texts for reparsing: {error}"))?
+            };
+            let config = Self::parser_config(&transaction, input.id)?;
+            for (text_id, content) in texts {
+                Self::persist_text_parsing(&transaction, text_id, input.id, &content, &config)?;
+            }
+        }
+
+        let saved = transaction
+            .query_row(
+                "SELECT languages.id,
+                        languages.name,
+                        languages.character_substitutions,
+                        languages.regexp_split_sentences,
+                        languages.split_each_character,
+                        languages.remove_spaces,
+                        languages.right_to_left,
+                        COUNT(texts.id)
+                 FROM languages
+                 LEFT JOIN texts ON texts.language_id = languages.id
+                 WHERE languages.id = ?1
+                 GROUP BY languages.id",
+                [input.id],
+                |row| {
+                    Ok(LanguageSettings {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        character_substitutions: row.get(2)?,
+                        sentence_terminators: row.get(3)?,
+                        split_each_character: row.get(4)?,
+                        remove_spaces: row.get(5)?,
+                        right_to_left: row.get(6)?,
+                        text_count: row.get(7)?,
+                    })
+                },
+            )
+            .map_err(|error| format!("Unable to load the updated language: {error}"))?;
+        transaction
+            .commit()
+            .map_err(|error| format!("Unable to save the language update: {error}"))?;
+        Ok(saved)
+    }
+
     pub fn list_texts(&self) -> Result<Vec<LibraryText>, String> {
         let connection = self
             .connection
@@ -580,7 +817,8 @@ impl Database {
             )
             .map_err(|error| format!("Unable to create the text: {error}"))?;
         let id = transaction.last_insert_rowid();
-        Self::persist_text_parsing(&transaction, id, language_id, &input.content)?;
+        let config = Self::parser_config(&transaction, language_id)?;
+        Self::persist_text_parsing(&transaction, id, language_id, &input.content, &config)?;
         let (known_terms, total_terms) = Self::text_progress(&transaction, id)?;
 
         transaction
@@ -687,7 +925,8 @@ impl Database {
         if changed == 0 {
             return Err("Text was not found".to_string());
         }
-        Self::persist_text_parsing(&transaction, id, language_id, &input.content)?;
+        let config = Self::parser_config(&transaction, language_id)?;
+        Self::persist_text_parsing(&transaction, id, language_id, &input.content, &config)?;
         let (known_terms, total_terms) = Self::text_progress(&transaction, id)?;
 
         transaction
@@ -718,12 +957,22 @@ impl Database {
             .map_err(|error| format!("Unable to start the reading session: {error}"))?;
         let metadata = transaction
             .query_row(
-                "SELECT texts.title, languages.name
+                "SELECT texts.title,
+                        languages.name,
+                        languages.remove_spaces,
+                        languages.right_to_left
                  FROM texts
                  INNER JOIN languages ON languages.id = texts.language_id
                  WHERE texts.id = ?1",
                 [id],
-                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, bool>(2)?,
+                        row.get::<_, bool>(3)?,
+                    ))
+                },
             )
             .optional()
             .map_err(|error| format!("Unable to load the reading text: {error}"))?
@@ -837,6 +1086,8 @@ impl Database {
             language: metadata.1,
             known_terms,
             total_terms,
+            remove_spaces: metadata.2,
+            right_to_left: metadata.3,
             sentences,
             expressions,
         })
@@ -1553,6 +1804,62 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM languages", [], |row| row.get(0))
             .expect("language count should be readable");
         assert_eq!(language_count, 1);
+    }
+
+    #[test]
+    fn updates_language_settings_and_reparses_existing_texts() {
+        let database = Database::in_memory().expect("database should migrate");
+        let created = database
+            .create_text(text_input("Japanese", "Reader", "日本語… 次"))
+            .expect("text should be created");
+        assert_eq!(created.total_terms, 2);
+
+        let language = database
+            .list_languages()
+            .expect("languages should load")
+            .remove(0);
+        let updated = database
+            .update_language(UpdateLanguageInput {
+                id: language.id,
+                character_substitutions: "…=。".into(),
+                sentence_terminators: "。".into(),
+                split_each_character: true,
+                remove_spaces: true,
+                right_to_left: false,
+            })
+            .expect("language should update");
+        let reading = database
+            .get_reading_text(created.id)
+            .expect("reparsed text should open");
+
+        assert_eq!(updated.text_count, 1);
+        assert!(updated.split_each_character);
+        assert!(updated.remove_spaces);
+        assert_eq!(reading.sentences.len(), 2);
+        assert_eq!(reading.total_terms, 4);
+        assert!(reading.remove_spaces);
+        assert!(!reading.right_to_left);
+    }
+
+    #[test]
+    fn validates_language_substitution_pairs() {
+        let database = Database::in_memory().expect("database should migrate");
+        database
+            .create_text(text_input("English", "Reader", "Text"))
+            .expect("text should be created");
+
+        let error = database
+            .update_language(UpdateLanguageInput {
+                id: 1,
+                character_substitutions: "invalid".into(),
+                sentence_terminators: ".!?".into(),
+                split_each_character: false,
+                remove_spaces: false,
+                right_to_left: false,
+            })
+            .expect_err("invalid substitution should fail");
+
+        assert_eq!(error, "Character substitutions must use from=to pairs");
     }
 
     #[test]

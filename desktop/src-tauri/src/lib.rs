@@ -2,15 +2,29 @@ mod database;
 mod parser;
 
 use database::{
-    CreateExpressionInput, CreateTextInput, CreatedExpression, Database, LibraryText, ReadingText,
-    RecordReviewInput, ReviewCard, ReviewOutcome, ReviewStatistics, SaveTermInput, SavedTerm,
-    SetTermStatusInput, TermDetails, TermProgress, TextDetails, UpdateTextInput,
+    CreateExpressionInput, CreateTextInput, CreatedExpression, Database, LanguageSettings,
+    LibraryText, ReadingText, RecordReviewInput, ReviewCard, ReviewOutcome, ReviewStatistics,
+    SaveTermInput, SavedTerm, SetTermStatusInput, TermDetails, TermProgress, TextDetails,
+    UpdateLanguageInput, UpdateTextInput,
 };
 use tauri::Manager;
 
 #[tauri::command]
 fn list_texts(database: tauri::State<'_, Database>) -> Result<Vec<LibraryText>, String> {
     database.list_texts()
+}
+
+#[tauri::command]
+fn list_languages(database: tauri::State<'_, Database>) -> Result<Vec<LanguageSettings>, String> {
+    database.list_languages()
+}
+
+#[tauri::command]
+fn update_language(
+    database: tauri::State<'_, Database>,
+    input: UpdateLanguageInput,
+) -> Result<LanguageSettings, String> {
+    database.update_language(input)
 }
 
 #[tauri::command]
@@ -109,6 +123,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             list_texts,
+            list_languages,
+            update_language,
             create_text,
             get_text,
             update_text,

@@ -45,6 +45,8 @@ export interface ReadingText {
   readonly language: string;
   readonly knownTerms: number;
   readonly totalTerms: number;
+  readonly removeSpaces: boolean;
+  readonly rightToLeft: boolean;
   readonly sentences: readonly ReadingSentence[];
   readonly expressions: readonly ReadingExpression[];
 }
@@ -151,4 +153,24 @@ export interface ReviewStatistics {
   readonly legacyDueToday: number;
   readonly legacyDueTomorrow: number;
   readonly languages: readonly LanguageStatistics[];
+}
+
+export interface LanguageSettings {
+  readonly id: number;
+  readonly name: string;
+  readonly characterSubstitutions: string;
+  readonly sentenceTerminators: string;
+  readonly splitEachCharacter: boolean;
+  readonly removeSpaces: boolean;
+  readonly rightToLeft: boolean;
+  readonly textCount: number;
+}
+
+export interface UpdateLanguageInput {
+  readonly id: number;
+  readonly characterSubstitutions: string;
+  readonly sentenceTerminators: string;
+  readonly splitEachCharacter: boolean;
+  readonly removeSpaces: boolean;
+  readonly rightToLeft: boolean;
 }

@@ -2,6 +2,7 @@ import type {
   CreateTextInput,
   CreateExpressionInput,
   CreatedExpression,
+  LanguageSettings,
   LibraryText,
   ReadingText,
   RecordReviewInput,
@@ -14,11 +15,14 @@ import type {
   TermDetails,
   TermProgress,
   TextDetails,
+  UpdateLanguageInput,
   UpdateTextInput
 } from '../domain/library';
 
 export interface LibraryGateway {
   listTexts(): Promise<readonly LibraryText[]>;
+  listLanguages(): Promise<readonly LanguageSettings[]>;
+  updateLanguage(input: UpdateLanguageInput): Promise<LanguageSettings>;
   createText(input: CreateTextInput): Promise<LibraryText>;
   getText(id: number): Promise<TextDetails>;
   updateText(input: UpdateTextInput): Promise<LibraryText>;

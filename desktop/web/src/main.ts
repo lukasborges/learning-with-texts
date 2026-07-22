@@ -445,12 +445,16 @@ async function renderReading(textId: number): Promise<void> {
 
   const article = document.createElement('article');
   article.className = 'reading-content';
+  article.dir = reading.rightToLeft ? 'rtl' : 'ltr';
   for (const sentence of reading.sentences) {
     const paragraph = document.createElement('p');
     paragraph.dataset.position = String(sentence.position);
     for (const item of sentence.items) {
       if (!item.isWord) {
-        paragraph.append(document.createTextNode(item.surface));
+        const separator = reading.removeSpaces ? item.surface.replace(/\s+/gu, '') : item.surface;
+        if (separator) {
+          paragraph.append(document.createTextNode(separator));
+        }
         continue;
       }
 
@@ -702,6 +706,118 @@ async function renderStatistics(): Promise<void> {
   applicationRoot.replaceChildren(shell);
 }
 
+async function renderLanguages(): Promise<void> {
+  const languages = await gateway.listLanguages();
+  const shell = document.createElement('main');
+  shell.className = 'shell language-shell';
+  const toolbar = document.createElement('div');
+  toolbar.className = 'reading-toolbar';
+  const back = document.createElement('button');
+  back.type = 'button';
+  back.textContent = '← Back to library';
+  back.addEventListener('click', () => void render());
+  toolbar.append(back);
+  const heading = document.createElement('h1');
+  heading.textContent = 'Language settings';
+  const introduction = document.createElement('p');
+  introduction.className = 'language-introduction';
+  introduction.textContent =
+    'Configure parsing and reading behavior for languages already used by your library.';
+  const grid = document.createElement('section');
+  grid.className = 'language-grid';
+
+  for (const language of languages) {
+    const form = document.createElement('form');
+    form.className = 'language-card';
+    const name = document.createElement('h2');
+    name.textContent = language.name;
+    const count = document.createElement('p');
+    count.textContent = `${language.textCount} ${language.textCount === 1 ? 'text' : 'texts'}`;
+    const terminators = document.createElement('input');
+    terminators.maxLength = 500;
+    terminators.placeholder = '.!?。！？';
+    terminators.value = language.sentenceTerminators;
+    const terminatorField = createField('Sentence-ending characters', terminators);
+    const terminatorHelp = document.createElement('small');
+    terminatorHelp.textContent = 'Leave empty for the Unicode-aware desktop defaults.';
+    terminatorField.append(terminatorHelp);
+    const substitutions = document.createElement('input');
+    substitutions.maxLength = 500;
+    substitutions.placeholder = "´='|`='|…=.";
+    substitutions.value = language.characterSubstitutions;
+    const substitutionField = createField('Character substitutions', substitutions);
+    const substitutionHelp = document.createElement('small');
+    substitutionHelp.textContent = 'Use from=to pairs separated by |.';
+    substitutionField.append(substitutionHelp);
+
+    const options = document.createElement('div');
+    options.className = 'language-options';
+    const checkboxes: Array<[string, HTMLInputElement]> = [
+      ['Make each character a term', document.createElement('input')],
+      ['Remove spaces while reading', document.createElement('input')],
+      ['Right-to-left script', document.createElement('input')]
+    ];
+    const values = [
+      language.splitEachCharacter,
+      language.removeSpaces,
+      language.rightToLeft
+    ];
+    checkboxes.forEach(([labelText, checkbox], index) => {
+      checkbox.type = 'checkbox';
+      checkbox.checked = values[index] ?? false;
+      const label = document.createElement('label');
+      label.append(checkbox, document.createTextNode(labelText));
+      options.append(label);
+    });
+    const save = document.createElement('button');
+    save.type = 'submit';
+    save.textContent = 'Save settings';
+    const feedback = document.createElement('p');
+    feedback.className = 'form-status';
+    feedback.setAttribute('role', 'status');
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      save.disabled = true;
+      feedback.className = 'form-status';
+      feedback.textContent = 'Saving and reparsing affected texts…';
+      void gateway
+        .updateLanguage({
+          id: language.id,
+          characterSubstitutions: substitutions.value,
+          sentenceTerminators: terminators.value,
+          splitEachCharacter: checkboxes[0]?.[1].checked ?? false,
+          removeSpaces: checkboxes[1]?.[1].checked ?? false,
+          rightToLeft: checkboxes[2]?.[1].checked ?? false
+        })
+        .then(() => {
+          feedback.textContent = 'Language settings saved.';
+        })
+        .catch((error: unknown) => {
+          feedback.className = 'form-status form-status--error';
+          feedback.textContent = error instanceof Error ? error.message : String(error);
+        })
+        .finally(() => {
+          save.disabled = false;
+        });
+    });
+    form.append(name, count, terminatorField, substitutionField, options, save, feedback);
+    grid.append(form);
+  }
+
+  if (languages.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'empty-state';
+    empty.textContent = 'Add a text to create its language settings.';
+    grid.append(empty);
+  }
+  const warning = document.createElement('aside');
+  warning.className = 'migration-notice language-warning';
+  warning.textContent =
+    'Changing parsing rules reparses every text in that language. Saved terms remain, but compound-expression positions for those texts are cleared.';
+  shell.append(toolbar, heading, introduction, warning, grid);
+  applicationRoot.replaceChildren(shell);
+}
+
 function createTextCard(text: LibraryText): HTMLElement {
   const card = document.createElement('article');
   card.className = 'text-card';
@@ -831,9 +947,18 @@ async function render(message = '', editingId?: number): Promise<void> {
       window.alert(error instanceof Error ? error.message : String(error));
     });
   });
+  const languagesButton = document.createElement('button');
+  languagesButton.type = 'button';
+  languagesButton.className = 'review-start';
+  languagesButton.textContent = 'Languages';
+  languagesButton.addEventListener('click', () => {
+    void renderLanguages().catch((error: unknown) => {
+      window.alert(error instanceof Error ? error.message : String(error));
+    });
+  });
   const libraryActions = document.createElement('div');
   libraryActions.className = 'library-actions';
-  libraryActions.append(statisticsButton, reviewButton);
+  libraryActions.append(languagesButton, statisticsButton, reviewButton);
   const libraryHeader = document.createElement('div');
   libraryHeader.className = 'library-header';
   libraryHeader.append(libraryHeading, libraryActions);

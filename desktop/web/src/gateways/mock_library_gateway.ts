@@ -2,6 +2,7 @@ import type {
   CreateTextInput,
   CreateExpressionInput,
   CreatedExpression,
+  LanguageSettings,
   LibraryText,
   ReadingItem,
   ReadingText,
@@ -16,6 +17,7 @@ import type {
   TermProgress,
   TermStatus,
   TextDetails,
+  UpdateLanguageInput,
   UpdateTextInput
 } from '../domain/library';
 import type { LibraryGateway } from './library_gateway';
@@ -64,11 +66,14 @@ function normalizedTerms(content: string): readonly string[] {
 
 function createReadingItems(
   content: string,
-  statusFor: (normalized: string) => TermStatus
+  statusFor: (normalized: string) => TermStatus,
+  splitEachCharacter = false
 ): readonly ReadingItem[] {
-  const parts = content
-    .split(/([\p{L}\p{N}_]+(?:['’‐‑-][\p{L}\p{N}_]+)*)/gu)
-    .filter(Boolean);
+  const parts = splitEachCharacter
+    ? [...content]
+    : content
+        .split(/([\p{L}\p{N}_]+(?:['’‐‑-][\p{L}\p{N}_]+)*)/gu)
+        .filter(Boolean);
   return parts.map((surface, index) => {
     const isWord = /^[\p{L}\p{N}_]+(?:['’‐‑-][\p{L}\p{N}_]+)*$/u.test(surface);
     const normalized = isWord ? surface.toLocaleLowerCase() : '';
@@ -90,6 +95,46 @@ export class MockLibraryGateway implements LibraryGateway {
   private readonly dueTerms = new Set<string>();
   private nextTermId = 1;
   private readonly reviewHistory: Array<{ key: string; rating: number }> = [];
+  private readonly languageSettings = new Map<string, LanguageSettings>();
+
+  private settingsFor(language: string): LanguageSettings {
+    const key = language.toLocaleLowerCase();
+    const existing = this.languageSettings.get(key);
+    if (existing) {
+      return existing;
+    }
+    const settings: LanguageSettings = {
+      id: this.languageSettings.size + 1,
+      name: language,
+      characterSubstitutions: '',
+      sentenceTerminators: '',
+      splitEachCharacter: false,
+      removeSpaces: false,
+      rightToLeft: false,
+      textCount: 0
+    };
+    this.languageSettings.set(key, settings);
+    return settings;
+  }
+
+  private configuredContent(text: TextDetails): string {
+    const settings = this.settingsFor(text.language);
+    return settings.characterSubstitutions
+      .split('|')
+      .filter(Boolean)
+      .reduce((content, pair) => {
+        const [from, to = ''] = pair.split('=', 2).map((part) => part.trim());
+        return from ? content.replaceAll(from, to) : content;
+      }, text.content);
+  }
+
+  private normalizedTermsFor(text: TextDetails): readonly string[] {
+    const content = this.configuredContent(text);
+    if (!this.settingsFor(text.language).splitEachCharacter) {
+      return normalizedTerms(content);
+    }
+    return [...content.toLocaleLowerCase()].filter((character) => /[\p{L}\p{N}_]/u.test(character));
+  }
 
   private termKey(language: string, normalized: string): string {
     return `${language.toLocaleLowerCase()}\u0000${normalized}`;
@@ -107,7 +152,7 @@ export class MockLibraryGateway implements LibraryGateway {
   }
 
   private withProgress(text: TextDetails): TextDetails {
-    const terms = new Set(normalizedTerms(text.content));
+    const terms = new Set(this.normalizedTermsFor(text));
     const knownTerms = [...terms].filter((term) => {
       const status = this.terms.get(this.termKey(text.language, term))?.status ?? 0;
       return status === 5 || status === 99;
@@ -117,6 +162,37 @@ export class MockLibraryGateway implements LibraryGateway {
 
   async listTexts(): Promise<readonly LibraryText[]> {
     return this.texts.map((text) => this.withProgress(text));
+  }
+
+  async listLanguages(): Promise<readonly LanguageSettings[]> {
+    for (const text of this.texts) {
+      this.settingsFor(text.language);
+    }
+    return [...this.languageSettings.values()]
+      .map((settings) => ({
+        ...settings,
+        textCount: this.texts.filter(
+          ({ language }) => language.toLocaleLowerCase() === settings.name.toLocaleLowerCase()
+        ).length
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }
+
+  async updateLanguage(input: UpdateLanguageInput): Promise<LanguageSettings> {
+    await this.listLanguages();
+    const entry = [...this.languageSettings.entries()].find(([, value]) => value.id === input.id);
+    if (!entry) {
+      throw new Error('Language was not found');
+    }
+    const [key, previous] = entry;
+    const updated = { ...previous, ...input };
+    this.languageSettings.set(key, updated);
+    return {
+      ...updated,
+      textCount: this.texts.filter(
+        ({ language }) => language.toLocaleLowerCase() === previous.name.toLocaleLowerCase()
+      ).length
+    };
   }
 
   async createText(input: CreateTextInput): Promise<LibraryText> {
@@ -130,6 +206,7 @@ export class MockLibraryGateway implements LibraryGateway {
       content: input.content,
       sourceUri: input.sourceUri
     };
+    this.settingsFor(text.language);
     this.texts.unshift(text);
     return this.withProgress(text);
   }
@@ -182,9 +259,12 @@ export class MockLibraryGateway implements LibraryGateway {
     const opened = { ...text, lastOpened: 'Just now' };
     this.texts[index] = opened;
     const progress = this.withProgress(opened);
-    const sentenceTexts = text.content
+    const settings = this.settingsFor(text.language);
+    const sentenceTerminators = settings.sentenceTerminators || '.!?。！？';
+    const escapedTerminators = sentenceTerminators.replace(/[\\\]\[\^-]/g, '\\$&');
+    const sentenceTexts = this.configuredContent(text)
       .replace(/\r\n?/g, '\n')
-      .split(/\n+|(?<=[.!?。！？])\s+/u)
+      .split(new RegExp(`\\n+|(?<=[${escapedTerminators}])\\s+`, 'u'))
       .map((sentence) => sentence.trim())
       .filter(Boolean);
 
@@ -194,11 +274,16 @@ export class MockLibraryGateway implements LibraryGateway {
       language: text.language,
       knownTerms: progress.knownTerms,
       totalTerms: progress.totalTerms,
+      removeSpaces: settings.removeSpaces,
+      rightToLeft: settings.rightToLeft,
       sentences: sentenceTexts.map((sentence, index) => ({
         id: index + 1,
         position: index + 1,
-        items: createReadingItems(sentence, (normalized) =>
-          this.terms.get(this.termKey(text.language, normalized))?.status ?? 0
+        items: createReadingItems(
+          sentence,
+          (normalized) =>
+            this.terms.get(this.termKey(text.language, normalized))?.status ?? 0,
+          settings.splitEachCharacter
         )
       })),
       expressions: this.expressions
@@ -217,7 +302,7 @@ export class MockLibraryGateway implements LibraryGateway {
     if (!text) {
       throw new Error('Text was not found');
     }
-    if (!normalizedTerms(text.content).includes(input.normalized)) {
+    if (!this.normalizedTermsFor(text).includes(input.normalized)) {
       throw new Error('Term was not found in this text');
     }
 
@@ -227,7 +312,12 @@ export class MockLibraryGateway implements LibraryGateway {
       this.dueTerms.delete(key);
     } else {
       const existing = this.terms.get(key);
-      const surface = createReadingItems(text.content, () => 0).find(
+      const settings = this.settingsFor(text.language);
+      const surface = createReadingItems(
+        this.configuredContent(text),
+        () => 0,
+        settings.splitEachCharacter
+      ).find(
         (item) => item.normalized === input.normalized
       )?.surface;
       this.terms.set(key, {
@@ -254,7 +344,12 @@ export class MockLibraryGateway implements LibraryGateway {
     if (!text) {
       throw new Error('Text was not found');
     }
-    const surface = createReadingItems(text.content, () => 0).find(
+    const settings = this.settingsFor(text.language);
+    const surface = createReadingItems(
+      this.configuredContent(text),
+      () => 0,
+      settings.splitEachCharacter
+    ).find(
       (item) => item.normalized === normalized
     )?.surface;
     const existing = this.terms.get(this.termKey(text.language, normalized));

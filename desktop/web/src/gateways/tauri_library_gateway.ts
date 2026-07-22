@@ -2,6 +2,7 @@ import type {
   CreateTextInput,
   CreateExpressionInput,
   CreatedExpression,
+  LanguageSettings,
   LibraryText,
   ReadingText,
   RecordReviewInput,
@@ -14,6 +15,7 @@ import type {
   TermDetails,
   TermProgress,
   TextDetails,
+  UpdateLanguageInput,
   UpdateTextInput
 } from '../domain/library';
 import type { LibraryGateway } from './library_gateway';
@@ -28,6 +30,14 @@ export class TauriLibraryGateway implements LibraryGateway {
 
   listTexts(): Promise<readonly LibraryText[]> {
     return this.invoke<LibraryText[]>('list_texts');
+  }
+
+  listLanguages(): Promise<readonly LanguageSettings[]> {
+    return this.invoke<LanguageSettings[]>('list_languages');
+  }
+
+  updateLanguage(input: UpdateLanguageInput): Promise<LanguageSettings> {
+    return this.invoke<LanguageSettings>('update_language', { input });
   }
 
   createText(input: CreateTextInput): Promise<LibraryText> {

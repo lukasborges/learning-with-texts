@@ -232,6 +232,88 @@ textarea {
   border-bottom: 0;
 }
 
+.language-shell > h1 {
+  margin-bottom: 0.5rem;
+}
+
+.language-introduction {
+  margin: 0 0 1.5rem;
+  color: #637083;
+}
+
+.language-warning {
+  margin-bottom: 1.5rem;
+}
+
+.language-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: 1rem;
+}
+
+.language-card {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  padding: 1.25rem;
+  border: 1px solid #d9e1e8;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(30 55 80 / 8%);
+}
+
+.language-card h2,
+.language-card > p {
+  margin: 0;
+}
+
+.language-card > p:not(.form-status),
+.language-card small {
+  color: #637083;
+}
+
+.language-card > label {
+  display: grid;
+  gap: 0.4rem;
+  font-weight: 650;
+}
+
+.language-card input[type='text'] {
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #aebdca;
+  border-radius: 8px;
+  background: #fff;
+  color: #243142;
+}
+
+.language-options {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.language-options label {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.language-card button {
+  justify-self: start;
+  padding: 0.65rem 0.9rem;
+  border: 0;
+  border-radius: 8px;
+  background: #246f96;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.language-card button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
 .import-panel {
   margin-bottom: 2rem;
   padding: 1.25rem;
@@ -714,6 +796,23 @@ textarea {
   .statistics-table th,
   .statistics-table td {
     border-color: #344352;
+  }
+
+  .language-introduction,
+  .language-card > p:not(.form-status),
+  .language-card small {
+    color: #a8b7c5;
+  }
+
+  .language-card {
+    border-color: #344352;
+    background: #1e2a35;
+  }
+
+  .language-card input[type='text'] {
+    border-color: #55687a;
+    background: #131b24;
+    color: #edf3f7;
   }
 
   .term-editor__normalized {

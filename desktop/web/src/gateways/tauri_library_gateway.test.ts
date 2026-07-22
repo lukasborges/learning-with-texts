@@ -20,6 +20,34 @@ describe('TauriLibraryGateway', () => {
     expect(invoke).toHaveBeenCalledWith('list_texts');
   });
 
+  it('loads and updates language settings', async () => {
+    const language = {
+      id: 2,
+      name: 'Japanese',
+      characterSubstitutions: '…=。',
+      sentenceTerminators: '。！？',
+      splitEachCharacter: true,
+      removeSpaces: true,
+      rightToLeft: false,
+      textCount: 3
+    };
+    const input = {
+      id: language.id,
+      characterSubstitutions: language.characterSubstitutions,
+      sentenceTerminators: language.sentenceTerminators,
+      splitEachCharacter: language.splitEachCharacter,
+      removeSpaces: language.removeSpaces,
+      rightToLeft: language.rightToLeft
+    };
+    const invoke = vi.fn().mockResolvedValueOnce([language]).mockResolvedValueOnce(language);
+    const gateway = new TauriLibraryGateway(invoke);
+
+    await expect(gateway.listLanguages()).resolves.toEqual([language]);
+    await expect(gateway.updateLanguage(input)).resolves.toEqual(language);
+    expect(invoke).toHaveBeenNthCalledWith(1, 'list_languages');
+    expect(invoke).toHaveBeenNthCalledWith(2, 'update_language', { input });
+  });
+
   it('passes a text creation request to the native command', async () => {
     const input = {
       language: 'English',
