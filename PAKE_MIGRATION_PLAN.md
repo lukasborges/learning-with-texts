@@ -88,6 +88,7 @@ expanded so its remaining work is visible before the next commit.
 - [x] Build and inspect PHP-free DEB, AppImage, and Arch Linux packages (`ee667a3` and this commit).
 - [x] Run packaged first-launch, persistence, backup, and restore E2E after PHP removal (this commit).
 - [x] Keep the updater inert in local and distribution-managed builds while preserving signed release overrides (this commit).
+- [x] Install and remove DEB and pacman packages in clean CI environments before publishing artifacts ([run `29966876339`](https://github.com/lukasborges/learning-with-texts/actions/runs/29966876339)).
 
 ### Completed Desktop Workflows
 
