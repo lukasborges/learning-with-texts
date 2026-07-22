@@ -1,0 +1,51 @@
+name: Desktop E2E
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Tauri and WebDriver system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libwebkit2gtk-4.1-dev \
+            patchelf \
+            webkit2gtk-driver \
+            xvfb
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20.19.0
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+
+      - run: npm ci
+      - run: cargo install tauri-driver --version 2.0.6 --locked
+      - run: npm run desktop:check
+      - run: npm run desktop:test
+      - name: Build the DEB and run native workflows
+        run: xvfb-run -a npm run desktop:e2e
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: lwt-desktop-debug-deb
+          path: desktop/src-tauri/target/debug/bundle/deb/*.deb
+          if-no-files-found: error

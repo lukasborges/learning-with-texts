@@ -9,6 +9,7 @@ npm install
 npm run desktop:dev
 npm run desktop:check
 npm run desktop:test
+npm run desktop:e2e
 npm run desktop:build
 npm run desktop:package:debug
 npm run desktop:tauri:dev
@@ -16,6 +17,10 @@ npm run desktop:tauri:build
 ```
 
 `desktop:build` writes a static, offline-capable web bundle to `dist-desktop/`. The package commands then use the pinned Pake CLI to wrap that directory in a native Tauri WebView. Native artifacts are written into this directory and ignored by Git.
+
+`desktop:e2e` builds the custom Tauri DEB and drives first launch, reading,
+review, statistics, backup, and restore through the native WebView. See
+[E2E.md](E2E.md) for local and CI prerequisites.
 
 ## Current Boundary
 
