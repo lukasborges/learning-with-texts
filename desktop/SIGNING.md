@@ -13,6 +13,10 @@ Configure required reviewers and allow only protected `v*` tags in the
 `desktop-production` Environment. Store the following there, not as repository
 or organization-wide secrets:
 
+The environment and tag policy were provisioned on July 22, 2026. The
+`lukasborges` account must approve each deployment; platform credentials and
+the updater key still need to be added before creating the first version tag.
+
 | Name | Scope and purpose |
 | --- | --- |
 | `TAURI_SIGNING_PRIVATE_KEY` | Tauri updater private key; release job only. |
