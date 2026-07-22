@@ -1,5 +1,6 @@
 import type {
   BackupSummary,
+  CreateTagInput,
   CreateTextInput,
   CreateExpressionInput,
   CreatedExpression,
@@ -13,6 +14,9 @@ import type {
   SaveTermInput,
   SavedTerm,
   SetTermStatusInput,
+  SetTermTagsInput,
+  SetTextTagsInput,
+  Tag,
   TermDetails,
   TermProgress,
   TextDetails,
@@ -47,6 +51,30 @@ export class TauriLibraryGateway implements LibraryGateway {
 
   restoreBackup(payload: string): Promise<BackupSummary> {
     return this.invoke<BackupSummary>('restore_backup', { payload });
+  }
+
+  listTags(): Promise<readonly Tag[]> {
+    return this.invoke<Tag[]>('list_tags');
+  }
+
+  createTag(input: CreateTagInput): Promise<Tag> {
+    return this.invoke<Tag>('create_tag', { input });
+  }
+
+  listTextTagIds(textId: number): Promise<readonly number[]> {
+    return this.invoke<number[]>('list_text_tag_ids', { textId });
+  }
+
+  setTextTags(input: SetTextTagsInput): Promise<readonly number[]> {
+    return this.invoke<number[]>('set_text_tags', { input });
+  }
+
+  listTermTagIds(textId: number, normalized: string): Promise<readonly number[]> {
+    return this.invoke<number[]>('list_term_tag_ids', { textId, normalized });
+  }
+
+  setTermTags(input: SetTermTagsInput): Promise<readonly number[]> {
+    return this.invoke<number[]>('set_term_tags', { input });
   }
 
   createText(input: CreateTextInput): Promise<LibraryText> {

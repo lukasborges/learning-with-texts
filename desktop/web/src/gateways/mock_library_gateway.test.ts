@@ -75,6 +75,26 @@ describe('MockLibraryGateway', () => {
     expect(texts.some(({ title }) => title === 'Temporary')).toBe(false);
   });
 
+  it('creates and assigns shared tags in browser preview', async () => {
+    const gateway = new MockLibraryGateway();
+    const tag = await gateway.createTag({ name: 'Important', comment: 'Review first' });
+    await gateway.setTextTags({ textId: 1, tagIds: [tag.id] });
+    await gateway.saveTerm({
+      textId: 1,
+      normalized: 'dog',
+      status: 1,
+      translation: 'cachorro',
+      romanization: ''
+    });
+    await gateway.setTermTags({ textId: 1, normalized: 'dog', tagIds: [tag.id] });
+
+    const tags = await gateway.listTags();
+
+    expect(tags[0]).toMatchObject({ name: 'Important', textCount: 1, termCount: 1 });
+    await expect(gateway.listTextTagIds(1)).resolves.toEqual([tag.id]);
+    await expect(gateway.listTermTagIds(1, 'dog')).resolves.toEqual([tag.id]);
+  });
+
   it('loads, updates, and deletes a text in the preview session', async () => {
     const gateway = new MockLibraryGateway();
 

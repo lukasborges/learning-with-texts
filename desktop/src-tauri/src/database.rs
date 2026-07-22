@@ -1,6 +1,7 @@
 use crate::parser::{parse_text_with_config, ParserConfig};
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension, Transaction};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use std::path::Path;
 use std::sync::Mutex;
 
@@ -10,14 +11,16 @@ const TERMS_MIGRATION: &str = include_str!("../migrations/0003_terms.sql");
 const TERM_DETAILS_MIGRATION: &str = include_str!("../migrations/0004_term_details.sql");
 const EXPRESSIONS_MIGRATION: &str = include_str!("../migrations/0005_expressions.sql");
 const REVIEWS_MIGRATION: &str = include_str!("../migrations/0006_reviews.sql");
-const LATEST_SCHEMA_VERSION: i64 = 6;
-const MIGRATIONS: [(i64, &str); 6] = [
+const TAGS_MIGRATION: &str = include_str!("../migrations/0007_tags.sql");
+const LATEST_SCHEMA_VERSION: i64 = 7;
+const MIGRATIONS: [(i64, &str); 7] = [
     (1, INITIAL_MIGRATION),
     (2, TEXT_PARSING_MIGRATION),
     (3, TERMS_MIGRATION),
     (4, TERM_DETAILS_MIGRATION),
     (5, EXPRESSIONS_MIGRATION),
-    (LATEST_SCHEMA_VERSION, REVIEWS_MIGRATION),
+    (6, REVIEWS_MIGRATION),
+    (LATEST_SCHEMA_VERSION, TAGS_MIGRATION),
 ];
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -255,10 +258,43 @@ pub struct UpdateLanguageInput {
 
 #[derive(Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct Tag {
+    pub id: i64,
+    pub name: String,
+    pub comment: String,
+    pub term_count: i64,
+    pub text_count: i64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateTagInput {
+    pub name: String,
+    pub comment: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetTextTagsInput {
+    pub text_id: i64,
+    pub tag_ids: Vec<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetTermTagsInput {
+    pub text_id: i64,
+    pub normalized: String,
+    pub tag_ids: Vec<i64>,
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BackupSummary {
     pub languages: usize,
     pub texts: usize,
     pub terms: usize,
+    pub tags: usize,
     pub expressions: usize,
     pub reviews: usize,
     pub warnings: Vec<String>,
@@ -277,6 +313,12 @@ struct PortableBackup {
     languages: Vec<BackupLanguage>,
     texts: Vec<BackupText>,
     terms: Vec<BackupTerm>,
+    #[serde(default)]
+    tags: Vec<BackupTag>,
+    #[serde(default)]
+    term_tags: Vec<BackupTermTag>,
+    #[serde(default)]
+    text_tags: Vec<BackupTextTag>,
     expressions: Vec<BackupExpression>,
     reviews: Vec<BackupReview>,
 }
@@ -332,6 +374,28 @@ struct BackupTerm {
     next_review_at: Option<String>,
     review_count: i64,
     correct_count: i64,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BackupTag {
+    id: i64,
+    name: String,
+    comment: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BackupTermTag {
+    term_id: i64,
+    tag_id: i64,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BackupTextTag {
+    text_id: i64,
+    tag_id: i64,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -693,6 +757,236 @@ impl Database {
             .ok_or_else(|| "Term was not found in this text".to_string())
     }
 
+    fn validate_tag_ids(
+        transaction: &Transaction<'_>,
+        tag_ids: Vec<i64>,
+    ) -> Result<BTreeSet<i64>, String> {
+        if tag_ids.len() > 100 {
+            return Err("No more than 100 tags can be assigned at once".to_string());
+        }
+        let tag_ids: BTreeSet<i64> = tag_ids.into_iter().collect();
+        for tag_id in &tag_ids {
+            if *tag_id <= 0 {
+                return Err("Tag selection is invalid".to_string());
+            }
+            let exists = transaction
+                .query_row("SELECT 1 FROM tags WHERE id = ?1", [tag_id], |_| Ok(()))
+                .optional()
+                .map_err(|error| format!("Unable to validate a selected tag: {error}"))?
+                .is_some();
+            if !exists {
+                return Err("A selected tag was not found".to_string());
+            }
+        }
+        Ok(tag_ids)
+    }
+
+    pub fn list_tags(&self) -> Result<Vec<Tag>, String> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| "The desktop database lock is unavailable".to_string())?;
+        let mut statement = connection
+            .prepare(
+                "SELECT tags.id,
+                        tags.name,
+                        tags.comment,
+                        (SELECT COUNT(*) FROM term_tags WHERE term_tags.tag_id = tags.id),
+                        (SELECT COUNT(*) FROM text_tags WHERE text_tags.tag_id = tags.id)
+                 FROM tags ORDER BY tags.name COLLATE NOCASE",
+            )
+            .map_err(|error| format!("Unable to prepare tags: {error}"))?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok(Tag {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    comment: row.get(2)?,
+                    term_count: row.get(3)?,
+                    text_count: row.get(4)?,
+                })
+            })
+            .map_err(|error| format!("Unable to load tags: {error}"))?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| format!("Unable to decode tags: {error}"))
+    }
+
+    pub fn create_tag(&self, input: CreateTagInput) -> Result<Tag, String> {
+        let name = input.name.trim();
+        let comment = input.comment.trim();
+        if name.is_empty() {
+            return Err("Tag name is required".to_string());
+        }
+        if name.chars().count() > 20 {
+            return Err("Tag name must not exceed 20 characters".to_string());
+        }
+        if comment.chars().count() > 200 {
+            return Err("Tag comment must not exceed 200 characters".to_string());
+        }
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| "The desktop database lock is unavailable".to_string())?;
+        connection
+            .execute(
+                "INSERT INTO tags (name, comment) VALUES (?1, ?2)",
+                params![name, comment],
+            )
+            .map_err(|error| format!("Unable to create the tag: {error}"))?;
+        Ok(Tag {
+            id: connection.last_insert_rowid(),
+            name: name.to_string(),
+            comment: comment.to_string(),
+            term_count: 0,
+            text_count: 0,
+        })
+    }
+
+    pub fn list_text_tag_ids(&self, text_id: i64) -> Result<Vec<i64>, String> {
+        if text_id <= 0 {
+            return Err("Text was not found".to_string());
+        }
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| "The desktop database lock is unavailable".to_string())?;
+        let exists = connection
+            .query_row("SELECT 1 FROM texts WHERE id = ?1", [text_id], |_| Ok(()))
+            .optional()
+            .map_err(|error| format!("Unable to load the tagged text: {error}"))?
+            .is_some();
+        if !exists {
+            return Err("Text was not found".to_string());
+        }
+        let mut statement = connection
+            .prepare("SELECT tag_id FROM text_tags WHERE text_id = ?1 ORDER BY tag_id")
+            .map_err(|error| format!("Unable to prepare text tags: {error}"))?;
+        let rows = statement
+            .query_map([text_id], |row| row.get(0))
+            .map_err(|error| format!("Unable to load text tags: {error}"))?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| format!("Unable to decode text tags: {error}"))
+    }
+
+    pub fn set_text_tags(&self, input: SetTextTagsInput) -> Result<Vec<i64>, String> {
+        if input.text_id <= 0 {
+            return Err("Text was not found".to_string());
+        }
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| "The desktop database lock is unavailable".to_string())?;
+        let transaction = connection
+            .transaction()
+            .map_err(|error| format!("Unable to start the text tag update: {error}"))?;
+        let exists = transaction
+            .query_row("SELECT 1 FROM texts WHERE id = ?1", [input.text_id], |_| {
+                Ok(())
+            })
+            .optional()
+            .map_err(|error| format!("Unable to load the tagged text: {error}"))?
+            .is_some();
+        if !exists {
+            return Err("Text was not found".to_string());
+        }
+        let tag_ids = Self::validate_tag_ids(&transaction, input.tag_ids)?;
+        transaction
+            .execute("DELETE FROM text_tags WHERE text_id = ?1", [input.text_id])
+            .map_err(|error| format!("Unable to clear text tags: {error}"))?;
+        for tag_id in &tag_ids {
+            transaction
+                .execute(
+                    "INSERT INTO text_tags (text_id, tag_id) VALUES (?1, ?2)",
+                    params![input.text_id, tag_id],
+                )
+                .map_err(|error| format!("Unable to assign a text tag: {error}"))?;
+        }
+        transaction
+            .commit()
+            .map_err(|error| format!("Unable to save text tags: {error}"))?;
+        Ok(tag_ids.into_iter().collect())
+    }
+
+    pub fn list_term_tag_ids(&self, text_id: i64, normalized: String) -> Result<Vec<i64>, String> {
+        if text_id <= 0 {
+            return Err("Text was not found".to_string());
+        }
+        let normalized = normalized.trim();
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| "The desktop database lock is unavailable".to_string())?;
+        let transaction = connection
+            .transaction()
+            .map_err(|error| format!("Unable to inspect the tagged term: {error}"))?;
+        let (language_id, _, _) = Self::find_text_term(&transaction, text_id, normalized)?;
+        let term_id = transaction
+            .query_row(
+                "SELECT id FROM terms WHERE language_id = ?1 AND normalized = ?2",
+                params![language_id, normalized],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()
+            .map_err(|error| format!("Unable to load the tagged term: {error}"))?;
+        let Some(term_id) = term_id else {
+            return Ok(Vec::new());
+        };
+        let tag_ids = {
+            let mut statement = transaction
+                .prepare("SELECT tag_id FROM term_tags WHERE term_id = ?1 ORDER BY tag_id")
+                .map_err(|error| format!("Unable to prepare term tags: {error}"))?;
+            let rows = statement
+                .query_map([term_id], |row| row.get(0))
+                .map_err(|error| format!("Unable to load term tags: {error}"))?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|error| format!("Unable to decode term tags: {error}"))?
+        };
+        transaction
+            .commit()
+            .map_err(|error| format!("Unable to finish reading term tags: {error}"))?;
+        Ok(tag_ids)
+    }
+
+    pub fn set_term_tags(&self, input: SetTermTagsInput) -> Result<Vec<i64>, String> {
+        if input.text_id <= 0 {
+            return Err("Text was not found".to_string());
+        }
+        let normalized = input.normalized.trim();
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| "The desktop database lock is unavailable".to_string())?;
+        let transaction = connection
+            .transaction()
+            .map_err(|error| format!("Unable to start the term tag update: {error}"))?;
+        let (language_id, _, _) = Self::find_text_term(&transaction, input.text_id, normalized)?;
+        let term_id = transaction
+            .query_row(
+                "SELECT id FROM terms WHERE language_id = ?1 AND normalized = ?2",
+                params![language_id, normalized],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()
+            .map_err(|error| format!("Unable to load the tagged term: {error}"))?
+            .ok_or_else(|| "Save the term before assigning tags".to_string())?;
+        let tag_ids = Self::validate_tag_ids(&transaction, input.tag_ids)?;
+        transaction
+            .execute("DELETE FROM term_tags WHERE term_id = ?1", [term_id])
+            .map_err(|error| format!("Unable to clear term tags: {error}"))?;
+        for tag_id in &tag_ids {
+            transaction
+                .execute(
+                    "INSERT INTO term_tags (term_id, tag_id) VALUES (?1, ?2)",
+                    params![term_id, tag_id],
+                )
+                .map_err(|error| format!("Unable to assign a term tag: {error}"))?;
+        }
+        transaction
+            .commit()
+            .map_err(|error| format!("Unable to save term tags: {error}"))?;
+        Ok(tag_ids.into_iter().collect())
+    }
+
     fn portable_backup(connection: &Connection) -> Result<PortableBackup, String> {
         let exported_at = connection
             .query_row("SELECT CURRENT_TIMESTAMP", [], |row| row.get(0))
@@ -791,6 +1085,52 @@ impl Database {
             rows.collect::<Result<Vec<_>, _>>()
                 .map_err(|error| format!("Unable to decode backup terms: {error}"))?
         };
+        let tags = {
+            let mut statement = connection
+                .prepare("SELECT id, name, comment FROM tags ORDER BY id")
+                .map_err(|error| format!("Unable to prepare backup tags: {error}"))?;
+            let rows = statement
+                .query_map([], |row| {
+                    Ok(BackupTag {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        comment: row.get(2)?,
+                    })
+                })
+                .map_err(|error| format!("Unable to read backup tags: {error}"))?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|error| format!("Unable to decode backup tags: {error}"))?
+        };
+        let term_tags = {
+            let mut statement = connection
+                .prepare("SELECT term_id, tag_id FROM term_tags ORDER BY term_id, tag_id")
+                .map_err(|error| format!("Unable to prepare backup term tags: {error}"))?;
+            let rows = statement
+                .query_map([], |row| {
+                    Ok(BackupTermTag {
+                        term_id: row.get(0)?,
+                        tag_id: row.get(1)?,
+                    })
+                })
+                .map_err(|error| format!("Unable to read backup term tags: {error}"))?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|error| format!("Unable to decode backup term tags: {error}"))?
+        };
+        let text_tags = {
+            let mut statement = connection
+                .prepare("SELECT text_id, tag_id FROM text_tags ORDER BY text_id, tag_id")
+                .map_err(|error| format!("Unable to prepare backup text tags: {error}"))?;
+            let rows = statement
+                .query_map([], |row| {
+                    Ok(BackupTextTag {
+                        text_id: row.get(0)?,
+                        tag_id: row.get(1)?,
+                    })
+                })
+                .map_err(|error| format!("Unable to read backup text tags: {error}"))?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|error| format!("Unable to decode backup text tags: {error}"))?
+        };
         let expressions = {
             let mut statement = connection
                 .prepare(
@@ -853,6 +1193,9 @@ impl Database {
             languages,
             texts,
             terms,
+            tags,
+            term_tags,
+            text_tags,
             expressions,
             reviews,
         })
@@ -887,6 +1230,7 @@ impl Database {
             languages: backup.languages.len(),
             texts: backup.texts.len(),
             terms: backup.terms.len(),
+            tags: backup.tags.len(),
             expressions: backup.expressions.len(),
             reviews: backup.reviews.len(),
             warnings: backup.warnings.clone(),
@@ -906,7 +1250,8 @@ impl Database {
                  DELETE FROM terms;
                  DELETE FROM sentences;
                  DELETE FROM texts;
-                 DELETE FROM languages;",
+                 DELETE FROM languages;
+                 DELETE FROM tags;",
             )
             .map_err(|error| format!("Unable to clear current library data: {error}"))?;
 
@@ -938,6 +1283,14 @@ impl Database {
                     ],
                 )
                 .map_err(|error| format!("Unable to restore a language: {error}"))?;
+        }
+        for tag in backup.tags {
+            transaction
+                .execute(
+                    "INSERT INTO tags (id, name, comment) VALUES (?1, ?2, ?3)",
+                    params![tag.id, tag.name, tag.comment],
+                )
+                .map_err(|error| format!("Unable to restore a tag: {error}"))?;
         }
         for text in &backup.texts {
             transaction
@@ -995,6 +1348,22 @@ impl Database {
                     ],
                 )
                 .map_err(|error| format!("Unable to restore a term: {error}"))?;
+        }
+        for assignment in backup.term_tags {
+            transaction
+                .execute(
+                    "INSERT INTO term_tags (term_id, tag_id) VALUES (?1, ?2)",
+                    params![assignment.term_id, assignment.tag_id],
+                )
+                .map_err(|error| format!("Unable to restore a term tag: {error}"))?;
+        }
+        for assignment in backup.text_tags {
+            transaction
+                .execute(
+                    "INSERT INTO text_tags (text_id, tag_id) VALUES (?1, ?2)",
+                    params![assignment.text_id, assignment.tag_id],
+                )
+                .map_err(|error| format!("Unable to restore a text tag: {error}"))?;
         }
         for expression in backup.expressions {
             let sentence_id = transaction
@@ -2335,6 +2704,86 @@ mod tests {
     }
 
     #[test]
+    fn creates_and_assigns_shared_tags() {
+        let database = Database::in_memory().expect("database should migrate");
+        let text = database
+            .create_text(text_input("English", "Tagged", "Tagged term."))
+            .expect("text should be created");
+        database
+            .save_term(SaveTermInput {
+                text_id: text.id,
+                normalized: "tagged".into(),
+                status: 1,
+                translation: "marcado".into(),
+                romanization: "".into(),
+            })
+            .expect("term should save");
+        let tag = database
+            .create_tag(CreateTagInput {
+                name: "Important".into(),
+                comment: "Review first".into(),
+            })
+            .expect("tag should be created");
+
+        database
+            .set_text_tags(SetTextTagsInput {
+                text_id: text.id,
+                tag_ids: vec![tag.id, tag.id],
+            })
+            .expect("text tag should save");
+        database
+            .set_term_tags(SetTermTagsInput {
+                text_id: text.id,
+                normalized: "tagged".into(),
+                tag_ids: vec![tag.id],
+            })
+            .expect("term tag should save");
+
+        assert_eq!(
+            database
+                .list_text_tag_ids(text.id)
+                .expect("text tags should load"),
+            [tag.id]
+        );
+        assert_eq!(
+            database
+                .list_term_tag_ids(text.id, "tagged".into())
+                .expect("term tags should load"),
+            [tag.id]
+        );
+        let tags = database.list_tags().expect("tags should load");
+        assert_eq!(tags[0].term_count, 1);
+        assert_eq!(tags[0].text_count, 1);
+    }
+
+    #[test]
+    fn validates_tag_names_and_assignments() {
+        let database = Database::in_memory().expect("database should migrate");
+        let text = database
+            .create_text(text_input("English", "Tagged", "Term"))
+            .expect("text should be created");
+
+        assert_eq!(
+            database
+                .create_tag(CreateTagInput {
+                    name: "".into(),
+                    comment: "".into(),
+                })
+                .expect_err("empty tag should fail"),
+            "Tag name is required"
+        );
+        assert_eq!(
+            database
+                .set_text_tags(SetTextTagsInput {
+                    text_id: text.id,
+                    tag_ids: vec![999],
+                })
+                .expect_err("missing tag should fail"),
+            "A selected tag was not found"
+        );
+    }
+
+    #[test]
     fn exports_and_restores_a_complete_portable_backup() {
         let database = Database::in_memory().expect("database should migrate");
         let created = database
@@ -2351,6 +2800,25 @@ mod tests {
                 end_position: 5,
             })
             .expect("expression should be created");
+        let tag = database
+            .create_tag(CreateTagInput {
+                name: "Story".into(),
+                comment: "Migration test".into(),
+            })
+            .expect("tag should be created");
+        database
+            .set_text_tags(SetTextTagsInput {
+                text_id: created.id,
+                tag_ids: vec![tag.id],
+            })
+            .expect("text tag should save");
+        database
+            .set_term_tags(SetTermTagsInput {
+                text_id: created.id,
+                normalized: "a short story".into(),
+                tag_ids: vec![tag.id],
+            })
+            .expect("term tag should save");
         let review = database
             .list_review_terms(20)
             .expect("review queue should load")
@@ -2380,12 +2848,16 @@ mod tests {
         assert_eq!(summary.languages, 1);
         assert_eq!(summary.texts, 1);
         assert_eq!(summary.terms, 1);
+        assert_eq!(summary.tags, 1);
         assert_eq!(summary.expressions, 1);
         assert_eq!(summary.reviews, 1);
         assert_eq!(texts.len(), 1);
         assert_eq!(texts[0].title, "Backup");
         assert_eq!(restored.expressions.len(), 1);
         assert_eq!(statistics.reviews_today, 1);
+        let restored_tags = database.list_tags().expect("restored tags should load");
+        assert_eq!(restored_tags[0].term_count, 1);
+        assert_eq!(restored_tags[0].text_count, 1);
     }
 
     #[test]
@@ -2430,11 +2902,15 @@ mod tests {
         assert_eq!(summary.languages, 1);
         assert_eq!(summary.texts, 1);
         assert_eq!(summary.terms, 1);
+        assert_eq!(summary.tags, 1);
         assert_eq!(summary.warnings.len(), 1);
         assert_eq!(texts[0].title, "Legacy text");
         assert_eq!(reading.language, "English");
         assert_eq!(term.translation, "antigo");
         assert_eq!(term.status, 2);
+        let tags = database.list_tags().expect("imported tags should load");
+        assert_eq!(tags[0].term_count, 1);
+        assert_eq!(tags[0].text_count, 1);
     }
 
     #[test]

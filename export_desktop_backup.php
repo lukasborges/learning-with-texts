@@ -48,12 +48,35 @@ function desktop_backup_substitutions($value, &$ignored) {
 	return implode('|', $valid);
 }
 
+function desktop_backup_register_tag(&$tags, &$keys, $name, $comment) {
+	$name = trim((string) $name);
+	if ($name == '') return 0;
+	$key = mb_strtolower($name, 'UTF-8');
+	if (isset($keys[$key])) return $keys[$key];
+	$id = count($tags) + 1;
+	$keys[$key] = $id;
+	$tags[] = array(
+		'id' => $id,
+		'name' => $name,
+		'comment' => trim((string) $comment)
+	);
+	return $id;
+}
+
 $exported_at = gmdate('Y-m-d H:i:s');
 $warnings = array();
 $languages = array();
 $language_ids = array();
 $texts = array();
+$text_ids = array();
 $terms = array();
+$term_ids = array();
+$tags = array();
+$tag_keys = array();
+$legacy_term_tag_ids = array();
+$legacy_text_tag_ids = array();
+$term_tags = array();
+$text_tags = array();
 $compound_terms = 0;
 $long_compound_terms = 0;
 $normalized_statuses = 0;
@@ -106,6 +129,7 @@ foreach ($records as $record) {
 		'createdAt' => $exported_at,
 		'updatedAt' => $exported_at
 	);
+	$text_ids[(int) $record['TxID']] = true;
 }
 
 $records = desktop_backup_rows(
@@ -150,16 +174,58 @@ foreach ($records as $record) {
 		'reviewCount' => 0,
 		'correctCount' => 0
 	);
+	$term_ids[(int) $record['WoID']] = true;
+}
+
+$records = desktop_backup_rows('select * from ' . $tbpref . 'tags order by TgID');
+foreach ($records as $record) {
+	$legacy_term_tag_ids[(int) $record['TgID']] = desktop_backup_register_tag(
+		$tags,
+		$tag_keys,
+		$record['TgText'],
+		$record['TgComment']
+	);
+}
+$records = desktop_backup_rows('select * from ' . $tbpref . 'tags2 order by T2ID');
+foreach ($records as $record) {
+	$legacy_text_tag_ids[(int) $record['T2ID']] = desktop_backup_register_tag(
+		$tags,
+		$tag_keys,
+		$record['T2Text'],
+		$record['T2Comment']
+	);
+}
+
+$skipped_tag_assignments = 0;
+$records = desktop_backup_rows('select * from ' . $tbpref . 'wordtags order by WtWoID, WtTgID');
+foreach ($records as $record) {
+	$term_id = (int) $record['WtWoID'];
+	$legacy_tag_id = (int) $record['WtTgID'];
+	$tag_id = isset($legacy_term_tag_ids[$legacy_tag_id]) ? $legacy_term_tag_ids[$legacy_tag_id] : 0;
+	if (! isset($term_ids[$term_id]) || $tag_id < 1) {
+		$skipped_tag_assignments++;
+		continue;
+	}
+	$term_tags[] = array('termId' => $term_id, 'tagId' => $tag_id);
+}
+$records = desktop_backup_rows('select * from ' . $tbpref . 'texttags order by TtTxID, TtT2ID');
+foreach ($records as $record) {
+	$text_id = (int) $record['TtTxID'];
+	$legacy_tag_id = (int) $record['TtT2ID'];
+	$tag_id = isset($legacy_text_tag_ids[$legacy_tag_id]) ? $legacy_text_tag_ids[$legacy_tag_id] : 0;
+	if (! isset($text_ids[$text_id]) || $tag_id < 1) {
+		$skipped_tag_assignments++;
+		continue;
+	}
+	$text_tags[] = array('textId' => $text_id, 'tagId' => $tag_id);
 }
 
 $archived_texts = desktop_backup_count('archivedtexts');
-$term_tags = desktop_backup_count('wordtags');
-$text_tags = desktop_backup_count('texttags');
 if ($archived_texts > 0) {
 	$warnings[] = $archived_texts . ' archived text(s) were not exported because the desktop archive is not implemented yet.';
 }
-if (($term_tags + $text_tags) > 0) {
-	$warnings[] = ($term_tags + $text_tags) . ' tag assignment(s) were not exported because desktop tags are not implemented yet.';
+if ($skipped_tag_assignments > 0) {
+	$warnings[] = $skipped_tag_assignments . ' orphaned tag assignment(s) were skipped.';
 }
 if ($compound_terms > 0) {
 	$warnings[] = $compound_terms . ' compound term(s) were preserved, but their legacy text positions must be recreated in the desktop reader.';
@@ -198,6 +264,9 @@ $backup = array(
 	'languages' => $languages,
 	'texts' => $texts,
 	'terms' => $terms,
+	'tags' => $tags,
+	'termTags' => $term_tags,
+	'textTags' => $text_tags,
 	'expressions' => array(),
 	'reviews' => array()
 );

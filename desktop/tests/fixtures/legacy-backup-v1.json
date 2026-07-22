@@ -56,6 +56,25 @@
       "correctCount": 0
     }
   ],
+  "tags": [
+    {
+      "id": 1,
+      "name": "Important",
+      "comment": "Migrated from legacy LWT"
+    }
+  ],
+  "termTags": [
+    {
+      "termId": 13,
+      "tagId": 1
+    }
+  ],
+  "textTags": [
+    {
+      "textId": 11,
+      "tagId": 1
+    }
+  ],
   "expressions": [],
   "reviews": []
 }

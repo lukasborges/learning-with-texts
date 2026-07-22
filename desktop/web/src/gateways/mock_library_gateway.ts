@@ -1,5 +1,6 @@
 import type {
   BackupSummary,
+  CreateTagInput,
   CreateTextInput,
   CreateExpressionInput,
   CreatedExpression,
@@ -14,6 +15,9 @@ import type {
   SaveTermInput,
   SavedTerm,
   SetTermStatusInput,
+  SetTermTagsInput,
+  SetTextTagsInput,
+  Tag,
   TermDetails,
   TermProgress,
   TermStatus,
@@ -64,6 +68,10 @@ interface MockBackup {
   readonly dueTerms: string[];
   readonly nextTermId: number;
   readonly reviewHistory: Array<{ key: string; rating: number }>;
+  readonly tags: Tag[];
+  readonly nextTagId: number;
+  readonly textTagIds: Array<[number, number[]]>;
+  readonly termTagIds: Array<[string, number[]]>;
 }
 
 function countUniqueTerms(content: string): number {
@@ -110,6 +118,10 @@ export class MockLibraryGateway implements LibraryGateway {
   private nextTermId = 1;
   private readonly reviewHistory: Array<{ key: string; rating: number }> = [];
   private readonly languageSettings = new Map<string, LanguageSettings>();
+  private readonly tags: Tag[] = [];
+  private nextTagId = 1;
+  private readonly textTagIds = new Map<number, Set<number>>();
+  private readonly termTagIds = new Map<string, Set<number>>();
 
   private settingsFor(language: string): LanguageSettings {
     const key = language.toLocaleLowerCase();
@@ -221,7 +233,11 @@ export class MockLibraryGateway implements LibraryGateway {
       termIds: [...this.termIds],
       dueTerms: [...this.dueTerms],
       nextTermId: this.nextTermId,
-      reviewHistory: this.reviewHistory
+      reviewHistory: this.reviewHistory,
+      tags: this.tags,
+      nextTagId: this.nextTagId,
+      textTagIds: [...this.textTagIds].map(([id, values]) => [id, [...values]]),
+      termTagIds: [...this.termTagIds].map(([key, values]) => [key, [...values]])
     };
     return JSON.stringify(backup, null, 2);
   }
@@ -250,6 +266,10 @@ export class MockLibraryGateway implements LibraryGateway {
       !Array.isArray(backup.termIds) ||
       !Array.isArray(backup.dueTerms) ||
       !Array.isArray(backup.reviewHistory) ||
+      !Array.isArray(backup.tags) ||
+      !Array.isArray(backup.textTagIds) ||
+      !Array.isArray(backup.termTagIds) ||
+      typeof backup.nextTagId !== 'number' ||
       typeof backup.nextTermId !== 'number'
     ) {
       throw new Error('Backup content is incomplete');
@@ -266,14 +286,94 @@ export class MockLibraryGateway implements LibraryGateway {
     backup.dueTerms.forEach((key) => this.dueTerms.add(key));
     this.nextTermId = backup.nextTermId;
     this.reviewHistory.splice(0, this.reviewHistory.length, ...backup.reviewHistory);
+    this.tags.splice(0, this.tags.length, ...backup.tags);
+    this.nextTagId = backup.nextTagId;
+    this.textTagIds.clear();
+    backup.textTagIds.forEach(([id, values]) => this.textTagIds.set(id, new Set(values)));
+    this.termTagIds.clear();
+    backup.termTagIds.forEach(([key, values]) => this.termTagIds.set(key, new Set(values)));
     return {
       languages: this.languageSettings.size,
       texts: this.texts.length,
       terms: this.terms.size,
+      tags: this.tags.length,
       expressions: this.expressions.length,
       reviews: this.reviewHistory.length,
       warnings: []
     };
+  }
+
+  async listTags(): Promise<readonly Tag[]> {
+    return this.tags
+      .map((tag) => ({
+        ...tag,
+        termCount: [...this.termTagIds.values()].filter((ids) => ids.has(tag.id)).length,
+        textCount: [...this.textTagIds.values()].filter((ids) => ids.has(tag.id)).length
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }
+
+  async createTag(input: CreateTagInput): Promise<Tag> {
+    const name = input.name.trim();
+    if (!name) {
+      throw new Error('Tag name is required');
+    }
+    if (this.tags.some((tag) => tag.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+      throw new Error('Unable to create the tag: name already exists');
+    }
+    const tag = {
+      id: this.nextTagId++,
+      name,
+      comment: input.comment.trim(),
+      termCount: 0,
+      textCount: 0
+    };
+    this.tags.push(tag);
+    return tag;
+  }
+
+  async listTextTagIds(textId: number): Promise<readonly number[]> {
+    if (!this.texts.some(({ id }) => id === textId)) {
+      throw new Error('Text was not found');
+    }
+    return [...(this.textTagIds.get(textId) ?? [])];
+  }
+
+  async setTextTags(input: SetTextTagsInput): Promise<readonly number[]> {
+    await this.listTextTagIds(input.textId);
+    const ids = this.validTagIds(input.tagIds);
+    this.textTagIds.set(input.textId, new Set(ids));
+    return ids;
+  }
+
+  async listTermTagIds(textId: number, normalized: string): Promise<readonly number[]> {
+    const text = this.texts.find(({ id }) => id === textId);
+    if (!text) {
+      throw new Error('Text was not found');
+    }
+    return [...(this.termTagIds.get(this.termKey(text.language, normalized)) ?? [])];
+  }
+
+  async setTermTags(input: SetTermTagsInput): Promise<readonly number[]> {
+    const text = this.texts.find(({ id }) => id === input.textId);
+    if (!text) {
+      throw new Error('Text was not found');
+    }
+    const key = this.termKey(text.language, input.normalized);
+    if (!this.terms.has(key)) {
+      throw new Error('Save the term before assigning tags');
+    }
+    const ids = this.validTagIds(input.tagIds);
+    this.termTagIds.set(key, new Set(ids));
+    return ids;
+  }
+
+  private validTagIds(tagIds: readonly number[]): number[] {
+    const ids = [...new Set(tagIds)];
+    if (ids.some((id) => !this.tags.some((tag) => tag.id === id))) {
+      throw new Error('A selected tag was not found');
+    }
+    return ids;
   }
 
   async createText(input: CreateTextInput): Promise<LibraryText> {

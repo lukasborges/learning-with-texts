@@ -2,10 +2,11 @@ mod database;
 mod parser;
 
 use database::{
-    BackupSummary, CreateExpressionInput, CreateTextInput, CreatedExpression, Database,
-    LanguageSettings, LibraryText, ReadingText, RecordReviewInput, ReviewCard, ReviewOutcome,
-    ReviewStatistics, SaveTermInput, SavedTerm, SetTermStatusInput, TermDetails, TermProgress,
-    TextDetails, UpdateLanguageInput, UpdateTextInput,
+    BackupSummary, CreateExpressionInput, CreateTagInput, CreateTextInput, CreatedExpression,
+    Database, LanguageSettings, LibraryText, ReadingText, RecordReviewInput, ReviewCard,
+    ReviewOutcome, ReviewStatistics, SaveTermInput, SavedTerm, SetTermStatusInput,
+    SetTermTagsInput, SetTextTagsInput, Tag, TermDetails, TermProgress, TextDetails,
+    UpdateLanguageInput, UpdateTextInput,
 };
 use tauri::Manager;
 
@@ -38,6 +39,49 @@ fn restore_backup(
     payload: String,
 ) -> Result<BackupSummary, String> {
     database.restore_backup(payload)
+}
+
+#[tauri::command]
+fn list_tags(database: tauri::State<'_, Database>) -> Result<Vec<Tag>, String> {
+    database.list_tags()
+}
+
+#[tauri::command]
+fn create_tag(database: tauri::State<'_, Database>, input: CreateTagInput) -> Result<Tag, String> {
+    database.create_tag(input)
+}
+
+#[tauri::command]
+fn list_text_tag_ids(
+    database: tauri::State<'_, Database>,
+    text_id: i64,
+) -> Result<Vec<i64>, String> {
+    database.list_text_tag_ids(text_id)
+}
+
+#[tauri::command]
+fn set_text_tags(
+    database: tauri::State<'_, Database>,
+    input: SetTextTagsInput,
+) -> Result<Vec<i64>, String> {
+    database.set_text_tags(input)
+}
+
+#[tauri::command]
+fn list_term_tag_ids(
+    database: tauri::State<'_, Database>,
+    text_id: i64,
+    normalized: String,
+) -> Result<Vec<i64>, String> {
+    database.list_term_tag_ids(text_id, normalized)
+}
+
+#[tauri::command]
+fn set_term_tags(
+    database: tauri::State<'_, Database>,
+    input: SetTermTagsInput,
+) -> Result<Vec<i64>, String> {
+    database.set_term_tags(input)
 }
 
 #[tauri::command]
@@ -140,6 +184,12 @@ pub fn run() {
             update_language,
             export_backup,
             restore_backup,
+            list_tags,
+            create_tag,
+            list_text_tag_ids,
+            set_text_tags,
+            list_term_tag_ids,
+            set_term_tags,
             create_text,
             get_text,
             update_text,

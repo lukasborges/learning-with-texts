@@ -54,6 +54,7 @@ describe('TauriLibraryGateway', () => {
       languages: 1,
       texts: 2,
       terms: 3,
+      tags: 2,
       expressions: 1,
       reviews: 4,
       warnings: []
@@ -65,6 +66,48 @@ describe('TauriLibraryGateway', () => {
     await expect(gateway.restoreBackup(payload)).resolves.toEqual(summary);
     expect(invoke).toHaveBeenNthCalledWith(1, 'export_backup');
     expect(invoke).toHaveBeenNthCalledWith(2, 'restore_backup', { payload });
+  });
+
+  it('maps shared tag commands to the native runtime', async () => {
+    const tag = {
+      id: 4,
+      name: 'Important',
+      comment: '',
+      termCount: 0,
+      textCount: 0
+    };
+    const invoke = vi
+      .fn()
+      .mockResolvedValueOnce([tag])
+      .mockResolvedValueOnce(tag)
+      .mockResolvedValueOnce([4])
+      .mockResolvedValueOnce([4])
+      .mockResolvedValueOnce([4])
+      .mockResolvedValueOnce([4]);
+    const gateway = new TauriLibraryGateway(invoke);
+
+    await gateway.listTags();
+    await gateway.createTag({ name: 'Important', comment: '' });
+    await gateway.listTextTagIds(2);
+    await gateway.setTextTags({ textId: 2, tagIds: [4] });
+    await gateway.listTermTagIds(2, 'term');
+    await gateway.setTermTags({ textId: 2, normalized: 'term', tagIds: [4] });
+
+    expect(invoke).toHaveBeenNthCalledWith(1, 'list_tags');
+    expect(invoke).toHaveBeenNthCalledWith(2, 'create_tag', {
+      input: { name: 'Important', comment: '' }
+    });
+    expect(invoke).toHaveBeenNthCalledWith(3, 'list_text_tag_ids', { textId: 2 });
+    expect(invoke).toHaveBeenNthCalledWith(4, 'set_text_tags', {
+      input: { textId: 2, tagIds: [4] }
+    });
+    expect(invoke).toHaveBeenNthCalledWith(5, 'list_term_tag_ids', {
+      textId: 2,
+      normalized: 'term'
+    });
+    expect(invoke).toHaveBeenNthCalledWith(6, 'set_term_tags', {
+      input: { textId: 2, normalized: 'term', tagIds: [4] }
+    });
   });
 
   it('passes a text creation request to the native command', async () => {

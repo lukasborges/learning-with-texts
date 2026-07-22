@@ -179,7 +179,32 @@ export interface BackupSummary {
   readonly languages: number;
   readonly texts: number;
   readonly terms: number;
+  readonly tags: number;
   readonly expressions: number;
   readonly reviews: number;
   readonly warnings: readonly string[];
+}
+
+export interface Tag {
+  readonly id: number;
+  readonly name: string;
+  readonly comment: string;
+  readonly termCount: number;
+  readonly textCount: number;
+}
+
+export interface CreateTagInput {
+  readonly name: string;
+  readonly comment: string;
+}
+
+export interface SetTextTagsInput {
+  readonly textId: number;
+  readonly tagIds: readonly number[];
+}
+
+export interface SetTermTagsInput {
+  readonly textId: number;
+  readonly normalized: string;
+  readonly tagIds: readonly number[];
 }

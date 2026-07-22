@@ -3,6 +3,7 @@ import { createLibraryGateway } from './gateways/create_library_gateway';
 import type {
   LibraryText,
   ReadingText,
+  Tag,
   TermStatus,
   TextDetails
 } from './domain/library';
@@ -26,7 +27,44 @@ function createField(labelText: string, control: HTMLElement): HTMLLabelElement 
   return label;
 }
 
-function createImportPanel(message = '', editingText?: TextDetails): HTMLElement {
+function createTagSelector(
+  tags: readonly Tag[],
+  selectedIds: readonly number[]
+): { element: HTMLElement; selected: () => number[] } {
+  const element = document.createElement('fieldset');
+  element.className = 'tag-selector';
+  const legend = document.createElement('legend');
+  legend.textContent = 'Tags';
+  element.append(legend);
+  const selected = new Set(selectedIds);
+  const checkboxes = tags.map((tag) => {
+    const label = document.createElement('label');
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.value = String(tag.id);
+    checkbox.checked = selected.has(tag.id);
+    label.append(checkbox, document.createTextNode(tag.name));
+    element.append(label);
+    return checkbox;
+  });
+  if (tags.length === 0) {
+    const empty = document.createElement('small');
+    empty.textContent = 'Create a tag from the Tags screen first.';
+    element.append(empty);
+  }
+  return {
+    element,
+    selected: () =>
+      checkboxes.filter(({ checked }) => checked).map(({ value }) => Number(value))
+  };
+}
+
+function createImportPanel(
+  message = '',
+  editingText?: TextDetails,
+  tags: readonly Tag[] = [],
+  selectedTagIds: readonly number[] = []
+): HTMLElement {
   const panel = document.createElement('section');
   panel.className = 'import-panel';
 
@@ -72,6 +110,7 @@ function createImportPanel(message = '', editingText?: TextDetails): HTMLElement
   sourceUri.maxLength = 1_000;
   sourceUri.placeholder = 'https://example.com/source';
   sourceUri.value = editingText?.sourceUri ?? '';
+  const tagSelector = createTagSelector(tags, selectedTagIds);
 
   const contentHelp = document.createElement('small');
   contentHelp.textContent = 'Maximum: 65,000 bytes. Soft hyphens are removed when saved.';
@@ -138,6 +177,9 @@ function createImportPanel(message = '', editingText?: TextDetails): HTMLElement
 
     void request
       .then((saved) =>
+        gateway.setTextTags({ textId: saved.id, tagIds: tagSelector.selected() }).then(() => saved)
+      )
+      .then((saved) =>
         render(
           editingText
             ? `“${saved.title}” was updated.`
@@ -163,6 +205,7 @@ function createImportPanel(message = '', editingText?: TextDetails): HTMLElement
     createField('Load a .txt file', file),
     contentField,
     createField('Source URL (optional)', sourceUri),
+    tagSelector.element,
     actions,
     status
   );
@@ -203,7 +246,7 @@ function updateReadingProgress(
 }
 
 async function renderReading(textId: number): Promise<void> {
-  const reading = await gateway.getReadingText(textId);
+  const [reading, tags] = await Promise.all([gateway.getReadingText(textId), gateway.listTags()]);
   const shell = document.createElement('main');
   shell.className = 'shell reading-shell';
 
@@ -233,7 +276,7 @@ async function renderReading(textId: number): Promise<void> {
   guide.className = 'reading-guide';
   const guideText = document.createElement('p');
   guideText.textContent =
-    'Click a term to edit its status, translation, and romanization.';
+    'Click a term to edit its status, translation, romanization, and tags.';
   const legend = document.createElement('div');
   legend.className = 'reading-legend';
   for (const [label, className] of [
@@ -277,9 +320,11 @@ async function renderReading(textId: number): Promise<void> {
     loading.textContent = 'Loading term…';
     editor.append(loading);
 
-    void gateway
-      .getTermDetails(textId, normalized)
-      .then((term) => {
+    void Promise.all([
+      gateway.getTermDetails(textId, normalized),
+      gateway.listTermTagIds(textId, normalized)
+    ])
+      .then(([term, assignedTagIds]) => {
         if (request !== editorRequest) {
           return;
         }
@@ -320,6 +365,7 @@ async function renderReading(textId: number): Promise<void> {
         const romanization = document.createElement('input');
         romanization.maxLength = 100;
         romanization.value = term.romanization;
+        const tagSelector = createTagSelector(tags, assignedTagIds);
 
         const actions = document.createElement('div');
         actions.className = 'term-editor__actions';
@@ -357,6 +403,11 @@ async function renderReading(textId: number): Promise<void> {
               translation: translation.value,
               romanization: romanization.value
             })
+            .then((saved) =>
+              gateway
+                .setTermTags({ textId, normalized, tagIds: tagSelector.selected() })
+                .then(() => saved)
+            )
             .then((saved) => {
               applyStatus(saved.term.status, saved.knownTerms);
               feedback.textContent = 'Term saved.';
@@ -386,6 +437,11 @@ async function renderReading(textId: number): Promise<void> {
               translation.value = '';
               romanization.value = '';
               status.value = '1';
+              tagSelector.element
+                .querySelectorAll<HTMLInputElement>('input[type="checkbox"]')
+                .forEach((checkbox) => {
+                  checkbox.checked = false;
+                });
               feedback.textContent = 'Term reset to unknown.';
             })
             .catch((error: unknown) => {
@@ -402,6 +458,7 @@ async function renderReading(textId: number): Promise<void> {
           createField('Status', status),
           createField('Translation', translation),
           createField('Romanization (optional)', romanization),
+          tagSelector.element,
           actions,
           feedback
         );
@@ -818,6 +875,84 @@ async function renderLanguages(): Promise<void> {
   applicationRoot.replaceChildren(shell);
 }
 
+async function renderTags(message = ''): Promise<void> {
+  const tags = await gateway.listTags();
+  const shell = document.createElement('main');
+  shell.className = 'shell tag-shell';
+  const toolbar = document.createElement('div');
+  toolbar.className = 'reading-toolbar';
+  const back = document.createElement('button');
+  back.type = 'button';
+  back.textContent = '← Back to library';
+  back.addEventListener('click', () => void render());
+  toolbar.append(back);
+  const heading = document.createElement('h1');
+  heading.textContent = 'Tags';
+  const description = document.createElement('p');
+  description.className = 'language-introduction';
+  description.textContent = 'Create shared tags, then assign them while editing a text or term.';
+
+  const form = document.createElement('form');
+  form.className = 'tag-form';
+  const name = document.createElement('input');
+  name.required = true;
+  name.maxLength = 20;
+  const comment = document.createElement('input');
+  comment.maxLength = 200;
+  const submit = document.createElement('button');
+  submit.type = 'submit';
+  submit.textContent = 'Create tag';
+  const feedback = document.createElement('p');
+  feedback.className = 'form-status';
+  feedback.setAttribute('role', 'status');
+  feedback.textContent = message;
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    if (!form.reportValidity()) {
+      return;
+    }
+    submit.disabled = true;
+    feedback.textContent = 'Creating tag…';
+    void gateway
+      .createTag({ name: name.value, comment: comment.value })
+      .then((created) => renderTags(`Tag “${created.name}” created.`))
+      .catch((error: unknown) => {
+        submit.disabled = false;
+        feedback.className = 'form-status form-status--error';
+        feedback.textContent = error instanceof Error ? error.message : String(error);
+      });
+  });
+  form.append(
+    createField('Name', name),
+    createField('Comment (optional)', comment),
+    submit,
+    feedback
+  );
+
+  const list = document.createElement('section');
+  list.className = 'tag-grid';
+  if (tags.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'empty-state';
+    empty.textContent = 'No tags have been created yet.';
+    list.append(empty);
+  }
+  for (const tag of tags) {
+    const card = document.createElement('article');
+    card.className = 'tag-card';
+    const tagName = document.createElement('h2');
+    tagName.textContent = tag.name;
+    const tagComment = document.createElement('p');
+    tagComment.textContent = tag.comment || 'No comment';
+    const counts = document.createElement('p');
+    counts.textContent = `${tag.textCount} texts · ${tag.termCount} terms`;
+    card.append(tagName, tagComment, counts);
+    list.append(card);
+  }
+  shell.append(toolbar, heading, description, form, list);
+  applicationRoot.replaceChildren(shell);
+}
+
 async function renderDataManagement(): Promise<void> {
   const shell = document.createElement('main');
   shell.className = 'shell data-shell';
@@ -933,7 +1068,7 @@ async function renderDataManagement(): Promise<void> {
       .then((summary) => {
         const warningText =
           summary.warnings.length === 0 ? '' : ` Warnings: ${summary.warnings.join(' ')}`;
-        restoreStatus.textContent = `Restored ${summary.texts} texts, ${summary.terms} terms, and ${summary.reviews} reviews.${warningText}`;
+        restoreStatus.textContent = `Restored ${summary.texts} texts, ${summary.terms} terms, ${summary.tags} tags, and ${summary.reviews} reviews.${warningText}`;
         selectedPayload = '';
         file.value = '';
       })
@@ -1033,9 +1168,11 @@ function createTextCard(text: LibraryText): HTMLElement {
 }
 
 async function render(message = '', editingId?: number): Promise<void> {
-  const [texts, editingText] = await Promise.all([
+  const [texts, editingText, tags, selectedTagIds] = await Promise.all([
     gateway.listTexts(),
-    editingId === undefined ? Promise.resolve(undefined) : gateway.getText(editingId)
+    editingId === undefined ? Promise.resolve(undefined) : gateway.getText(editingId),
+    gateway.listTags(),
+    editingId === undefined ? Promise.resolve([]) : gateway.listTextTagIds(editingId)
   ]);
 
   const shell = document.createElement('main');
@@ -1103,9 +1240,18 @@ async function render(message = '', editingId?: number): Promise<void> {
   dataButton.addEventListener('click', () => {
     void renderDataManagement();
   });
+  const tagsButton = document.createElement('button');
+  tagsButton.type = 'button';
+  tagsButton.className = 'review-start';
+  tagsButton.textContent = 'Tags';
+  tagsButton.addEventListener('click', () => {
+    void renderTags().catch((error: unknown) => {
+      window.alert(error instanceof Error ? error.message : String(error));
+    });
+  });
   const libraryActions = document.createElement('div');
   libraryActions.className = 'library-actions';
-  libraryActions.append(dataButton, languagesButton, statisticsButton, reviewButton);
+  libraryActions.append(dataButton, tagsButton, languagesButton, statisticsButton, reviewButton);
   const libraryHeader = document.createElement('div');
   libraryHeader.className = 'library-header';
   libraryHeader.append(libraryHeading, libraryActions);
@@ -1125,7 +1271,7 @@ async function render(message = '', editingId?: number): Promise<void> {
   shell.append(
     header,
     notice,
-    createImportPanel(message, editingText),
+    createImportPanel(message, editingText, tags, selectedTagIds),
     libraryHeader,
     library
   );

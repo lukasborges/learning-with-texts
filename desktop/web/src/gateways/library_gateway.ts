@@ -1,5 +1,6 @@
 import type {
   BackupSummary,
+  CreateTagInput,
   CreateTextInput,
   CreateExpressionInput,
   CreatedExpression,
@@ -13,6 +14,9 @@ import type {
   SaveTermInput,
   SavedTerm,
   SetTermStatusInput,
+  SetTermTagsInput,
+  SetTextTagsInput,
+  Tag,
   TermDetails,
   TermProgress,
   TextDetails,
@@ -26,6 +30,12 @@ export interface LibraryGateway {
   updateLanguage(input: UpdateLanguageInput): Promise<LanguageSettings>;
   exportBackup(): Promise<string>;
   restoreBackup(payload: string): Promise<BackupSummary>;
+  listTags(): Promise<readonly Tag[]>;
+  createTag(input: CreateTagInput): Promise<Tag>;
+  listTextTagIds(textId: number): Promise<readonly number[]>;
+  setTextTags(input: SetTextTagsInput): Promise<readonly number[]>;
+  listTermTagIds(textId: number, normalized: string): Promise<readonly number[]>;
+  setTermTags(input: SetTermTagsInput): Promise<readonly number[]>;
   createText(input: CreateTextInput): Promise<LibraryText>;
   getText(id: number): Promise<TextDetails>;
   updateText(input: UpdateTextInput): Promise<LibraryText>;
