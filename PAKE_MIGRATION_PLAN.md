@@ -79,8 +79,8 @@ expanded so its remaining work is visible before the next commit.
 
 ### Current Slice — Release Integrity and Signing
 
-- [ ] Generate checksums for every release artifact.
-- [ ] Generate and retain a machine-readable software bill of materials (SBOM).
+- [x] Generate checksums for every release artifact (this commit).
+- [x] Generate and retain a machine-readable software bill of materials (SBOM) (this commit).
 - [ ] Define least-privilege secret contracts for Windows and macOS signing.
 - [ ] Sign Windows installers and notarize macOS DMGs in CI.
 - [ ] Configure cryptographically signed application updates.

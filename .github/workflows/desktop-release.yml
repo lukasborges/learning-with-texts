@@ -21,26 +21,40 @@ jobs:
             artifact: lwt-desktop-linux-x86_64
             rust_target: x86_64-unknown-linux-gnu
             build_args: --bundles deb,appimage
+            bundle_root: desktop/src-tauri/target/release/bundle
             paths: |
               desktop/src-tauri/target/release/bundle/deb/*.deb
               desktop/src-tauri/target/release/bundle/appimage/*.AppImage
+              desktop/src-tauri/target/release/bundle/lwt-desktop-linux-x86_64.cdx.json
+              desktop/src-tauri/target/release/bundle/SHA256SUMS
           - runner: windows-2025
             artifact: lwt-desktop-windows-x86_64
             rust_target: x86_64-pc-windows-msvc
             build_args: --bundles msi,nsis
+            bundle_root: desktop/src-tauri/target/release/bundle
             paths: |
               desktop/src-tauri/target/release/bundle/msi/*.msi
               desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
+              desktop/src-tauri/target/release/bundle/lwt-desktop-windows-x86_64.cdx.json
+              desktop/src-tauri/target/release/bundle/SHA256SUMS
           - runner: macos-15
             artifact: lwt-desktop-macos-aarch64
             rust_target: aarch64-apple-darwin
             build_args: --target aarch64-apple-darwin --bundles dmg
-            paths: desktop/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+            bundle_root: desktop/src-tauri/target/aarch64-apple-darwin/release/bundle
+            paths: |
+              desktop/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+              desktop/src-tauri/target/aarch64-apple-darwin/release/bundle/lwt-desktop-macos-aarch64.cdx.json
+              desktop/src-tauri/target/aarch64-apple-darwin/release/bundle/SHA256SUMS
           - runner: macos-15-intel
             artifact: lwt-desktop-macos-x86_64
             rust_target: x86_64-apple-darwin
             build_args: --target x86_64-apple-darwin --bundles dmg
-            paths: desktop/src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
+            bundle_root: desktop/src-tauri/target/x86_64-apple-darwin/release/bundle
+            paths: |
+              desktop/src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
+              desktop/src-tauri/target/x86_64-apple-darwin/release/bundle/lwt-desktop-macos-x86_64.cdx.json
+              desktop/src-tauri/target/x86_64-apple-darwin/release/bundle/SHA256SUMS
 
     steps:
       - uses: actions/checkout@v6
@@ -78,6 +92,21 @@ jobs:
         env:
           NO_STRIP: ${{ runner.os == 'Linux' && '1' || '' }}
         run: npx tauri build ${{ matrix.build_args }}
+
+      - name: Generate CycloneDX SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: ${{ matrix.bundle_root }}
+          format: cyclonedx-json
+          output-file: ${{ matrix.bundle_root }}/${{ matrix.artifact }}.cdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Generate SHA-256 manifest
+        run: >-
+          node desktop/scripts/release-integrity.mjs
+          --root "${{ matrix.bundle_root }}"
+          --output "${{ matrix.bundle_root }}/SHA256SUMS"
 
       - uses: actions/upload-artifact@v7
         with:

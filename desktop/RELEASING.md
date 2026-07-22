@@ -11,10 +11,12 @@ their target operating systems. It runs manually or for tags matching `v*`.
 | `lwt-desktop-macos-x86_64` | macOS 15 Intel | DMG |
 
 Every matrix job installs from `package-lock.json`, runs TypeScript/Rust checks
-and tests, then builds with the repository-pinned Tauri CLI. Artifacts use stable
-names and are retained for 30 days. Linux AppImages bundle the WebKit media
-framework required for local audio playback. The separate Linux E2E workflow
-continues to test first launch and core workflows through the native WebView.
+and tests, then builds with the repository-pinned Tauri CLI. Each retained
+artifact set includes a CycloneDX JSON SBOM and `SHA256SUMS`; the latter covers
+every installer and the SBOM. Artifacts use stable names and are retained for 30
+days. Linux AppImages bundle the WebKit media framework required for local audio
+playback. The separate Linux E2E workflow continues to test first launch and
+core workflows through the native WebView.
 
 ## Local Build
 
@@ -32,8 +34,23 @@ npx tauri build --bundles dmg
 ```
 
 These artifacts are intentionally unsigned. Do not present them as trusted
-production releases until the signing, notarization, checksum, SBOM, and updater
-stage is complete.
+production releases until the signing, notarization, and updater stage is
+complete.
+
+## Verify an Artifact
+
+Keep the downloaded files and `SHA256SUMS` in the same directory structure as
+the workflow artifact. From that artifact's root directory, run:
+
+```bash
+sha256sum --check SHA256SUMS
+```
+
+On Windows, compare an individual entry with
+`Get-FileHash -Algorithm SHA256 <installer>`. A missing file, unexpected file,
+or hash mismatch must stop installation and release promotion. The
+`*.cdx.json` file is the machine-readable dependency and package inventory for
+security review and incident response.
 
 `NO_STRIP=1` avoids the old `linuxdeploy` strip binary rejecting modern RELR
 sections while still allowing Rust's release profile to optimize the app binary.
