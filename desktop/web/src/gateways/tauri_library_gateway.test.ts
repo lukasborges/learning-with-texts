@@ -125,4 +125,26 @@ describe('TauriLibraryGateway', () => {
     });
     expect(invoke).toHaveBeenNthCalledWith(2, 'save_term', { input });
   });
+
+  it('creates a compound expression from a reading range', async () => {
+    const input = { textId: 8, sentenceId: 2, startPosition: 1, endPosition: 5 };
+    const created = {
+      term: {
+        normalized: 'a short story',
+        displayText: 'A short story',
+        status: 1,
+        translation: '',
+        romanization: '',
+        wordCount: 3
+      },
+      sentenceId: 2,
+      startPosition: 1,
+      endPosition: 5
+    };
+    const invoke = vi.fn().mockResolvedValue(created);
+    const gateway = new TauriLibraryGateway(invoke);
+
+    await expect(gateway.createExpression(input)).resolves.toEqual(created);
+    expect(invoke).toHaveBeenCalledWith('create_expression', { input });
+  });
 });

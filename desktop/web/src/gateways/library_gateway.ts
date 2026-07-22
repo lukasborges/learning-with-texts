@@ -1,5 +1,7 @@
 import type {
   CreateTextInput,
+  CreateExpressionInput,
+  CreatedExpression,
   LibraryText,
   ReadingText,
   SaveTermInput,
@@ -21,4 +23,5 @@ export interface LibraryGateway {
   setTermStatus(input: SetTermStatusInput): Promise<TermProgress>;
   getTermDetails(textId: number, normalized: string): Promise<TermDetails>;
   saveTerm(input: SaveTermInput): Promise<SavedTerm>;
+  createExpression(input: CreateExpressionInput): Promise<CreatedExpression>;
 }

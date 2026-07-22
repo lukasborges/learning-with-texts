@@ -91,4 +91,24 @@ describe('MockLibraryGateway', () => {
       romanization: 'dog'
     });
   });
+
+  it('creates and reopens a compound expression', async () => {
+    const gateway = new MockLibraryGateway();
+    const reading = await gateway.getReadingText(1);
+    const sentence = reading.sentences[0];
+    if (!sentence) {
+      throw new Error('fixture sentence is missing');
+    }
+
+    const created = await gateway.createExpression({
+      textId: 1,
+      sentenceId: sentence.id,
+      startPosition: 1,
+      endPosition: 3
+    });
+    const reopened = await gateway.getReadingText(1);
+
+    expect(created.term).toMatchObject({ normalized: 'a man', wordCount: 2 });
+    expect(reopened.expressions).toHaveLength(1);
+  });
 });

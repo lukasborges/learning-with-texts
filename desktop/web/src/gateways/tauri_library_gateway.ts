@@ -1,5 +1,7 @@
 import type {
   CreateTextInput,
+  CreateExpressionInput,
+  CreatedExpression,
   LibraryText,
   ReadingText,
   SaveTermInput,
@@ -54,5 +56,9 @@ export class TauriLibraryGateway implements LibraryGateway {
 
   saveTerm(input: SaveTermInput): Promise<SavedTerm> {
     return this.invoke<SavedTerm>('save_term', { input });
+  }
+
+  createExpression(input: CreateExpressionInput): Promise<CreatedExpression> {
+    return this.invoke<CreatedExpression>('create_expression', { input });
   }
 }

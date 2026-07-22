@@ -1,5 +1,7 @@
 import type {
   CreateTextInput,
+  CreateExpressionInput,
+  CreatedExpression,
   LibraryText,
   ReadingItem,
   ReadingText,
@@ -63,10 +65,11 @@ function createReadingItems(
   const parts = content
     .split(/([\p{L}\p{N}_]+(?:['’‐‑-][\p{L}\p{N}_]+)*)/gu)
     .filter(Boolean);
-  return parts.map((surface) => {
+  return parts.map((surface, index) => {
     const isWord = /^[\p{L}\p{N}_]+(?:['’‐‑-][\p{L}\p{N}_]+)*$/u.test(surface);
     const normalized = isWord ? surface.toLocaleLowerCase() : '';
     return {
+      position: index + 1,
       surface,
       normalized,
       isWord,
@@ -78,6 +81,7 @@ function createReadingItems(
 export class MockLibraryGateway implements LibraryGateway {
   private readonly texts = sampleTexts.map((text) => ({ ...text }));
   private readonly terms = new Map<string, TermDetails>();
+  private readonly expressions: Array<CreatedExpression & { textId: number }> = [];
 
   private termKey(language: string, normalized: string): string {
     return `${language.toLocaleLowerCase()}\u0000${normalized}`;
@@ -177,7 +181,15 @@ export class MockLibraryGateway implements LibraryGateway {
         items: createReadingItems(sentence, (normalized) =>
           this.terms.get(this.termKey(text.language, normalized))?.status ?? 0
         )
-      }))
+      })),
+      expressions: this.expressions
+        .filter((expression) => expression.textId === id)
+        .map((expression) => ({
+          ...expression.term,
+          sentenceId: expression.sentenceId,
+          startPosition: expression.startPosition,
+          endPosition: expression.endPosition
+        }))
     };
   }
 
@@ -203,7 +215,8 @@ export class MockLibraryGateway implements LibraryGateway {
         displayText: existing?.displayText ?? surface ?? input.normalized,
         status: input.status,
         translation: existing?.translation ?? '',
-        romanization: existing?.romanization ?? ''
+        romanization: existing?.romanization ?? '',
+        wordCount: existing?.wordCount ?? 1
       });
     }
     const progress = this.withProgress(text);
@@ -223,17 +236,22 @@ export class MockLibraryGateway implements LibraryGateway {
     const surface = createReadingItems(text.content, () => 0).find(
       (item) => item.normalized === normalized
     )?.surface;
-    if (!surface) {
+    const existing = this.terms.get(this.termKey(text.language, normalized));
+    const hasExpression = this.expressions.some(
+      (expression) => expression.textId === textId && expression.term.normalized === normalized
+    );
+    if (!surface && !hasExpression) {
       throw new Error('Term was not found in this text');
     }
 
     return (
-      this.terms.get(this.termKey(text.language, normalized)) ?? {
+      existing ?? {
         normalized,
-        displayText: surface,
+        displayText: surface ?? normalized,
         status: 0,
         translation: '',
-        romanization: ''
+        romanization: '',
+        wordCount: 1
       }
     );
   }
@@ -257,5 +275,54 @@ export class MockLibraryGateway implements LibraryGateway {
       knownTerms: progress.knownTerms,
       totalTerms: progress.totalTerms
     };
+  }
+
+  async createExpression(input: CreateExpressionInput): Promise<CreatedExpression> {
+    const reading = await this.getReadingText(input.textId);
+    const sentence = reading.sentences.find(({ id }) => id === input.sentenceId);
+    if (!sentence) {
+      throw new Error('Text was not found');
+    }
+    const startPosition = Math.min(input.startPosition, input.endPosition);
+    const endPosition = Math.max(input.startPosition, input.endPosition);
+    const items = sentence.items.filter(
+      ({ position }) => position >= startPosition && position <= endPosition
+    );
+    if (!items[0]?.isWord || !items.at(-1)?.isWord) {
+      throw new Error('Select the first and last terms of the expression');
+    }
+    const words = items.filter(({ isWord }) => isWord);
+    if (words.length < 2 || words.length > 9) {
+      throw new Error('An expression must contain between 2 and 9 terms');
+    }
+    const normalized = words.map((item) => item.normalized).join(' ');
+    const text = this.texts.find(({ id }) => id === input.textId);
+    if (!text) {
+      throw new Error('Text was not found');
+    }
+    const key = this.termKey(text.language, normalized);
+    const term: TermDetails =
+      this.terms.get(key) ?? {
+        normalized,
+        displayText: items.map(({ surface }) => surface).join(''),
+        status: 1,
+        translation: '',
+        romanization: '',
+        wordCount: words.length
+      };
+    this.terms.set(key, term);
+    const created = { term, sentenceId: sentence.id, startPosition, endPosition };
+    if (
+      !this.expressions.some(
+        (expression) =>
+          expression.textId === input.textId &&
+          expression.sentenceId === sentence.id &&
+          expression.startPosition === startPosition &&
+          expression.endPosition === endPosition
+      )
+    ) {
+      this.expressions.push({ ...created, textId: input.textId });
+    }
+    return created;
   }
 }

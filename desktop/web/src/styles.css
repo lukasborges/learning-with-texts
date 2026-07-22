@@ -285,6 +285,31 @@ textarea {
   gap: 0.5rem;
 }
 
+.expression-controls,
+.expression-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.9rem;
+}
+
+.expression-controls button,
+.expression-list button {
+  padding: 0.45rem 0.7rem;
+  border: 1px solid #8ca1b2;
+  border-radius: 7px;
+  background: #f5f9fc;
+  color: #274f68;
+  cursor: pointer;
+}
+
+.expression-list button {
+  border-color: #8068a8;
+  background: #eee7fa;
+  color: #533b78;
+}
+
 .reading-legend__item {
   padding: 0.25rem 0.55rem;
   border-radius: 6px;
@@ -404,6 +429,15 @@ textarea {
 .reading-term:disabled {
   cursor: wait;
   opacity: 0.65;
+}
+
+.reading-term--selected {
+  outline: 3px solid #a56000;
+  outline-offset: 2px;
+}
+
+.reading-term--expression {
+  box-shadow: inset 0 -3px #7952a8;
 }
 
 .reading-term--unknown {
@@ -529,6 +563,19 @@ textarea {
   .reading-term--ignored {
     background: #3a4650;
     color: #c3cbd2;
+  }
+
+  .expression-controls button,
+  .expression-list button {
+    border-color: #6f8293;
+    background: #263846;
+    color: #d6e7f2;
+  }
+
+  .expression-list button {
+    border-color: #876eb3;
+    background: #403255;
+    color: #eee1ff;
   }
 
   .text-card {

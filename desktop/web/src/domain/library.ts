@@ -26,6 +26,7 @@ export interface TextDetails extends LibraryText {
 export type TermStatus = 0 | 1 | 2 | 3 | 4 | 5 | 98 | 99;
 
 export interface ReadingItem {
+  readonly position: number;
   readonly surface: string;
   readonly normalized: string;
   readonly isWord: boolean;
@@ -45,6 +46,13 @@ export interface ReadingText {
   readonly knownTerms: number;
   readonly totalTerms: number;
   readonly sentences: readonly ReadingSentence[];
+  readonly expressions: readonly ReadingExpression[];
+}
+
+export interface ReadingExpression extends TermDetails {
+  readonly sentenceId: number;
+  readonly startPosition: number;
+  readonly endPosition: number;
 }
 
 export interface SetTermStatusInput {
@@ -66,6 +74,7 @@ export interface TermDetails {
   readonly status: TermStatus;
   readonly translation: string;
   readonly romanization: string;
+  readonly wordCount: number;
 }
 
 export interface SaveTermInput {
@@ -80,4 +89,18 @@ export interface SavedTerm {
   readonly term: TermDetails;
   readonly knownTerms: number;
   readonly totalTerms: number;
+}
+
+export interface CreateExpressionInput {
+  readonly textId: number;
+  readonly sentenceId: number;
+  readonly startPosition: number;
+  readonly endPosition: number;
+}
+
+export interface CreatedExpression {
+  readonly term: TermDetails;
+  readonly sentenceId: number;
+  readonly startPosition: number;
+  readonly endPosition: number;
 }

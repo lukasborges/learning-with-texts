@@ -249,7 +249,20 @@ async function renderReading(textId: number): Promise<void> {
   }
   guide.append(guideText, legend);
 
+  const expressionControls = document.createElement('div');
+  expressionControls.className = 'expression-controls';
+  const expressionToggle = document.createElement('button');
+  expressionToggle.type = 'button';
+  expressionToggle.textContent = 'Create expression';
+  const expressionStatus = document.createElement('span');
+  expressionStatus.textContent = 'Select expressions containing 2–9 terms.';
+  expressionControls.append(expressionToggle, expressionStatus);
+  const expressionList = document.createElement('div');
+  expressionList.className = 'expression-list';
+  guide.append(expressionControls, expressionList);
+
   const termButtons = new Map<string, HTMLButtonElement[]>();
+  const positionButtons = new Map<string, HTMLButtonElement>();
   const editor = document.createElement('section');
   editor.className = 'term-editor';
   const editorPlaceholder = document.createElement('p');
@@ -323,8 +336,10 @@ async function renderReading(textId: number): Promise<void> {
         actions.append(save, reset);
 
         const applyStatus = (savedStatus: TermStatus, knownTerms: number): void => {
-          const buttons = termButtons.get(normalized) ?? [];
-          buttons.forEach((button) => updateTermButton(button, savedStatus));
+          if (term.wordCount === 1) {
+            const buttons = termButtons.get(normalized) ?? [];
+            buttons.forEach((button) => updateTermButton(button, savedStatus));
+          }
           updateReadingProgress(reading, knownTerms, meter, progressLabel);
         };
 
@@ -365,6 +380,9 @@ async function renderReading(textId: number): Promise<void> {
             .setTermStatus({ textId, normalized, status: 0 })
             .then((progress) => {
               applyStatus(0, progress.knownTerms);
+              if (term.wordCount > 1) {
+                return renderReading(textId);
+              }
               translation.value = '';
               romanization.value = '';
               status.value = '1';
@@ -399,6 +417,32 @@ async function renderReading(textId: number): Promise<void> {
       });
   };
 
+  const addExpressionChip = (normalized: string, displayText: string): void => {
+    if (expressionList.querySelector(`[data-normalized="${CSS.escape(normalized)}"]`)) {
+      return;
+    }
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.dataset.normalized = normalized;
+    chip.textContent = displayText;
+    chip.addEventListener('click', () => openTermEditor(normalized));
+    expressionList.append(chip);
+  };
+
+  let expressionMode = false;
+  let expressionStart:
+    | { sentenceId: number; position: number; button: HTMLButtonElement }
+    | undefined;
+  expressionToggle.addEventListener('click', () => {
+    expressionMode = !expressionMode;
+    expressionStart?.button.classList.remove('reading-term--selected');
+    expressionStart = undefined;
+    expressionToggle.textContent = expressionMode ? 'Cancel expression' : 'Create expression';
+    expressionStatus.textContent = expressionMode
+      ? 'Select the first term, then the last term in the same sentence.'
+      : 'Select expressions containing 2–9 terms.';
+  });
+
   const article = document.createElement('article');
   article.className = 'reading-content';
   for (const sentence of reading.sentences) {
@@ -417,12 +461,65 @@ async function renderReading(textId: number): Promise<void> {
       const matchingButtons = termButtons.get(item.normalized) ?? [];
       matchingButtons.push(button);
       termButtons.set(item.normalized, matchingButtons);
+      positionButtons.set(`${sentence.id}:${item.position}`, button);
       button.addEventListener('click', () => {
+        if (expressionMode) {
+          if (!expressionStart) {
+            expressionStart = { sentenceId: sentence.id, position: item.position, button };
+            button.classList.add('reading-term--selected');
+            expressionStatus.textContent = 'Now select the last term of the expression.';
+            return;
+          }
+          if (expressionStart.sentenceId !== sentence.id) {
+            expressionStatus.textContent = 'Both terms must be in the same sentence.';
+            return;
+          }
+          const start = expressionStart;
+          expressionToggle.disabled = true;
+          void gateway
+            .createExpression({
+              textId,
+              sentenceId: sentence.id,
+              startPosition: start.position,
+              endPosition: item.position
+            })
+            .then((created) => {
+              for (let position = created.startPosition; position <= created.endPosition; position += 1) {
+                positionButtons
+                  .get(`${created.sentenceId}:${position}`)
+                  ?.classList.add('reading-term--expression');
+              }
+              addExpressionChip(created.term.normalized, created.term.displayText);
+              openTermEditor(created.term.normalized);
+              expressionStatus.textContent = `Expression “${created.term.displayText}” created.`;
+            })
+            .catch((error: unknown) => {
+              expressionStatus.textContent =
+                error instanceof Error ? error.message : String(error);
+            })
+            .finally(() => {
+              start.button.classList.remove('reading-term--selected');
+              expressionStart = undefined;
+              expressionMode = false;
+              expressionToggle.disabled = false;
+              expressionToggle.textContent = 'Create expression';
+            });
+          return;
+        }
         openTermEditor(item.normalized);
       });
       paragraph.append(button);
     }
     article.append(paragraph);
+  }
+
+  for (const expression of reading.expressions) {
+    addExpressionChip(expression.normalized, expression.displayText);
+    for (let position = expression.startPosition; position <= expression.endPosition; position += 1) {
+      positionButtons
+        .get(`${expression.sentenceId}:${position}`)
+        ?.classList.add('reading-term--expression');
+    }
   }
 
   shell.append(toolbar, header, guide, editor, article);

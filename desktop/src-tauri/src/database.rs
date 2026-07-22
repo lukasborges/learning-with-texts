@@ -8,12 +8,14 @@ const INITIAL_MIGRATION: &str = include_str!("../migrations/0001_initial.sql");
 const TEXT_PARSING_MIGRATION: &str = include_str!("../migrations/0002_text_parsing.sql");
 const TERMS_MIGRATION: &str = include_str!("../migrations/0003_terms.sql");
 const TERM_DETAILS_MIGRATION: &str = include_str!("../migrations/0004_term_details.sql");
-const LATEST_SCHEMA_VERSION: i64 = 4;
-const MIGRATIONS: [(i64, &str); 4] = [
+const EXPRESSIONS_MIGRATION: &str = include_str!("../migrations/0005_expressions.sql");
+const LATEST_SCHEMA_VERSION: i64 = 5;
+const MIGRATIONS: [(i64, &str); 5] = [
     (1, INITIAL_MIGRATION),
     (2, TEXT_PARSING_MIGRATION),
     (3, TERMS_MIGRATION),
-    (LATEST_SCHEMA_VERSION, TERM_DETAILS_MIGRATION),
+    (4, TERM_DETAILS_MIGRATION),
+    (LATEST_SCHEMA_VERSION, EXPRESSIONS_MIGRATION),
 ];
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -62,6 +64,7 @@ pub struct UpdateTextInput {
 #[derive(Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadingItem {
+    pub position: i64,
     pub surface: String,
     pub normalized: String,
     pub is_word: bool,
@@ -85,6 +88,21 @@ pub struct ReadingText {
     pub known_terms: i64,
     pub total_terms: i64,
     pub sentences: Vec<ReadingSentence>,
+    pub expressions: Vec<ReadingExpression>,
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadingExpression {
+    pub normalized: String,
+    pub display_text: String,
+    pub status: i64,
+    pub translation: String,
+    pub romanization: String,
+    pub word_count: i64,
+    pub sentence_id: i64,
+    pub start_position: i64,
+    pub end_position: i64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -112,6 +130,7 @@ pub struct TermDetails {
     pub status: i64,
     pub translation: String,
     pub romanization: String,
+    pub word_count: i64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -130,6 +149,24 @@ pub struct SavedTerm {
     pub term: TermDetails,
     pub known_terms: i64,
     pub total_terms: i64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateExpressionInput {
+    pub text_id: i64,
+    pub sentence_id: i64,
+    pub start_position: i64,
+    pub end_position: i64,
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreatedExpression {
+    pub term: TermDetails,
+    pub sentence_id: i64,
+    pub start_position: i64,
+    pub end_position: i64,
 }
 
 struct ValidatedTextInput {
@@ -370,8 +407,8 @@ impl Database {
         transaction: &Transaction<'_>,
         text_id: i64,
         normalized: &str,
-    ) -> Result<(i64, String), String> {
-        transaction
+    ) -> Result<(i64, String, i64), String> {
+        let word = transaction
             .query_row(
                 "SELECT text_items.language_id, text_items.surface
                  FROM text_items
@@ -381,10 +418,27 @@ impl Database {
                  ORDER BY text_items.id
                  LIMIT 1",
                 params![text_id, normalized],
-                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?, 1)),
             )
             .optional()
-            .map_err(|error| format!("Unable to load the parsed term: {error}"))?
+            .map_err(|error| format!("Unable to load the parsed term: {error}"))?;
+        if let Some(word) = word {
+            return Ok(word);
+        }
+
+        transaction
+            .query_row(
+                "SELECT terms.language_id, terms.display_text, terms.word_count
+                 FROM expression_occurrences
+                 INNER JOIN terms ON terms.id = expression_occurrences.term_id
+                 WHERE expression_occurrences.text_id = ?1 AND terms.normalized = ?2
+                 ORDER BY expression_occurrences.id
+                 LIMIT 1",
+                params![text_id, normalized],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .optional()
+            .map_err(|error| format!("Unable to load the expression: {error}"))?
             .ok_or_else(|| "Term was not found in this text".to_string())
     }
 
@@ -631,7 +685,8 @@ impl Database {
             let items = {
                 let mut statement = transaction
                     .prepare(
-                        "SELECT text_items.surface,
+                        "SELECT text_items.position,
+                                text_items.surface,
                                 text_items.normalized,
                                 text_items.is_word,
                                 COALESCE(terms.status, 0)
@@ -646,10 +701,11 @@ impl Database {
                 let rows = statement
                     .query_map([sentence_id], |row| {
                         Ok(ReadingItem {
-                            surface: row.get(0)?,
-                            normalized: row.get(1)?,
-                            is_word: row.get(2)?,
-                            status: row.get(3)?,
+                            position: row.get(0)?,
+                            surface: row.get(1)?,
+                            normalized: row.get(2)?,
+                            is_word: row.get(3)?,
+                            status: row.get(4)?,
                         })
                     })
                     .map_err(|error| format!("Unable to load the reading items: {error}"))?;
@@ -663,6 +719,44 @@ impl Database {
             });
         }
 
+        let expressions = {
+            let mut statement = transaction
+                .prepare(
+                    "SELECT terms.normalized,
+                            terms.display_text,
+                            terms.status,
+                            terms.translation,
+                            COALESCE(terms.romanization, ''),
+                            terms.word_count,
+                            expression_occurrences.sentence_id,
+                            expression_occurrences.start_position,
+                            expression_occurrences.end_position
+                     FROM expression_occurrences
+                     INNER JOIN terms ON terms.id = expression_occurrences.term_id
+                     WHERE expression_occurrences.text_id = ?1
+                     ORDER BY expression_occurrences.sentence_id,
+                              expression_occurrences.start_position",
+                )
+                .map_err(|error| format!("Unable to prepare expressions: {error}"))?;
+            let rows = statement
+                .query_map([id], |row| {
+                    Ok(ReadingExpression {
+                        normalized: row.get(0)?,
+                        display_text: row.get(1)?,
+                        status: row.get(2)?,
+                        translation: row.get(3)?,
+                        romanization: row.get(4)?,
+                        word_count: row.get(5)?,
+                        sentence_id: row.get(6)?,
+                        start_position: row.get(7)?,
+                        end_position: row.get(8)?,
+                    })
+                })
+                .map_err(|error| format!("Unable to load expressions: {error}"))?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|error| format!("Unable to decode expressions: {error}"))?
+        };
+
         let (known_terms, total_terms) = Self::text_progress(&transaction, id)?;
         transaction
             .commit()
@@ -675,6 +769,7 @@ impl Database {
             known_terms,
             total_terms,
             sentences,
+            expressions,
         })
     }
 
@@ -709,13 +804,13 @@ impl Database {
         } else {
             transaction
                 .execute(
-                    "INSERT INTO terms (language_id, display_text, normalized, status)
-                     VALUES (?1, ?2, ?3, ?4)
+                    "INSERT INTO terms (language_id, display_text, normalized, status, word_count)
+                     VALUES (?1, ?2, ?3, ?4, ?5)
                      ON CONFLICT(language_id, normalized) DO UPDATE SET
                         display_text = excluded.display_text,
                         status = excluded.status,
                         updated_at = CURRENT_TIMESTAMP",
-                    params![term.0, term.1, normalized, input.status],
+                    params![term.0, term.1, normalized, input.status, term.2],
                 )
                 .map_err(|error| format!("Unable to save the term status: {error}"))?;
         }
@@ -756,7 +851,7 @@ impl Database {
         let occurrence = Self::find_text_term(&transaction, text_id, &normalized)?;
         let stored = transaction
             .query_row(
-                "SELECT status, translation, COALESCE(romanization, '')
+                "SELECT status, translation, COALESCE(romanization, ''), word_count
                  FROM terms
                  WHERE language_id = ?1 AND normalized = ?2",
                 params![occurrence.0, normalized],
@@ -765,6 +860,7 @@ impl Database {
                         row.get::<_, i64>(0)?,
                         row.get::<_, String>(1)?,
                         row.get::<_, String>(2)?,
+                        row.get::<_, i64>(3)?,
                     ))
                 },
             )
@@ -774,14 +870,15 @@ impl Database {
             .commit()
             .map_err(|error| format!("Unable to finish the term lookup: {error}"))?;
 
-        let (status, translation, romanization) =
-            stored.unwrap_or_else(|| (0, String::new(), String::new()));
+        let (status, translation, romanization, word_count) =
+            stored.unwrap_or_else(|| (0, String::new(), String::new(), occurrence.2));
         Ok(TermDetails {
             normalized,
             display_text: occurrence.1,
             status,
             translation,
             romanization,
+            word_count,
         })
     }
 
@@ -816,13 +913,14 @@ impl Database {
         transaction
             .execute(
                 "INSERT INTO terms
-                    (language_id, display_text, normalized, status, translation, romanization)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                    (language_id, display_text, normalized, status, translation, romanization, word_count)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
                  ON CONFLICT(language_id, normalized) DO UPDATE SET
                     display_text = excluded.display_text,
                     status = excluded.status,
                     translation = excluded.translation,
                     romanization = excluded.romanization,
+                    word_count = excluded.word_count,
                     updated_at = CURRENT_TIMESTAMP",
                 params![
                     occurrence.0,
@@ -830,7 +928,8 @@ impl Database {
                     normalized,
                     input.status,
                     translation,
-                    romanization
+                    romanization,
+                    occurrence.2
                 ],
             )
             .map_err(|error| format!("Unable to save the term details: {error}"))?;
@@ -846,9 +945,146 @@ impl Database {
                 status: input.status,
                 translation,
                 romanization,
+                word_count: occurrence.2,
             },
             known_terms,
             total_terms,
+        })
+    }
+
+    pub fn create_expression(
+        &self,
+        input: CreateExpressionInput,
+    ) -> Result<CreatedExpression, String> {
+        if input.text_id <= 0 || input.sentence_id <= 0 {
+            return Err("Text was not found".to_string());
+        }
+        let start_position = input.start_position.min(input.end_position);
+        let end_position = input.start_position.max(input.end_position);
+
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| "The desktop database lock is unavailable".to_string())?;
+        let transaction = connection
+            .transaction()
+            .map_err(|error| format!("Unable to start expression creation: {error}"))?;
+        let items = {
+            let mut statement = transaction
+                .prepare(
+                    "SELECT text_items.language_id,
+                            text_items.surface,
+                            text_items.normalized,
+                            text_items.is_word
+                     FROM text_items
+                     WHERE text_items.text_id = ?1
+                       AND text_items.sentence_id = ?2
+                       AND text_items.position BETWEEN ?3 AND ?4
+                     ORDER BY text_items.position",
+                )
+                .map_err(|error| format!("Unable to prepare the expression items: {error}"))?;
+            let rows = statement
+                .query_map(
+                    params![
+                        input.text_id,
+                        input.sentence_id,
+                        start_position,
+                        end_position
+                    ],
+                    |row| {
+                        Ok((
+                            row.get::<_, i64>(0)?,
+                            row.get::<_, String>(1)?,
+                            row.get::<_, String>(2)?,
+                            row.get::<_, bool>(3)?,
+                        ))
+                    },
+                )
+                .map_err(|error| format!("Unable to load the expression items: {error}"))?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|error| format!("Unable to decode the expression items: {error}"))?
+        };
+        if items.is_empty()
+            || !items.first().is_some_and(|item| item.3)
+            || !items.last().is_some_and(|item| item.3)
+        {
+            return Err("Select the first and last terms of the expression".to_string());
+        }
+
+        let words: Vec<&str> = items
+            .iter()
+            .filter(|item| item.3)
+            .map(|item| item.2.as_str())
+            .collect();
+        if !(2..=9).contains(&words.len()) {
+            return Err("An expression must contain between 2 and 9 terms".to_string());
+        }
+        let normalized = words.join(" ");
+        let display_text = items.iter().map(|item| item.1.as_str()).collect::<String>();
+        if normalized.chars().count() > 250 || display_text.chars().count() > 250 {
+            return Err("Expression must not exceed 250 characters".to_string());
+        }
+        let language_id = items[0].0;
+        let word_count = words.len() as i64;
+
+        transaction
+            .execute(
+                "INSERT INTO terms
+                    (language_id, display_text, normalized, status, word_count)
+                 VALUES (?1, ?2, ?3, 1, ?4)
+                 ON CONFLICT(language_id, normalized) DO UPDATE SET
+                    display_text = excluded.display_text,
+                    word_count = excluded.word_count,
+                    updated_at = CURRENT_TIMESTAMP",
+                params![language_id, display_text, normalized, word_count],
+            )
+            .map_err(|error| format!("Unable to save the expression: {error}"))?;
+        let stored = transaction
+            .query_row(
+                "SELECT id, status, translation, COALESCE(romanization, '')
+                 FROM terms WHERE language_id = ?1 AND normalized = ?2",
+                params![language_id, normalized],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, i64>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                    ))
+                },
+            )
+            .map_err(|error| format!("Unable to load the saved expression: {error}"))?;
+        transaction
+            .execute(
+                "INSERT INTO expression_occurrences
+                    (term_id, text_id, sentence_id, start_position, end_position)
+                 VALUES (?1, ?2, ?3, ?4, ?5)
+                 ON CONFLICT(term_id, sentence_id, start_position, end_position) DO NOTHING",
+                params![
+                    stored.0,
+                    input.text_id,
+                    input.sentence_id,
+                    start_position,
+                    end_position
+                ],
+            )
+            .map_err(|error| format!("Unable to link the expression to the text: {error}"))?;
+        transaction
+            .commit()
+            .map_err(|error| format!("Unable to commit the expression: {error}"))?;
+
+        Ok(CreatedExpression {
+            term: TermDetails {
+                normalized,
+                display_text,
+                status: stored.1,
+                translation: stored.2,
+                romanization: stored.3,
+                word_count,
+            },
+            sentence_id: input.sentence_id,
+            start_position,
+            end_position,
         })
     }
 
@@ -1307,5 +1543,49 @@ mod tests {
             )
             .expect("upgraded term should load");
         assert_eq!(stored, (5, String::new(), None));
+    }
+
+    #[test]
+    fn creates_and_reopens_a_compound_expression() {
+        let database = Database::in_memory().expect("database should migrate");
+        let text = database
+            .create_text(text_input(
+                "English",
+                "Expressions",
+                "One small fish swims.",
+            ))
+            .expect("text should be created");
+        let reading = database
+            .get_reading_text(text.id)
+            .expect("reading should load");
+        let sentence_id = reading.sentences[0].id;
+
+        let created = database
+            .create_expression(CreateExpressionInput {
+                text_id: text.id,
+                sentence_id,
+                start_position: 1,
+                end_position: 5,
+            })
+            .expect("expression should be created");
+        let saved = database
+            .save_term(SaveTermInput {
+                text_id: text.id,
+                normalized: created.term.normalized.clone(),
+                status: 5,
+                translation: "um peixe pequeno".to_string(),
+                romanization: String::new(),
+            })
+            .expect("expression details should save");
+        let reopened = database
+            .get_reading_text(text.id)
+            .expect("reading should reopen");
+
+        assert_eq!(created.term.normalized, "one small fish");
+        assert_eq!(created.term.word_count, 3);
+        assert_eq!(saved.term.translation, "um peixe pequeno");
+        assert_eq!(reopened.expressions.len(), 1);
+        assert_eq!(reopened.expressions[0].start_position, 1);
+        assert_eq!(reopened.expressions[0].end_position, 5);
     }
 }
