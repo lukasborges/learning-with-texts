@@ -169,6 +169,44 @@ jobs:
           updaterJsonPreferNsis: true
           args: ${{ matrix.build_args }} --config ${{ runner.temp }}/tauri.release.conf.json
 
+      - name: Verify Windows installer signatures
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installers = @(
+            Get-ChildItem -Path "${{ matrix.bundle_root }}" -Recurse -File |
+              Where-Object { $_.Extension -in '.msi', '.exe' }
+          )
+          if ($installers.Count -eq 0) {
+            throw 'No Windows installers were produced'
+          }
+          foreach ($installer in $installers) {
+            $signature = Get-AuthenticodeSignature $installer.FullName
+            if ($signature.Status -ne 'Valid') {
+              throw "Invalid Authenticode signature on $($installer.FullName): $($signature.Status)"
+            }
+          }
+
+      - name: Verify Apple signatures and notarization
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          verified_apps=0
+          while IFS= read -r -d '' app_path; do
+            codesign --verify --deep --strict "$app_path"
+            verified_apps=$((verified_apps + 1))
+          done < <(find "${{ matrix.bundle_root }}" -type d -name '*.app' -print0)
+          test "$verified_apps" -gt 0 || { echo 'No macOS application bundle was produced'; exit 1; }
+
+          verified_dmgs=0
+          while IFS= read -r -d '' dmg_path; do
+            codesign --verify --deep --strict "$dmg_path"
+            spctl --assess --type open "$dmg_path"
+            xcrun stapler validate "$dmg_path"
+            verified_dmgs=$((verified_dmgs + 1))
+          done < <(find "${{ matrix.bundle_root }}" -type f -name '*.dmg' -print0)
+          test "$verified_dmgs" -gt 0 || { echo 'No macOS disk image was produced'; exit 1; }
+
       - name: Smoke test signed Linux package installation and removal
         if: runner.os == 'Linux'
         run: |

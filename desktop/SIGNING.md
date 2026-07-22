@@ -44,7 +44,7 @@ SBOM action runs.
    `Cargo.toml`, `Cargo.lock`, and `tauri.conf.json`; commit it before creating
    `vX.Y.Z`. Run `npm run desktop:validate:release -- --tag vX.Y.Z` locally;
    the protected workflow repeats this check before accessing credentials.
-2. Push the tag and approve all four jobs in `desktop-production`.
+2. Push the tag and approve the protected `desktop-production` deployments.
 3. Keep the GitHub release as a draft until every job succeeds. Confirm that
    installers (including the Arch `.pkg.tar.zst`), updater bundles, `.sig`
    files, `latest.json`, per-platform
@@ -54,7 +54,8 @@ SBOM action runs.
    platform manifests for focused checks. On Windows run
    `Get-AuthenticodeSignature <installer>` and require `Status: Valid`. On macOS
    run `codesign --verify --deep --strict <app>`, `spctl --assess --type open
-   <dmg>`, and `xcrun stapler validate <dmg>`.
+   <dmg>`, and `xcrun stapler validate <dmg>`. The workflow runs these platform
+   checks before its integrity jobs.
 5. Install the draft on clean target systems, test backup/restore and an update
    from the previous version, then publish it.
 
