@@ -18,7 +18,12 @@ body {
 }
 
 button,
+input,
 progress {
+  font: inherit;
+}
+
+textarea {
   font: inherit;
 }
 
@@ -67,6 +72,92 @@ progress {
 
 .section-title {
   margin: 0 0 1rem;
+}
+
+.import-panel {
+  margin-bottom: 2rem;
+  padding: 1.25rem;
+  border: 1px solid #d9e1e8;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(30 55 80 / 8%);
+}
+
+.import-panel h2,
+.import-panel > p {
+  margin: 0 0 0.6rem;
+}
+
+.import-panel > p {
+  color: #637083;
+}
+
+.text-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.text-form label {
+  display: grid;
+  align-content: start;
+  gap: 0.4rem;
+  font-weight: 650;
+}
+
+.text-form input,
+.text-form textarea {
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #aebdca;
+  border-radius: 8px;
+  background: #fff;
+  color: #243142;
+  font-weight: 400;
+}
+
+.text-form input:focus,
+.text-form textarea:focus {
+  border-color: #2b789f;
+  outline: 3px solid rgb(43 120 159 / 20%);
+}
+
+.text-form__content,
+.text-form button,
+.form-status {
+  grid-column: 1 / -1;
+}
+
+.text-form small {
+  color: #637083;
+  font-weight: 400;
+}
+
+.text-form button {
+  justify-self: start;
+  padding: 0.7rem 1rem;
+  border: 0;
+  border-radius: 8px;
+  background: #246f96;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.text-form button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.form-status {
+  min-height: 1.25rem;
+  margin: 0;
+  color: #246f52;
+}
+
+.form-status--error {
+  color: #a52222;
 }
 
 .library-grid {
@@ -135,8 +226,31 @@ progress {
     color: #bde6fa;
   }
 
+  .import-panel {
+    border-color: #344352;
+    background: #1e2a35;
+  }
+
+  .import-panel > p,
+  .text-form small {
+    color: #a8b7c5;
+  }
+
+  .text-form input,
+  .text-form textarea {
+    border-color: #55687a;
+    background: #131b24;
+    color: #edf3f7;
+  }
+
   .text-card {
     border-color: #344352;
     background: #1e2a35;
+  }
+}
+
+@media (max-width: 640px) {
+  .text-form {
+    grid-template-columns: 1fr;
   }
 }

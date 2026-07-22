@@ -1,4 +1,4 @@
-import type { LibraryText } from '../domain/library';
+import type { CreateTextInput, LibraryText } from '../domain/library';
 import type { LibraryGateway } from './library_gateway';
 
 export type TauriInvoke = <T>(
@@ -11,5 +11,9 @@ export class TauriLibraryGateway implements LibraryGateway {
 
   listTexts(): Promise<readonly LibraryText[]> {
     return this.invoke<LibraryText[]>('list_texts');
+  }
+
+  createText(input: CreateTextInput): Promise<LibraryText> {
+    return this.invoke<LibraryText>('create_text', { input });
   }
 }

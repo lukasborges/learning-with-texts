@@ -1,5 +1,5 @@
-use rusqlite::{Connection, OpenFlags};
-use serde::Serialize;
+use rusqlite::{params, Connection, OpenFlags};
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Mutex;
 
@@ -15,6 +15,15 @@ pub struct LibraryText {
     pub known_terms: i64,
     pub total_terms: i64,
     pub last_opened: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateTextInput {
+    pub language: String,
+    pub title: String,
+    pub content: String,
+    pub source_uri: Option<String>,
 }
 
 pub struct Database {
@@ -110,6 +119,85 @@ impl Database {
             .map_err(|error| format!("Unable to decode the text library: {error}"))
     }
 
+    pub fn create_text(&self, input: CreateTextInput) -> Result<LibraryText, String> {
+        let language = input.language.trim();
+        let title = input.title.trim();
+        let content = input.content.replace('\u{00ad}', "");
+        let source_uri = input
+            .source_uri
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+
+        if language.is_empty() {
+            return Err("Language is required".to_string());
+        }
+        if language.chars().count() > 40 {
+            return Err("Language must not exceed 40 characters".to_string());
+        }
+        if title.is_empty() {
+            return Err("Title is required".to_string());
+        }
+        if title.chars().count() > 200 {
+            return Err("Title must not exceed 200 characters".to_string());
+        }
+        if content.trim().is_empty() {
+            return Err("Text content is required".to_string());
+        }
+        if content.len() > 65_000 {
+            return Err("Text content must not exceed 65,000 bytes".to_string());
+        }
+        if source_uri.is_some_and(|value| value.chars().count() > 1_000) {
+            return Err("Source URI must not exceed 1,000 characters".to_string());
+        }
+
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| "The desktop database lock is unavailable".to_string())?;
+        let transaction = connection
+            .transaction()
+            .map_err(|error| format!("Unable to start text creation: {error}"))?;
+
+        transaction
+            .execute(
+                "INSERT INTO languages (name) VALUES (?1)
+                 ON CONFLICT(name) DO NOTHING",
+                [language],
+            )
+            .map_err(|error| format!("Unable to create the language: {error}"))?;
+
+        let (language_id, stored_language): (i64, String) = transaction
+            .query_row(
+                "SELECT id, name FROM languages WHERE name = ?1 COLLATE NOCASE",
+                [language],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .map_err(|error| format!("Unable to load the text language: {error}"))?;
+
+        transaction
+            .execute(
+                "INSERT INTO texts (language_id, title, content, source_uri)
+                 VALUES (?1, ?2, ?3, ?4)",
+                params![language_id, title, content, source_uri],
+            )
+            .map_err(|error| format!("Unable to create the text: {error}"))?;
+        let id = transaction.last_insert_rowid();
+
+        transaction
+            .commit()
+            .map_err(|error| format!("Unable to save the text: {error}"))?;
+
+        Ok(LibraryText {
+            id,
+            title: title.to_string(),
+            language: stored_language,
+            known_terms: 0,
+            total_terms: 0,
+            last_opened: String::new(),
+        })
+    }
+
     #[cfg(test)]
     fn in_memory() -> Result<Self, String> {
         let mut connection = Connection::open_in_memory()
@@ -178,5 +266,85 @@ mod tests {
         );
 
         assert!(result.is_err());
+    }
+
+    fn text_input(language: &str, title: &str, content: &str) -> CreateTextInput {
+        CreateTextInput {
+            language: language.to_string(),
+            title: title.to_string(),
+            content: content.to_string(),
+            source_uri: None,
+        }
+    }
+
+    #[test]
+    fn creates_a_text_and_its_language_atomically() {
+        let database = Database::in_memory().expect("database should migrate");
+
+        let created = database
+            .create_text(CreateTextInput {
+                source_uri: Some(" https://example.com/story ".to_string()),
+                ..text_input(" English ", " A local story ", "Some\u{00ad} text")
+            })
+            .expect("text should be created");
+
+        assert_eq!(created.id, 1);
+        assert_eq!(created.language, "English");
+        assert_eq!(created.title, "A local story");
+
+        let connection = database.connection.lock().expect("database should lock");
+        let stored: (String, String, String) = connection
+            .query_row(
+                "SELECT content, source_uri, languages.name
+                 FROM texts INNER JOIN languages ON languages.id = texts.language_id",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .expect("created text should be readable");
+        assert_eq!(
+            stored,
+            (
+                "Some text".into(),
+                "https://example.com/story".into(),
+                "English".into()
+            )
+        );
+    }
+
+    #[test]
+    fn reuses_an_existing_language_case_insensitively() {
+        let database = Database::in_memory().expect("database should migrate");
+
+        database
+            .create_text(text_input("English", "First", "First text"))
+            .expect("first text should be created");
+        let second = database
+            .create_text(text_input("english", "Second", "Second text"))
+            .expect("second text should be created");
+
+        assert_eq!(second.language, "English");
+        let connection = database.connection.lock().expect("database should lock");
+        let language_count: i64 = connection
+            .query_row("SELECT COUNT(*) FROM languages", [], |row| row.get(0))
+            .expect("language count should be readable");
+        assert_eq!(language_count, 1);
+    }
+
+    #[test]
+    fn validates_required_fields_and_the_legacy_byte_limit() {
+        let database = Database::in_memory().expect("database should migrate");
+
+        assert_eq!(
+            database
+                .create_text(text_input("English", "", "Content"))
+                .expect_err("empty title should fail"),
+            "Title is required"
+        );
+        assert_eq!(
+            database
+                .create_text(text_input("English", "Long", &"é".repeat(32_501)))
+                .expect_err("oversized text should fail"),
+            "Text content must not exceed 65,000 bytes"
+        );
     }
 }

@@ -6,3 +6,10 @@ export interface LibraryText {
   readonly totalTerms: number;
   readonly lastOpened: string;
 }
+
+export interface CreateTextInput {
+  readonly language: string;
+  readonly title: string;
+  readonly content: string;
+  readonly sourceUri?: string;
+}

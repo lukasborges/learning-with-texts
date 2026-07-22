@@ -11,12 +11,139 @@ if (!app) {
 
 const applicationRoot = app;
 const usesNativeDatabase = import.meta.env.MODE === 'tauri';
+const gateway = createLibraryGateway();
+
+function createField(labelText: string, control: HTMLElement): HTMLLabelElement {
+  const label = document.createElement('label');
+  const caption = document.createElement('span');
+  caption.textContent = labelText;
+  label.append(caption, control);
+  return label;
+}
+
+function createImportPanel(message = ''): HTMLElement {
+  const panel = document.createElement('section');
+  panel.className = 'import-panel';
+
+  const heading = document.createElement('h2');
+  heading.textContent = 'Add a text';
+  const description = document.createElement('p');
+  description.textContent =
+    'Paste a text below or load a UTF-8 text file. Review the details before saving.';
+
+  const form = document.createElement('form');
+  form.className = 'text-form';
+
+  const language = document.createElement('input');
+  language.name = 'language';
+  language.required = true;
+  language.maxLength = 40;
+  language.placeholder = 'e.g. English';
+  language.autocomplete = 'off';
+
+  const title = document.createElement('input');
+  title.name = 'title';
+  title.required = true;
+  title.maxLength = 200;
+
+  const file = document.createElement('input');
+  file.type = 'file';
+  file.accept = '.txt,text/plain';
+
+  const content = document.createElement('textarea');
+  content.name = 'content';
+  content.required = true;
+  content.maxLength = 65_000;
+  content.rows = 10;
+  content.placeholder = 'Paste or type the text to study';
+
+  const sourceUri = document.createElement('input');
+  sourceUri.name = 'sourceUri';
+  sourceUri.type = 'url';
+  sourceUri.maxLength = 1_000;
+  sourceUri.placeholder = 'https://example.com/source';
+
+  const contentHelp = document.createElement('small');
+  contentHelp.textContent = 'Maximum: 65,000 bytes. Soft hyphens are removed when saved.';
+
+  const status = document.createElement('p');
+  status.className = 'form-status';
+  status.setAttribute('role', 'status');
+  status.textContent = message;
+
+  const submit = document.createElement('button');
+  submit.type = 'submit';
+  submit.textContent = 'Save to library';
+
+  file.addEventListener('change', () => {
+    const selectedFile = file.files?.[0];
+    if (!selectedFile) {
+      return;
+    }
+
+    void selectedFile
+      .text()
+      .then((fileContent) => {
+        content.value = fileContent;
+        if (title.value.trim() === '') {
+          title.value = selectedFile.name.replace(/\.[^.]+$/, '');
+        }
+        status.className = 'form-status';
+        status.textContent = `${selectedFile.name} loaded. Review it before saving.`;
+      })
+      .catch(() => {
+        status.className = 'form-status form-status--error';
+        status.textContent = 'The selected file could not be read.';
+      });
+  });
+
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    if (!form.reportValidity()) {
+      return;
+    }
+
+    submit.disabled = true;
+    status.className = 'form-status';
+    status.textContent = 'Saving text…';
+
+    void gateway
+      .createText({
+        language: language.value,
+        title: title.value,
+        content: content.value,
+        sourceUri: sourceUri.value || undefined
+      })
+      .then((created) => render(`“${created.title}” was added to the library.`))
+      .catch((error: unknown) => {
+        submit.disabled = false;
+        status.className = 'form-status form-status--error';
+        status.textContent = error instanceof Error ? error.message : String(error);
+      });
+  });
+
+  const contentField = createField('Text', content);
+  contentField.className = 'text-form__content';
+  contentField.append(contentHelp);
+  form.append(
+    createField('Language', language),
+    createField('Title', title),
+    createField('Load a .txt file', file),
+    contentField,
+    createField('Source URL (optional)', sourceUri),
+    submit,
+    status
+  );
+  panel.append(heading, description, form);
+  return panel;
+}
 
 function createTextCard(text: LibraryText): HTMLElement {
   const card = document.createElement('article');
   card.className = 'text-card';
 
-  const progress = Math.round((text.knownTerms / text.totalTerms) * 100);
+  const progress =
+    text.totalTerms > 0 ? Math.round((text.knownTerms / text.totalTerms) * 100) : 0;
   const heading = document.createElement('h2');
   heading.textContent = text.title;
 
@@ -24,14 +151,12 @@ function createTextCard(text: LibraryText): HTMLElement {
   language.className = 'text-card__language';
   language.textContent = text.language;
 
-  const meter = document.createElement('progress');
-  meter.max = 100;
-  meter.value = progress;
-  meter.setAttribute('aria-label', `${progress}% known terms`);
-
   const details = document.createElement('p');
   details.className = 'text-card__details';
-  details.textContent = `${text.knownTerms} of ${text.totalTerms} terms known · ${text.lastOpened}`;
+  details.textContent =
+    text.totalTerms > 0
+      ? `${text.knownTerms} of ${text.totalTerms} terms known · ${text.lastOpened}`
+      : 'Term analysis pending';
 
   const button = document.createElement('button');
   button.type = 'button';
@@ -39,12 +164,19 @@ function createTextCard(text: LibraryText): HTMLElement {
   button.disabled = true;
   button.title = 'Reading will be enabled after the Rust text slice is ready';
 
-  card.append(heading, language, meter, details, button);
+  card.append(heading, language);
+  if (text.totalTerms > 0) {
+    const meter = document.createElement('progress');
+    meter.max = 100;
+    meter.value = progress;
+    meter.setAttribute('aria-label', `${progress}% known terms`);
+    card.append(meter);
+  }
+  card.append(details, button);
   return card;
 }
 
-async function render(): Promise<void> {
-  const gateway = createLibraryGateway();
+async function render(message = ''): Promise<void> {
   const texts = await gateway.listTexts();
 
   const shell = document.createElement('main');
@@ -92,7 +224,7 @@ async function render(): Promise<void> {
     library.append(...texts.map(createTextCard));
   }
 
-  shell.append(header, notice, libraryHeading, library);
+  shell.append(header, notice, createImportPanel(message), libraryHeading, library);
   applicationRoot.replaceChildren(shell);
 }
 
