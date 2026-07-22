@@ -1,56 +1,53 @@
-![LWT](img/lwt_icon_big.png)
+# Learning with Texts Desktop
 
-# Learning with Texts (LWT)
+Learning with Texts (LWT) is now a local-first desktop application for reading,
+tracking vocabulary, reviewing terms, and preserving a language-learning
+library. It runs on SQLite inside a Tauri/Pake desktop shell; end users do not
+install PHP, Apache, MySQL/MariaDB, XAMPP, MAMP, or Docker.
 
-> **Migration freeze:** this PHP/MySQL application is retained only to export
-> existing libraries to LWT Desktop. It receives no new features. Follow
-> [Migrating from Legacy PHP LWT](MIGRATING_FROM_LEGACY_PHP.md) and keep the
-> original SQL backup until the desktop migration is verified.
+## Install
 
-## This is the Official LWT Version 25.10.0 (October 25 2025)
+Signed Windows, macOS, and Linux installers are produced from version tags by
+the protected release workflow. Until its first production run is verified,
+use artifacts from the manual workflow only for testing; those artifacts are
+explicitly unsigned. Release and verification details are in
+[desktop/RELEASING.md](desktop/RELEASING.md).
 
-**Please note:** 
+Application data is stored in the operating system's per-user application-data
+directory. Use **Backup** in the application to create a portable JSON snapshot
+before upgrading or moving to another computer.
 
-This **official version of LWT** is from the original author, and it is **stable and bug-free**.
+## Develop
 
-All **LWT forks** that I found on the internet (e.g. from [jzohrab](https://github.com/jzohrab/lute), [HugoFara](https://github.com/HugoFara/lwt), [chaosarium](https://github.com/chaosarium/lwt), [pirtleshell](https://github.com/pirtleshell/lwt), [andreask7](https://github.com/andreask7/lwt), [hans](https://github.com/hans/lwt), and many more) are either outdated or faulty, even if they contain some new features or may have a cleaner source code. 
+Install Node.js 20.19 or newer, Rust, and the platform prerequisites from the
+[Tauri documentation](https://v2.tauri.app/start/prerequisites/). Then run:
 
-The fork from [jzohrab](https://github.com/jzohrab/lute) - called **Lute** (newest version see [github.com/LuteOrg/lute-v3](https://github.com/LuteOrg/lute-v3)) - describes itself in many places on the web (e.g. on Reddit, YouTube) as the **better LWT**, but my extensive testing revealed a number of features that are worse than in the official LWT, or are completely missing. Furthermore, a number of serious software crashes occurred. **Lute** currently (Nov. 2025) has over 170 issues on GitHub but hasn't been updated since March 2025.
+```bash
+npm ci
+npm run desktop:check
+npm run desktop:test
+npm run desktop:tauri:dev
+```
 
-## Abstract
+`npm run desktop:build` creates the static Pake web bundle.
+`npm run desktop:tauri:build` creates native installers with the custom SQLite
+runtime. Packaged Linux end-to-end tests are available through
+`npm run desktop:e2e` after installing the prerequisites in [desktop/E2E.md](desktop/E2E.md).
 
-**LWT** is a tool for Language Learning, inspired by:
+## Architecture and Migration
 
-- [Stephen Krashen](https://en.wikipedia.org/wiki/Stephen_Krashen)'s [principles in Second Language Acquisition](https://www.sdkrashen.com/content/books/principles_and_practice.pdf),
-- [Steve Kaufmann](https://en.wikipedia.org/wiki/Steve_Kaufmann)'s [LingQ](https://www.lingq.com) application, and
-- ideas from [Khatzumoto](https://x.com/ajatt) - published at [AJATT - All Japanese All The Time](https://alljapanesealltheti.me/index.html).
+The TypeScript frontend is under `desktop/web/`; native commands, SQLite
+migrations, and tests are under `desktop/src-tauri/`. The WebView receives only
+typed, scoped commands—never raw SQL, shell access, or unrestricted filesystem
+access. See [desktop/README.md](desktop/README.md) and
+[desktop/MVP_PARITY.md](desktop/MVP_PARITY.md) for the implemented workflows and
+runtime boundary.
 
-To run LWT, you'll need:
+Existing PHP LWT users should follow
+[Migrating from Legacy PHP LWT](MIGRATING_FROM_LEGACY_PHP.md). The frozen
+exporter remains available in the `legacy-php-migration-v25.10.0` tag and
+`legacy-php-maintenance` branch; the maintained desktop branch contains no
+legacy server runtime.
 
-- a modern web browser,
-- a local web and database server with PHP - like [XAMPP](https://www.apachefriends.org/index.html), [MAMP](https://www.mamp.info/en/mac/), [LAMP](https://en.wikipedia.org/wiki/LAMP_(software_bundle)),
-- and the LWT application, which can be downloaded here.
-
-![Screenshot1](img/lwt_screenshot.png)
-
-**NEW** in 25.10.0: Now with *Translate Shell* (only on macOS and Linux).
-![Screenshot2](img/lwt-with-translate-shell.png)
-
-
-## PLEASE READ MORE:
-
-- [LWT Documentation](https://hapepo23.github.io/lwt/info.htm)
-- [LWT Installation](https://hapepo23.github.io/lwt/LWT_INSTALLATION.txt)
-- [UNLICENSE.txt](UNLICENSE.txt)
-
-## DOWNLOAD:
-
-- [Latest release](https://sourceforge.net/projects/learning-with-texts/files)
-
------
-
-### Security Notice
-
-The code I released here into the public domain may appear in third-party projects. I do not maintain, endorse, or have any affiliation with such projects. Any malicious or deceptive use is unauthorized and should be reported to the hosting platform.
-
------
+This project retains the upstream licensing files [LICENSE](LICENSE) and
+[UNLICENSE.txt](UNLICENSE.txt).

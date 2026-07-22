@@ -1,4 +1,4 @@
-import logoUrl from '../../../img/lwt_icon_big.png';
+import logoUrl from '../assets/lwt_icon_big.png';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { check } from '@tauri-apps/plugin-updater';
 import { createLibraryGateway } from './gateways/create_library_gateway';

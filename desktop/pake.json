@@ -4,7 +4,7 @@
   "name": "LWT Desktop",
   "title": "Learning with Texts",
   "identifier": "io.github.lukasborges.learningwithtexts.desktop",
-  "icon": "../img/lwt_icon_big.png",
+  "icon": "web/assets/lwt_icon_big.png",
   "width": 1280,
   "height": 800,
   "minWidth": 900,
