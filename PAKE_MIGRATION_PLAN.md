@@ -121,7 +121,7 @@ expanded so its remaining work is visible before the next commit.
 
 - [x] Produce local Linux DEB and AppImage proof-of-concept packages.
 - [x] Produce and validate a native Arch Linux pacman package (`ee667a3`).
-- [ ] Build Windows, macOS, and Linux release artifacts in CI. **Matrix ready; first remote run pending.**
+- [x] Build Windows, macOS, Linux, and Arch release artifacts in CI ([run `29965703267`](https://github.com/lukasborges/learning-with-texts/actions/runs/29965703267)).
 - [x] Add upgrade tests covering older desktop schema versions (`352a3b0`).
 - [ ] Add signing/notarization, checksums, SBOM, and signed updates. **Implementation complete; first protected CI release pending.**
 - [ ] Validate installation, backup, upgrade, and removal with nontechnical users.
