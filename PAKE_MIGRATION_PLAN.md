@@ -191,7 +191,7 @@ For each workflow, record current behavior, expose Rust commands, connect the Ty
 
 - [x] Freeze the PHP application as a migration-only release (`01d534a`).
 - [x] Publish and document a stable PHP-to-desktop export path for existing users (`01d534a`).
-- [ ] Preserve the legacy application and exporter in a tagged maintenance branch. **Local branch and annotated tag point to `01d534a`; remote publication pending.**
+- [x] Preserve the legacy application and exporter in the remote `legacy-php-maintenance` branch and annotated `legacy-php-migration-v25.10.0` tag (`01d534a`).
 - [x] Confirm every MVP workflow has desktop parity and no longer invokes PHP or MySQL (`7da80bd`).
 - [x] Remove PHP pages, MySQL connection templates, and obsolete browser dependencies from the desktop branch (`9fbac1a`).
 - [x] Verify clean builds, tests, installers, backup/restore, and upgrades without PHP or MySQL files (this commit).
