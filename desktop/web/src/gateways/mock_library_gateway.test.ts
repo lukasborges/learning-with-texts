@@ -30,4 +30,22 @@ describe('MockLibraryGateway', () => {
     });
     expect(texts[0]).toEqual(created);
   });
+
+  it('loads, updates, and deletes a text in the preview session', async () => {
+    const gateway = new MockLibraryGateway();
+
+    const details = await gateway.getText(1);
+    const updated = await gateway.updateText({
+      id: 1,
+      language: 'Portuguese',
+      title: 'Título atualizado',
+      content: 'Conteúdo atualizado.'
+    });
+    await gateway.deleteText(1);
+    const texts = await gateway.listTexts();
+
+    expect(details.content).toContain('dog');
+    expect(updated).toMatchObject({ language: 'Portuguese', title: 'Título atualizado' });
+    expect(texts.some(({ id }) => id === 1)).toBe(false);
+  });
 });

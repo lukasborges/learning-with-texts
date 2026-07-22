@@ -124,9 +124,16 @@ textarea {
 }
 
 .text-form__content,
-.text-form button,
+.text-form__actions,
 .form-status {
   grid-column: 1 / -1;
+}
+
+.text-form__actions,
+.text-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
 }
 
 .text-form small {
@@ -148,6 +155,12 @@ textarea {
 .text-form button:disabled {
   cursor: wait;
   opacity: 0.65;
+}
+
+.text-form .button-secondary {
+  border: 1px solid #8ca1b2;
+  background: transparent;
+  color: #365166;
 }
 
 .form-status {
@@ -205,8 +218,21 @@ textarea {
   padding: 0.55rem 0.85rem;
   border: 0;
   border-radius: 8px;
+  background: #e1eff6;
+  color: #175b7f;
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.text-card button:disabled {
   background: #dfe6eb;
   color: #6c7782;
+  cursor: not-allowed;
+}
+
+.text-card .button-danger {
+  background: #f8e5e5;
+  color: #962a2a;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -241,6 +267,26 @@ textarea {
     border-color: #55687a;
     background: #131b24;
     color: #edf3f7;
+  }
+
+  .text-form .button-secondary {
+    border-color: #6f8293;
+    color: #d2e0ea;
+  }
+
+  .text-card button {
+    background: #25495d;
+    color: #c5e8f8;
+  }
+
+  .text-card button:disabled {
+    background: #344352;
+    color: #8999a7;
+  }
+
+  .text-card .button-danger {
+    background: #542d32;
+    color: #ffd4d4;
   }
 
   .text-card {

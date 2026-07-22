@@ -13,3 +13,12 @@ export interface CreateTextInput {
   readonly content: string;
   readonly sourceUri?: string;
 }
+
+export interface UpdateTextInput extends CreateTextInput {
+  readonly id: number;
+}
+
+export interface TextDetails extends LibraryText {
+  readonly content: string;
+  readonly sourceUri?: string;
+}
