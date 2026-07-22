@@ -40,8 +40,10 @@ SBOM action runs.
 
 ## Release and Verification
 
-1. Update the version consistently in `package.json`, `Cargo.toml`, and
-   `tauri.conf.json`; commit it before creating `vX.Y.Z`.
+1. Update the version consistently in `package.json`, `package-lock.json`,
+   `Cargo.toml`, `Cargo.lock`, and `tauri.conf.json`; commit it before creating
+   `vX.Y.Z`. Run `npm run desktop:validate:release -- --tag vX.Y.Z` locally;
+   the protected workflow repeats this check before accessing credentials.
 2. Push the tag and approve all four jobs in `desktop-production`.
 3. Keep the GitHub release as a draft until every job succeeds. Confirm that
    installers (including the Arch `.pkg.tar.zst`), updater bundles, `.sig`

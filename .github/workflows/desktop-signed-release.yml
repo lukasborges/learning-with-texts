@@ -68,6 +68,8 @@ jobs:
           key: signed-${{ matrix.rust_target }}
 
       - run: npm ci
+      - name: Validate release tag and application versions
+        run: npm run desktop:validate:release -- --tag "${{ github.ref_name }}"
       - run: npm run desktop:check
       - run: npm run desktop:test
 
@@ -251,6 +253,8 @@ jobs:
         run: rustup default stable
 
       - run: npm ci
+      - name: Validate release tag and application versions
+        run: npm run desktop:validate:release -- --tag "${{ github.ref_name }}"
       - run: npm run desktop:check
       - run: npm run desktop:test
       - run: cd desktop && npx tauri build --no-bundle

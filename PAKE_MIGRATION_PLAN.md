@@ -91,6 +91,7 @@ expanded so its remaining work is visible before the next commit.
 - [x] Install and remove DEB and pacman packages in clean CI environments before publishing artifacts ([run `29966876339`](https://github.com/lukasborges/learning-with-texts/actions/runs/29966876339)).
 - [x] Protect production releases with the `desktop-production` environment, required owner approval, and a `v*` tag-only policy (this commit).
 - [x] Generate and verify a release-wide checksum manifest covering every draft asset, including updater bundles and `latest.json` (this commit).
+- [x] Reject release tags whose version differs from npm, Cargo, or Tauri manifests before signing starts (this commit).
 
 ### Completed Desktop Workflows
 
