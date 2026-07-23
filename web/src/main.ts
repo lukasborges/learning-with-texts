@@ -1156,7 +1156,6 @@ async function renderReading(textId: number): Promise<void> {
   expressionToggle.type = 'button';
   expressionToggle.textContent = 'Create expression';
   const expressionStatus = document.createElement('span');
-  expressionStatus.textContent = 'Select expressions containing 2–9 terms.';
   expressionControls.append(expressionToggle, expressionStatus);
   const expressionList = document.createElement('div');
   expressionList.className = 'expression-list';
@@ -1458,7 +1457,7 @@ async function renderReading(textId: number): Promise<void> {
     expressionToggle.textContent = expressionMode ? 'Cancel expression' : 'Create expression';
     expressionStatus.textContent = expressionMode
       ? 'Select the first term, then the last term in the same sentence.'
-      : 'Select expressions containing 2–9 terms.';
+      : '';
   });
 
   const article = document.createElement('article');

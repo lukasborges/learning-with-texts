@@ -665,6 +665,10 @@ test('local QA exercises the complete supported desktop workflow', { timeout: 24
     await waitForText(driver, By.css('.term-editor .form-status'), 'Term saved.');
 
     await closeTermEditor(driver);
+    assert.equal(
+      await driver.findElement(By.css('.expression-controls span')).getText(),
+      ''
+    );
     await driver.findElement(buttonWithText('Create expression')).click();
     await helloOccurrences[0].click();
     await driver
