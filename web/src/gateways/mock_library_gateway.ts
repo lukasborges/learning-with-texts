@@ -31,7 +31,9 @@ import type {
   UndoFinishLessonInput,
   UndoFinishLessonOutcome,
   UpdateLanguageInput,
-  UpdateTextInput
+  UpdateTextInput,
+  UpdateVocabularyTermInput,
+  VocabularyTerm
 } from '../domain/library';
 import type { LibraryGateway } from './library_gateway';
 
@@ -836,25 +838,92 @@ export class MockLibraryGateway implements LibraryGateway {
 
   async listReviewTerms(limit: number): Promise<readonly ReviewCard[]> {
     return [...this.dueTerms]
-      .map((key) => {
+      .map<ReviewCard | undefined>((key) => {
         const term = this.terms.get(key);
         const id = this.termIds.get(key);
         const language = key.split('\u0000')[0] ?? '';
         if (!term || id === undefined || term.status < 1 || term.status > 5) {
           return undefined;
         }
-        return {
+        const source = this.texts.find(
+          (text) =>
+            text.language.toLocaleLowerCase() === language &&
+            this.normalizedTermsFor(text).includes(term.normalized)
+        );
+        const card: ReviewCard = {
           id,
           displayText: term.displayText,
           language,
           translation: term.translation,
           romanization: term.romanization,
           status: term.status,
-          wordCount: term.wordCount
-        } satisfies ReviewCard;
+          wordCount: term.wordCount,
+          context: source?.content,
+          sourceTitle: source?.title
+        };
+        return card;
       })
       .filter((card): card is ReviewCard => card !== undefined)
       .slice(0, limit);
+  }
+
+  async listVocabularyTerms(): Promise<readonly VocabularyTerm[]> {
+    return [...this.terms.entries()]
+      .map(([key, term]) => {
+        const [language = ''] = key.split('\u0000', 1);
+        const id = this.termIds.get(key) ?? 0;
+        const source = this.texts.find(
+          (text) =>
+            text.language.toLocaleLowerCase() === language &&
+            this.normalizedTermsFor(text).includes(term.normalized)
+        );
+        return {
+          id,
+          displayText: term.displayText,
+          normalized: term.normalized,
+          language: source?.language ?? language,
+          translation: term.translation,
+          romanization: term.romanization,
+          status: term.status,
+          wordCount: term.wordCount,
+          occurrenceCount: this.texts.reduce(
+            (count, text) =>
+              count +
+              (text.language.toLocaleLowerCase() === language
+                ? this.normalizedTermsFor(text).filter(
+                    (normalized) => normalized === term.normalized
+                  ).length
+                : 0),
+            0
+          ),
+          reviewCount: this.reviewHistory.filter(({ key: reviewed }) => reviewed === key).length,
+          nextReviewAt: this.dueTerms.has(key) ? new Date(0).toISOString() : undefined,
+          sourceTitle: source?.title,
+          context: source?.content
+        };
+      })
+      .sort((left, right) => right.id - left.id);
+  }
+
+  async updateVocabularyTerm(input: UpdateVocabularyTermInput): Promise<TermDetails> {
+    const entry = [...this.termIds].find(([, id]) => id === input.id);
+    if (!entry) {
+      throw new Error('Vocabulary term was not found');
+    }
+    const [key] = entry;
+    const term = this.terms.get(key);
+    if (!term) {
+      throw new Error('Vocabulary term was not found');
+    }
+    const updated: TermDetails = {
+      ...term,
+      status: input.status,
+      translation: input.translation.trim(),
+      romanization: input.romanization.trim()
+    };
+    this.terms.set(key, updated);
+    this.trackTerm(key, updated.status);
+    return { ...updated };
   }
 
   async recordReview(input: RecordReviewInput): Promise<ReviewOutcome> {

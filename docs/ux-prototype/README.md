@@ -20,12 +20,16 @@ The prototype does not persist data or connect to the database. It demonstrates:
 - the global vocabulary area recovered from LWT PHP;
 - review with context, shortcuts, and intervals;
 - settings organized by section;
-- light and dark themes;
+- a light GNOME/libadwaita-inspired application shell;
 - responsive behavior.
 
 ## Interactions
 
-- Use the side or bottom navigation to change screens.
+- Use the headerbar view switcher to change the four frequent screens. At
+  narrow widths it becomes a bottom navigation bar.
+- Use the primary menu for backup, tag, statistics, and preference tasks.
+  Language, Add text, Archive, and the four main destinations each keep a
+  single visible access point outside the menu.
 - “Home” shows continuity and up to 3 recent texts; “Library” is a separate,
   scalable collection screen.
 - “Preview first use” switches Home to an inline first-language form.
@@ -37,4 +41,3 @@ The prototype does not persist data or connect to the database. It demonstrates:
   remain in Vocabulary with their learning status. The toast provides `Undo`.
 - In the reader, `Ctrl+Enter` simulates saving a term.
 - During review, `Space` reveals the answer and `1`–`4` rate it.
-- The button in the top banner switches the theme.

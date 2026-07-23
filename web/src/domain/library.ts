@@ -140,6 +140,31 @@ export interface ReviewCard {
   readonly romanization: string;
   readonly status: TermStatus;
   readonly wordCount: number;
+  readonly context?: string;
+  readonly sourceTitle?: string;
+}
+
+export interface VocabularyTerm {
+  readonly id: number;
+  readonly displayText: string;
+  readonly normalized: string;
+  readonly language: string;
+  readonly translation: string;
+  readonly romanization: string;
+  readonly status: TermStatus;
+  readonly wordCount: number;
+  readonly occurrenceCount: number;
+  readonly reviewCount: number;
+  readonly nextReviewAt?: string;
+  readonly sourceTitle?: string;
+  readonly context?: string;
+}
+
+export interface UpdateVocabularyTermInput {
+  readonly id: number;
+  readonly status: Exclude<TermStatus, 0>;
+  readonly translation: string;
+  readonly romanization: string;
 }
 
 export type ReviewRating = 0 | 1 | 2 | 3;

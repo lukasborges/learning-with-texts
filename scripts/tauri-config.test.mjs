@@ -15,3 +15,25 @@ test('local builds initialize the updater with an inert configuration', async ()
     endpoints: []
   });
 });
+
+test('custom titlebar grants only its required window commands', async () => {
+  const configuration = JSON.parse(
+    await readFile(path.join(repositoryRoot, 'tauri.conf.json'), 'utf8')
+  );
+  const capability = JSON.parse(
+    await readFile(path.join(repositoryRoot, 'capabilities', 'default.json'), 'utf8')
+  );
+
+  assert.equal(configuration.app.windows[0].decorations, false);
+  assert.equal(configuration.app.windows[0].transparent, true);
+  assert.deepEqual(
+    capability.permissions.filter((permission) => permission.startsWith('core:window:allow-')),
+    [
+      'core:window:allow-close',
+      'core:window:allow-is-maximized',
+      'core:window:allow-minimize',
+      'core:window:allow-start-dragging',
+      'core:window:allow-toggle-maximize'
+    ]
+  );
+});

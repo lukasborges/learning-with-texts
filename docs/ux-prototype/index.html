@@ -11,93 +11,66 @@
     <link rel="stylesheet" href="prototype.css" />
   </head>
   <body>
-    <div class="prototype-banner">
-      <span><strong>UX prototype</strong> · sample data, no persistence</span>
-      <button id="preview-state-toggle" class="preview-state-button" type="button">
-        Preview first use
-      </button>
-      <button id="theme-toggle" class="icon-button" type="button" aria-label="Toggle theme">
-        <svg aria-hidden="true" viewBox="0 0 24 24">
-          <path d="M12 3a1 1 0 0 1 1 1v1a1 1 0 1 1-2 0V4a1 1 0 0 1 1-1Zm0 15a1 1 0 0 1 1 1v1a1 1 0 1 1-2 0v-1a1 1 0 0 1 1-1Zm9-6a1 1 0 0 1-1 1h-1a1 1 0 1 1 0-2h1a1 1 0 0 1 1 1ZM6 12a1 1 0 0 1-1 1H4a1 1 0 1 1 0-2h1a1 1 0 0 1 1 1Zm11.66-5.66a1 1 0 0 1 0 1.41l-.7.71a1 1 0 0 1-1.42-1.42l.71-.7a1 1 0 0 1 1.41 0ZM8.46 15.54a1 1 0 0 1 0 1.42l-.7.7a1 1 0 0 1-1.42-1.41l.7-.71a1 1 0 0 1 1.42 0Zm9.2 2.12a1 1 0 0 1-1.41 0l-.71-.7a1 1 0 0 1 1.42-1.42l.7.71a1 1 0 0 1 0 1.41ZM8.46 8.46a1 1 0 0 1-1.42 0l-.7-.7a1 1 0 0 1 1.41-1.42l.71.7a1 1 0 0 1 0 1.42ZM12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10Zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z" />
-        </svg>
-      </button>
-    </div>
+    <header class="prototype-headerbar">
+      <div class="headerbar-start">
+        <details class="prototype-primary-menu">
+          <summary class="headerbar-button" aria-label="Main menu" title="Main menu">
+            <img class="adw-icon" src="../../web/assets/icons/open-menu-symbolic.svg" alt="" aria-hidden="true" />
+          </summary>
+          <div class="primary-menu-popup">
+            <span>Data</span>
+            <button type="button">Import Terms…</button>
+            <button type="button">Backup and Restore…</button>
+            <span>Organize</span>
+            <button type="button" data-screen-target="settings">Tags…</button>
+            <button type="button">Statistics</button>
+            <button type="button" data-screen-target="settings">Preferences…</button>
+            <span>Prototype</span>
+            <button id="preview-state-toggle" type="button">Preview first use</button>
+            <small>Local and available offline</small>
+          </div>
+        </details>
+        <button class="headerbar-button suggested-action" type="button" data-open-import aria-label="Add text" title="Add text">
+          <img class="adw-icon" src="../../web/assets/icons/list-add-symbolic.svg" alt="" aria-hidden="true" />
+        </button>
+      </div>
+
+      <nav class="headerbar-view-switcher" aria-label="Primary navigation">
+        <button class="is-active" type="button" data-screen-target="home">
+          <img class="adw-icon" src="../../web/assets/icons/go-home-symbolic.svg" alt="" aria-hidden="true" />Home
+        </button>
+        <button type="button" data-screen-target="library">
+          <img class="adw-icon" src="../../web/assets/icons/view-grid-symbolic.svg" alt="" aria-hidden="true" />Library
+        </button>
+        <button type="button" data-screen-target="vocabulary">
+          <img class="adw-icon" src="../../web/assets/icons/view-list-symbolic.svg" alt="" aria-hidden="true" />Vocabulary
+        </button>
+        <button type="button" data-screen-target="review">
+          <img class="adw-icon" src="../../web/assets/icons/view-refresh-symbolic.svg" alt="" aria-hidden="true" />Review<i>12</i>
+        </button>
+      </nav>
+
+      <div class="headerbar-end">
+        <button class="language-switch" type="button">
+          <span id="active-language-code" class="flag">EN</span>
+          <span id="active-language-label">English</span>
+        </button>
+        <div class="prototype-window-controls" aria-label="Window controls">
+          <button class="headerbar-button" type="button" aria-label="Minimize window" title="Minimize window">
+            <img class="adw-icon" src="../../web/assets/icons/window-minimize-symbolic.svg" alt="" aria-hidden="true" />
+          </button>
+          <button class="headerbar-button" type="button" aria-label="Maximize window" title="Maximize window">
+            <img class="adw-icon" src="../../web/assets/icons/window-maximize-symbolic.svg" alt="" aria-hidden="true" />
+          </button>
+          <button class="headerbar-button window-close" type="button" aria-label="Close window" title="Close window">
+            <img class="adw-icon" src="../../web/assets/icons/window-close-symbolic.svg" alt="" aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+    </header>
 
     <div class="app-frame">
-      <aside class="sidebar" aria-label="Primary navigation">
-        <div class="brand">
-          <img src="../../web/assets/lwt_icon_big.png" alt="" width="44" height="44" />
-          <div>
-            <strong>Learning with Texts</strong>
-            <span>Local library</span>
-          </div>
-        </div>
-
-        <nav class="side-nav">
-          <p class="nav-label">Study</p>
-          <button class="nav-item is-active" type="button" data-screen-target="home">
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="m4 10 8-7 8 7v10a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1V10Z" />
-            </svg>
-            <span>Home</span>
-          </button>
-          <button class="nav-item" type="button" data-screen-target="library">
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="M5 3h12a2 2 0 0 1 2 2v15a1 1 0 0 1-1.45.9A7.7 7.7 0 0 0 14 20a7.7 7.7 0 0 0-3.55.9L9 21.62V7a2 2 0 0 0-2-2H5V3Zm0 4h2v13.38l-1.55-.77A1 1 0 0 1 5 18.72V7Z" />
-            </svg>
-            <span>Library</span>
-          </button>
-          <button class="nav-item" type="button" data-screen-target="vocabulary">
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="M4 4h16v3H4V4Zm0 6h10v3H4v-3Zm0 6h13v3H4v-3Z" />
-            </svg>
-            <span>Vocabulary</span>
-          </button>
-          <button class="nav-item" type="button" data-screen-target="review">
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="M12 3a9 9 0 1 1-8.49 6H1l3.5-4L8 9H5.62A7 7 0 1 0 12 5V3Zm-1 4h2v5.42l3.2 1.85-1 1.73-4.2-2.42V7Z" />
-            </svg>
-            <span>Review</span>
-            <span class="nav-badge">12</span>
-          </button>
-
-          <p class="nav-label">Organize</p>
-          <button class="nav-item" type="button" data-screen-target="settings">
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="M12 2a2 2 0 0 1 2 2v.35a8 8 0 0 1 1.8.75l.25-.25a2 2 0 0 1 2.83 0l.27.27a2 2 0 0 1 0 2.83l-.25.25c.32.57.57 1.17.75 1.8H20a2 2 0 0 1 2 2v.38a2 2 0 0 1-2 2h-.35a8 8 0 0 1-.75 1.8l.25.25a2 2 0 0 1 0 2.83l-.27.27a2 2 0 0 1-2.83 0l-.25-.25a8 8 0 0 1-1.8.75V20a2 2 0 0 1-2 2h-.38a2 2 0 0 1-2-2v-.35a8 8 0 0 1-1.8-.75l-.25.25a2 2 0 0 1-2.83 0l-.27-.27a2 2 0 0 1 0-2.83l.25-.25a8 8 0 0 1-.75-1.8H4a2 2 0 0 1-2-2v-.38a2 2 0 0 1 2-2h.35a8 8 0 0 1 .75-1.8l-.25-.25a2 2 0 0 1 0-2.83l.27-.27a2 2 0 0 1 2.83 0l.25.25A8 8 0 0 1 10 4.35V4a2 2 0 0 1 2-2Zm0 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z" />
-            </svg>
-            <span>Settings</span>
-          </button>
-        </nav>
-
-        <div class="local-note">
-          <span class="status-dot"></span>
-          <div>
-            <strong>Your data stays local</strong>
-            <span id="backup-status">Last backup: today, 9:42 AM</span>
-          </div>
-        </div>
-      </aside>
-
       <main class="main-area">
-        <header class="topbar">
-          <button class="language-switch" type="button">
-            <span id="active-language-code" class="flag">EN</span>
-            <span id="active-language-label">English</span>
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="m7 9 5 5 5-5H7Z" />
-            </svg>
-          </button>
-          <div class="topbar-actions">
-            <button class="icon-button" type="button" aria-label="Search">
-              <svg aria-hidden="true" viewBox="0 0 24 24">
-                <path d="M10.5 3a7.5 7.5 0 1 1-4.73 13.32l-3.04 3.04-1.42-1.42 3.05-3.04A7.5 7.5 0 0 1 10.5 3Zm0 2a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z" />
-              </svg>
-            </button>
-            <button class="avatar" type="button" aria-label="Open profile menu">LB</button>
-          </div>
-        </header>
-
         <section id="screen-home" class="screen is-active" aria-label="Home">
           <div id="home-populated-state">
           <div class="page-heading">
@@ -514,19 +487,12 @@
 
         <section id="screen-reader" class="screen" aria-labelledby="reader-title" hidden>
           <div class="reader-heading">
-            <button class="back-button" type="button" data-screen-target="library">
-              <span aria-hidden="true">←</span>
-              Library
-            </button>
             <div class="reader-title-group">
               <div>
                 <p class="eyebrow">ENGLISH · A2</p>
                 <h1 id="reader-title">The Man and the Dog</h1>
               </div>
               <div class="reader-actions">
-                <button id="complete-reading" class="primary-button compact" type="button">
-                  Finish lesson
-                </button>
                 <button class="secondary-button compact" type="button">Aa</button>
                 <button class="secondary-button compact" type="button">Translate sentence</button>
                 <button class="ghost-icon bordered" type="button" aria-label="More options">•••</button>
@@ -542,18 +508,6 @@
 
           <div class="reader-layout">
             <article class="reading-pane">
-              <div class="audio-player">
-                <button type="button" aria-label="Play audio">
-                  <svg aria-hidden="true" viewBox="0 0 24 24">
-                    <path d="m8 5 11 7-11 7V5Z" />
-                  </svg>
-                </button>
-                <span>00:42</span>
-                <div class="audio-track"><span style="width: 31%"></span></div>
-                <span>02:16</span>
-                <button class="speed-button" type="button">1×</button>
-              </div>
-
               <div class="reading-legend" aria-label="Term status legend">
                 <span><i class="term-dot term-dot--new"></i>New</span>
                 <span><i class="term-dot term-dot--learning"></i>Learning</span>
@@ -590,6 +544,7 @@
               </div>
             </article>
 
+            <div class="reader-sidebar">
             <aside class="term-panel is-open" aria-labelledby="term-panel-title">
               <div class="term-panel__handle" aria-hidden="true"></div>
               <div class="term-panel__top">
@@ -648,6 +603,13 @@
                 <span><kbd>Ctrl</kbd> + <kbd>Enter</kbd></span>
               </div>
             </aside>
+              <button class="complete-reading complete-reading--sidebar primary-button compact" type="button">
+                <svg aria-hidden="true" viewBox="0 0 16 16">
+                  <path d="M3.008 0A3.02 3.02 0 0 0 .008 3v10a3.02 3.02 0 0 0 3 3h10a3.02 3.02 0 0 0 3-3V3a3.02 3.02 0 0 0-3-3zm0 2h10c.422 0 .766.234.918.586l-.668.758-6.297 7.195-2.246-2.246a1 1 0 0 0-1.414 1.418l3 3a1.003 1.003 0 0 0 1.46-.05l6.247-7.137V13c0 .57-.43 1-1 1h-10c-.57 0-1-.43-1-1V3c0-.57.43-1 1-1z"/>
+                </svg>
+                <span>Finish lesson</span>
+              </button>
+            </div>
           </div>
         </section>
 
@@ -898,19 +860,19 @@
 
       <nav class="bottom-nav" aria-label="Mobile primary navigation">
         <button class="is-active" type="button" data-screen-target="home">
-          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m4 10 8-7 8 7v10H4V10Z" /></svg>
+          <img class="adw-icon" src="../../web/assets/icons/go-home-symbolic.svg" alt="" aria-hidden="true" />
           Home
         </button>
         <button type="button" data-screen-target="library">
-          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 3h14v18l-7-3-7 3V3Z" /></svg>
+          <img class="adw-icon" src="../../web/assets/icons/view-grid-symbolic.svg" alt="" aria-hidden="true" />
           Library
         </button>
         <button type="button" data-screen-target="vocabulary">
-          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 4h16v3H4V4Zm0 6h10v3H4v-3Zm0 6h13v3H4v-3Z" /></svg>
+          <img class="adw-icon" src="../../web/assets/icons/view-list-symbolic.svg" alt="" aria-hidden="true" />
           Terms
         </button>
         <button type="button" data-screen-target="review">
-          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 1-8.5 6H1l3.5-4L8 9H5.6A7 7 0 1 0 12 5V3Z" /></svg>
+          <img class="adw-icon" src="../../web/assets/icons/view-refresh-symbolic.svg" alt="" aria-hidden="true" />
           Review
         </button>
       </nav>

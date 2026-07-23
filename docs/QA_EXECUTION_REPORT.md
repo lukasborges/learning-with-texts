@@ -12,21 +12,25 @@
 | Status | Scenarios | Result |
 | --- | --- | --- |
 | [x] Pass | HOME-01, HOME-03, HOME-04 | Inline first-language setup persisted before text creation; the add form inherited the language; after opening a text, Home featured it and did not repeat it in Recent. |
-| [x] Pass | NAV-01 | Home, Library, Review, and Settings navigation opened the intended separate screens in the packaged WebView. |
+| [x] Pass | NAV-01, NAV-03–05 | Home, Library, Reader, Vocabulary, Review, and administrative destinations opened separately in the packaged WebView; the light Adwaita shell, deduplicated menu, and approved prototype hierarchy remained consistent in side-by-side captures. |
 | [x] Pass | LIB-01–08 | The Library empty state, contextual Add content form, import/edit/archive/delete, pagination, and persistence passed. |
 | [x] Pass | READ-01–11 | Reader parsing, exact Learning statuses, contextual editor, one-click Finish lesson, Well Known conversion, learning-term preservation, persisted completion, and single-use Undo passed. |
-| [x] Pass | REV-01–04, STAT-01 | The review queue, all four ratings, empty completion state, and statistics passed after the Reader changes. |
-| [x] Pass | CFG-01–07, DATA-01–05 | Tags, language rules, RTL, settings, audio, backup, rollback, and legacy restore remained green. |
+| [x] Pass | VOC-01, VOC-03 | The global inventory showed exact statuses, recent sentence context and source; the editor persisted status, translation, and romanization through the native boundary. |
+| [x] Pass | REV-01–04, STAT-01 | Source context, Space/1–4 shortcuts, displayed intervals, all four ratings, empty completion state, actionable statistics, and persistence passed. |
+| [x] Pass | CFG-01–09, DATA-01–05 | Adding and editing languages, consistent custom comboboxes, language rules, RTL, human-readable review pacing, tags, backup, rollback, and legacy restore remained green. |
+| [x] Pass | READ-06–07 | Add/Edit/Reader expose no local-audio controls; native backup compatibility tests continue to preserve legacy media without surfacing it in the study UI. |
 | [ ] Not run | HOME-02, HOME-05, NAV-02 | These visual variants are documented for manual/exploratory coverage; the underlying empty/current branches compile and first-use/current states have automated coverage. |
-| [ ] Not run | VOC-01–04 | The prototype Vocabulary inventory remains a proposed screen; these acceptance scenarios are ready but the screen is not part of this implementation slice. |
+| [ ] Partial | VOC-02, VOC-04 | Search/language/status filtering is implemented and exercised; a very large multi-page inventory at 200% zoom remains exploratory. |
 
-Automated totals for this run: 41 web tests, 42 Rust tests, 17 release-script
+Automated totals for this run: 43 web tests, 43 Rust tests, 18 release-script
 tests, one packaged smoke workflow, and one full packaged QA workflow. All
-executed tests passed. The GStreamer plugin scanner repeated its known range
-warnings while initializing test audio; media persistence and the WebView
-workflow still completed successfully.
+executed tests passed.
 
 ## Test Run
+
+> Historical run from 2026-07-22. Its audio checks predate the later product
+> decision to remove local-audio controls from the interface; legacy media
+> remains covered only for migration and backup compatibility.
 
 - **Date:** 2026-07-22
 - **Application:** LWT Desktop 0.1.0

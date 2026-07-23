@@ -36,10 +36,44 @@ function buttonWithText(text) {
   return By.xpath(`//button[normalize-space(.)="${text}"]`);
 }
 
+function checkpoint(name) {
+  process.stderr.write(`# Smoke checkpoint: ${name}\n`);
+}
+
 async function visible(driver, locator, timeout = 10_000) {
-  const element = await driver.wait(until.elementLocated(locator), timeout);
-  await driver.wait(until.elementIsVisible(element), timeout);
-  return element;
+  return driver.wait(async () => {
+    const elements = await driver.findElements(locator);
+    for (const element of elements) {
+      try {
+        if (await element.isDisplayed()) {
+          return element;
+        }
+      } catch {
+        // The procedural WebView may replace a screen while an async query resolves.
+      }
+    }
+    return false;
+  }, timeout, `Visible element was not found: ${locator}`);
+}
+
+async function chooseCombobox(driver, controlLocator, optionLabel) {
+  const control = await visible(driver, controlLocator);
+  await control.findElement(By.css('[role="combobox"]')).click();
+  const option = await driver.wait(async () => {
+    const options = await control.findElements(
+      By.xpath(`.//*[@role="option" and normalize-space(.)="${optionLabel}"]`)
+    );
+    for (const candidate of options) {
+      if (await candidate.isDisplayed()) return candidate;
+    }
+    return false;
+  }, 10_000);
+  await option.click();
+}
+
+async function openPrimaryMenuItem(driver, label) {
+  await driver.findElement(By.css('summary[aria-label="Main menu"]')).click();
+  await (await visible(driver, buttonWithText(label))).click();
 }
 
 async function waitForDriver(processHandle) {
@@ -109,7 +143,24 @@ test('packaged desktop workflows persist and restore local data', { timeout: 120
 
     const heading = await visible(driver, By.css('h1'));
     assert.equal(await heading.getText(), 'Set up the language you want to learn');
-    await driver.findElement(By.css('.first-language-form [name="language"]')).sendKeys('English');
+    assert.equal(await driver.findElements(By.css('.window-control')).then((items) => items.length), 3);
+    assert.equal(
+      await driver.findElement(By.css('.window-control[aria-label="Maximize window"]')).isDisplayed(),
+      true
+    );
+    assert.ok(
+      (await driver.findElements(By.css('.adw-headerbar svg.adw-icon path'))).length >= 8
+    );
+    assert.equal(
+      (await driver.findElements(By.css('.adw-headerbar img.adw-icon'))).length,
+      0
+    );
+    checkpoint('first-use shell');
+    await chooseCombobox(
+      driver,
+      By.css('.first-language-form .language-name-control'),
+      'English'
+    );
     await driver
       .findElement(buttonWithText('Save language and add your first text'))
       .click();
@@ -118,6 +169,10 @@ test('packaged desktop workflows persist and restore local data', { timeout: 120
       await driver.findElement(By.css('.empty-state')).getText(),
       'Your local library is empty. Add your first text to begin.'
     );
+    checkpoint('language setup');
+    await driver.findElement(By.css('.tag-selector__empty-action')).click();
+    await visible(driver, By.xpath('//dialog//h2[normalize-space(.)="No tags have been created"]'));
+    await driver.findElement(buttonWithText('Not now')).click();
 
     await driver.findElement(By.css('[name="title"]')).sendKeys('E2E Story');
     await driver
@@ -128,6 +183,7 @@ test('packaged desktop workflows persist and restore local data', { timeout: 120
       driver,
       By.xpath('//article[contains(@class,"text-card")][.//h2[normalize-space(.)="E2E Story"]]')
     );
+    checkpoint('text creation');
 
     await driver
       .findElement(
@@ -151,8 +207,9 @@ test('packaged desktop workflows persist and restore local data', { timeout: 120
       until.elementTextIs(await driver.findElement(By.css('.term-editor .form-status')), 'Term saved.'),
       10_000
     );
+    checkpoint('term save');
     await driver.findElement(buttonWithText('Finish lesson')).click();
-    await visible(driver, By.xpath('//button[normalize-space(.)="Lesson finished ✓"]'));
+    await visible(driver, By.xpath('//button[normalize-space(.)="Lesson finished"]'));
     assert.match(
       await driver.findElement(By.css('.completion-notice span')).getText(),
       /set to Well Known/
@@ -166,27 +223,38 @@ test('packaged desktop workflows persist and restore local data', { timeout: 120
       10_000
     );
 
-    await driver.findElement(buttonWithText('← Back to library')).click();
-    await driver.findElement(buttonWithText('Home')).click();
+    await driver.findElement(By.css('.view-switcher__button[aria-label="Library"]')).click();
+    await visible(driver, By.xpath('//h2[normalize-space(.)="Library"]'));
+    await (await visible(driver, buttonWithText('Home'))).click();
     await visible(driver, By.xpath('//h1[normalize-space(.)="Pick up where you left off"]'));
     assert.equal(await driver.findElement(By.css('.continue-card h2')).getText(), 'E2E Story');
     assert.equal(
       await driver.findElement(By.css('.recent-grid .empty-state')).getText(),
       'No other recent texts yet.'
     );
-    await driver.findElement(buttonWithText('Library')).click();
-    await visible(driver, buttonWithText('Review'));
-    await driver.findElement(buttonWithText('Review')).click();
-    await visible(driver, By.xpath('//h1[normalize-space(.)="Review terms"]'));
+    await (await visible(driver, buttonWithText('Library'))).click();
+    await (await visible(driver, buttonWithText('Vocabulary'))).click();
+    await visible(driver, By.xpath('//h1[normalize-space(.)="Words and expressions"]'));
+    const vocabularyRow = await visible(
+      driver,
+      By.xpath('//table[contains(@class,"term-table")]//tr[.//strong[.="Hello"]]')
+    );
+    assert.match(await vocabularyRow.findElement(By.css('.term-context')).getText(), /Hello world/);
+    await vocabularyRow.findElement(By.css('button[aria-label="Edit Hello"]')).click();
+    await visible(driver, By.xpath('//dialog//h2[normalize-space(.)="Hello"]'));
+    await driver.findElement(buttonWithText('Cancel')).click();
+    await (await visible(driver, By.css('.view-switcher__button:nth-child(4)'))).click();
+    await visible(driver, By.css('.review-header'));
     assert.equal(await driver.findElement(By.css('.review-card h2')).getText(), 'Hello');
+    assert.match(await driver.findElement(By.css('.review-context')).getText(), /Hello world/);
     await driver.findElement(buttonWithText('Show answer')).click();
     assert.equal(await driver.findElement(By.css('.review-answer p')).getText(), 'olá');
     await driver.findElement(buttonWithText('Good')).click();
     await visible(driver, By.xpath('//h2[normalize-space(.)="Review complete"]'));
 
-    await driver.findElement(buttonWithText('← Back to library')).click();
-    await visible(driver, buttonWithText('Statistics'));
-    await driver.findElement(buttonWithText('Statistics')).click();
+    await driver.findElement(By.css('.view-switcher__button[aria-label="Library"]')).click();
+    await visible(driver, By.xpath('//h2[normalize-space(.)="Library"]'));
+    await openPrimaryMenuItem(driver, 'Statistics');
     await visible(driver, By.xpath('//h1[normalize-space(.)="Learning statistics"]'));
     assert.equal(
       await driver
@@ -195,9 +263,9 @@ test('packaged desktop workflows persist and restore local data', { timeout: 120
       '1'
     );
 
-    await driver.findElement(buttonWithText('← Back to library')).click();
-    await visible(driver, buttonWithText('Backup'));
-    await driver.findElement(buttonWithText('Backup')).click();
+    await driver.findElement(By.css('.view-switcher__button[aria-label="Library"]')).click();
+    await visible(driver, By.xpath('//h2[normalize-space(.)="Library"]'));
+    await openPrimaryMenuItem(driver, 'Backup and Restore…');
     await visible(driver, By.xpath('//h1[normalize-space(.)="Backup and restore"]'));
     await driver.findElement(buttonWithText('Download backup')).click();
     await driver.wait(
@@ -218,7 +286,7 @@ test('packaged desktop workflows persist and restore local data', { timeout: 120
     const restoreStatus = await driver.findElement(By.css('.data-card:last-of-type .form-status'));
     await driver.wait(async () => (await restoreStatus.getText()).startsWith('Restored 2 texts'), 10_000);
 
-    await driver.findElement(buttonWithText('← Back to library')).click();
+    await driver.findElement(By.css('.view-switcher__button[aria-label="Library"]')).click();
     await visible(driver, By.xpath('//h2[normalize-space(.)="Legacy text"]'));
     assert.equal(
       await driver.findElements(By.xpath('//h2[normalize-space(.)="E2E Story"]')).then((items) => items.length),

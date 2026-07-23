@@ -40,7 +40,8 @@ export function createPager(
 
 export function createTagSelector(
   tags: readonly Tag[],
-  selectedIds: readonly number[]
+  selectedIds: readonly number[],
+  onOpenTags?: () => void
 ): { element: HTMLElement; selected: () => number[] } {
   const element = document.createElement('fieldset');
   element.className = 'tag-selector';
@@ -62,9 +63,49 @@ export function createTagSelector(
   });
 
   if (tags.length === 0) {
-    const emptyMessage = document.createElement('small');
-    emptyMessage.textContent = 'Create a tag from the Tags screen first.';
-    element.append(emptyMessage);
+    const emptyAction = document.createElement('button');
+    emptyAction.type = 'button';
+    emptyAction.className = 'tag-selector__empty-action';
+    const emptyIcon = document.createElement('span');
+    emptyIcon.className = 'tag-selector__empty-icon';
+    emptyIcon.setAttribute('aria-hidden', 'true');
+    emptyIcon.textContent = '+';
+    const emptyCopy = document.createElement('span');
+    const emptyTitle = document.createElement('strong');
+    emptyTitle.textContent = 'No tags yet';
+    const emptyDescription = document.createElement('small');
+    emptyDescription.textContent = 'Tags are optional';
+    emptyCopy.append(emptyTitle, emptyDescription);
+    emptyAction.append(emptyIcon, emptyCopy);
+
+    const dialog = document.createElement('dialog');
+    dialog.className = 'tag-help-dialog';
+    const dialogTitle = document.createElement('h2');
+    dialogTitle.textContent = 'No tags have been created';
+    const dialogDescription = document.createElement('p');
+    dialogDescription.textContent =
+      'Tags are optional. You can save this item now or create tags to organize your library.';
+    const actions = document.createElement('div');
+    actions.className = 'tag-help-dialog__actions';
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.textContent = 'Not now';
+    close.addEventListener('click', () => dialog.close());
+    actions.append(close);
+    if (onOpenTags) {
+      const openTags = document.createElement('button');
+      openTags.type = 'button';
+      openTags.className = 'primary-action';
+      openTags.textContent = 'Open Tags';
+      openTags.addEventListener('click', () => {
+        dialog.close();
+        onOpenTags();
+      });
+      actions.append(openTags);
+    }
+    dialog.append(dialogTitle, dialogDescription, actions);
+    emptyAction.addEventListener('click', () => dialog.showModal());
+    element.append(emptyAction, dialog);
   }
 
   return {

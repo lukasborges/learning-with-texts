@@ -29,7 +29,9 @@ import type {
   UndoFinishLessonInput,
   UndoFinishLessonOutcome,
   UpdateLanguageInput,
-  UpdateTextInput
+  UpdateTextInput,
+  UpdateVocabularyTermInput,
+  VocabularyTerm
 } from '../domain/library';
 
 export interface LibraryGateway {
@@ -62,6 +64,8 @@ export interface LibraryGateway {
   getTermDetails(textId: number, normalized: string): Promise<TermDetails>;
   saveTerm(input: SaveTermInput): Promise<SavedTerm>;
   createExpression(input: CreateExpressionInput): Promise<CreatedExpression>;
+  listVocabularyTerms(): Promise<readonly VocabularyTerm[]>;
+  updateVocabularyTerm(input: UpdateVocabularyTermInput): Promise<TermDetails>;
   listReviewTerms(limit: number): Promise<readonly ReviewCard[]>;
   recordReview(input: RecordReviewInput): Promise<ReviewOutcome>;
   reviewStatistics(): Promise<ReviewStatistics>;

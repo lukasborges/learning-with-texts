@@ -230,6 +230,35 @@ pub struct ReviewCard {
     pub romanization: String,
     pub status: i64,
     pub word_count: i64,
+    pub context: Option<String>,
+    pub source_title: Option<String>,
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VocabularyTerm {
+    pub id: i64,
+    pub display_text: String,
+    pub normalized: String,
+    pub language: String,
+    pub translation: String,
+    pub romanization: String,
+    pub status: i64,
+    pub word_count: i64,
+    pub occurrence_count: i64,
+    pub review_count: i64,
+    pub next_review_at: Option<String>,
+    pub source_title: Option<String>,
+    pub context: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateVocabularyTermInput {
+    pub id: i64,
+    pub status: i64,
+    pub translation: String,
+    pub romanization: String,
 }
 
 #[derive(Debug, Deserialize)]

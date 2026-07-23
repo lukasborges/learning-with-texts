@@ -299,9 +299,27 @@ describe('MockLibraryGateway', () => {
 
     const queue = await gateway.listReviewTerms(20);
     const outcome = await gateway.recordReview({ termId: queue[0]?.id ?? 0, rating: 2 });
+    const vocabulary = await gateway.listVocabularyTerms();
+    await gateway.updateVocabularyTerm({
+      id: vocabulary[0]?.id ?? 0,
+      status: 4,
+      translation: 'cão',
+      romanization: 'dog'
+    });
+    const updated = await gateway.listVocabularyTerms();
 
     expect(queue).toHaveLength(1);
-    expect(queue[0]).toMatchObject({ displayText: 'dog', translation: 'cachorro' });
+    expect(queue[0]).toMatchObject({
+      displayText: 'dog',
+      translation: 'cachorro',
+      context: 'A man and his dog walked along the road.',
+      sourceTitle: 'The Man and the Dog'
+    });
+    expect(updated[0]).toMatchObject({
+      status: 4,
+      translation: 'cão',
+      romanization: 'dog'
+    });
     expect(outcome).toMatchObject({ status: 2, dueTerms: 0 });
   });
 

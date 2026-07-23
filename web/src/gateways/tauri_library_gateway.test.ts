@@ -355,6 +355,52 @@ describe('TauriLibraryGateway', () => {
     expect(invoke).toHaveBeenNthCalledWith(2, 'record_review', { input });
   });
 
+  it('loads the global vocabulary inventory', async () => {
+    const terms = [
+      {
+        id: 9,
+        displayText: 'Along',
+        normalized: 'along',
+        language: 'English',
+        translation: 'ao longo de',
+        romanization: '',
+        status: 2,
+        wordCount: 1,
+        occurrenceCount: 3,
+        reviewCount: 1,
+        nextReviewAt: '2026-07-24T12:00:00Z',
+        sourceTitle: 'The Man and the Dog'
+      }
+    ];
+    const invoke = vi.fn().mockResolvedValue(terms);
+    const gateway = new TauriLibraryGateway(invoke);
+
+    await expect(gateway.listVocabularyTerms()).resolves.toEqual(terms);
+    expect(invoke).toHaveBeenCalledWith('list_vocabulary_terms');
+  });
+
+  it('updates a vocabulary term through the native command', async () => {
+    const input = {
+      id: 9,
+      status: 4 as const,
+      translation: 'ao longo de',
+      romanization: ''
+    };
+    const term = {
+      normalized: 'along',
+      displayText: 'Along',
+      status: 4,
+      translation: 'ao longo de',
+      romanization: '',
+      wordCount: 1
+    };
+    const invoke = vi.fn().mockResolvedValue(term);
+    const gateway = new TauriLibraryGateway(invoke);
+
+    await expect(gateway.updateVocabularyTerm(input)).resolves.toEqual(term);
+    expect(invoke).toHaveBeenCalledWith('update_vocabulary_term', { input });
+  });
+
   it('loads review statistics from the native runtime', async () => {
     const statistics = {
       totalTerms: 12,

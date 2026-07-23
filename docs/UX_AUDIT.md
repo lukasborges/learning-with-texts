@@ -33,8 +33,22 @@ Um protótipo navegável das propostas prioritárias acompanha este documento em
 > leitura atual/usuário recorrente, configuração direta do primeiro idioma e
 > dicionário, formulário Add content sob demanda, até três textos recentes sem
 > repetir o destaque, leitor em duas colunas, níveis exatos Learning 1–4 e
-> `Finish lesson` em um clique com persistência e `Undo`. Busca/filtros da
-> Library e a tela global Vocabulary continuam no backlog.
+> `Finish lesson` em um clique com persistência e `Undo`, busca/filtros da
+> Library e a tela global Vocabulary. O shell foi refinado para uma linguagem
+> visual clara inspirada no GNOME/libadwaita: headerbar de 54 px, controles
+> elevados, azul de destaque e `ViewSwitcher` para Home, Library, Vocabulary e
+> Review. A sidebar permanente foi removida para preservar a área útil; os
+> destinos administrativos ficam no menu primário e a navegação frequente vira
+> barra inferior em janelas estreitas. A headerbar também substitui a decoração
+> nativa, com ícones oficiais Adwaita, controles de janela, borda e cantos
+> arredondados reais. Vocabulary agora permite edição direta com frase de
+> contexto; Review apresenta contexto, intervalos e atalhos; idiomas são
+> editados um por vez; Estatísticas sugere a próxima ação. O áudio local foi
+> removido da interface, preservando dados legados apenas para round-trip de
+> backup. Uma rodada final de fidelidade levou os componentes do protótipo para
+> a aplicação real: capas e progresso na Home/Library, documento tipográfico e
+> painel contextual no Reader, densidade de Vocabulary, sessão focada de Review
+> e cartão guiado de primeiro idioma.
 
 ## Como a análise foi feita
 
@@ -69,7 +83,7 @@ Um protótipo navegável das propostas prioritárias acompanha este documento em
   muito grandes.
 - O leitor preserva pontuação e apresenta progresso por termos únicos.
 - O produto oferece um conjunto raro e valioso de capacidades offline:
-  leitura, áudio local, termos, expressões, revisão, estatísticas e backup.
+  leitura, termos, expressões, revisão, estatísticas e backup.
 
 ## Problemas críticos
 
@@ -250,8 +264,8 @@ Estes casos merecem atenção especial porque podem criar uma falsa sensação d
 migração completa:
 
 - `texts.annotated_content`: é restaurado e reexportado, porém invisível.
-- `texts.audio_uri`: referências remotas podem ser preservadas com aviso, mas o
-  leitor só usa o blob local de `text_audio`.
+- `texts.audio_uri` e `text_audio`: preservados na migração e no backup para não
+  causar perda silenciosa, mas deliberadamente não expostos na interface.
 - `languages.export_template`: é editável, mas não existe exportação de termos.
 - `languages.exceptions_split_sentences` e
   `languages.regexp_word_characters`: são preservados, mas não usados pelo parser
@@ -475,7 +489,8 @@ O resultado era “zero pendentes”; não havia um estado persistente separado 
 
 **Proposta:**
 
-- Exibir um único botão `Finish lesson` no cabeçalho ou no fim do leitor.
+- Expor `Finish lesson` como uma única ação abaixo do painel contextual de
+  vocabulário. Não repetir no cabeçalho, no rodapé ou como ação flutuante.
 - Executar diretamente, sem diálogo intermediário: termos clicados já estão
   salvos no vocabulário; palavras simples nunca clicadas passam para status 99.
 - Não modificar termos em aprendizagem, ignorados nem expressões.
@@ -652,7 +667,8 @@ Sistema
   texto.
 - Raio, borda, sombra, espaçamento e cores definidos por tokens.
 - Títulos curtos, metadados discretos e ações secundárias em menus.
-- Dark mode desenhado como tema completo, não como conjunto de exceções.
+- Tema claro intencional e consistente, independentemente da preferência escura
+  do sistema operacional.
 - No leitor, largura de texto controlada e painel lateral entre 320 e 380 px.
 - No mobile, navegação inferior e painel de termo em folha inferior.
 
@@ -661,21 +677,27 @@ Sistema
 ### Etapa 0 — correções de base
 
 1. Corrigir `[hidden]`.
-2. Corrigir modo escuro em Configurações.
+2. Consolidar o tema claro intencional em todas as telas.
 3. Implementar política de rolagem e foco entre telas.
 4. Criar tokens semânticos de cor e testes visuais dos temas.
 
 ### Etapa 1 — shell e Biblioteca
 
-1. Criar navegação persistente.
-2. Separar Home e Library.
-3. Mover importação para modal/tela própria.
-4. Criar os estados de primeiro uso, sem leitura atual e usuário recorrente; no
+1. Criar navegação persistente em `ViewSwitcher` na headerbar, com fallback
+   inferior responsivo e menu primário para operações menos frequentes.
+2. Transformar a headerbar na titlebar da janela Tauri: desativar as decorações
+   nativas, definir regiões de arraste, adicionar controles Adwaita para
+   minimizar, maximizar/restaurar e fechar, conceder somente as permissões de
+   janela necessárias e validar arraste, duplo clique, redimensionamento e
+   maximização em Wayland e X11.
+3. Separar Home e Library.
+4. Mover importação para modal/tela própria.
+5. Criar os estados de primeiro uso, sem leitura atual e usuário recorrente; no
    primeiro uso, configurar o idioma antes do texto.
-5. Criar `Continue reading`, revisão de hoje e três textos recentes sem
+6. Criar `Continue reading`, revisão de hoje e três textos recentes sem
    duplicar o destaque.
-6. Adicionar busca, filtro, ordenação e paginação na Library.
-7. Simplificar ações dos cartões.
+7. Adicionar busca, filtro, ordenação e paginação na Library.
+8. Simplificar ações dos cartões.
 
 ### Etapa 2 — leitor contextual
 
@@ -684,7 +706,7 @@ Sistema
 3. Preservar seleção, contexto e posição de leitura.
 4. Simplificar status, tradução e expressões.
 5. Implementar `Finish lesson` em um clique, registro de leitura e `Undo`.
-6. Integrar áudio e chamada de revisão ao leitor.
+6. Integrar a chamada de revisão ao leitor; não expor áudio local na interface.
 
 ### Etapa 3 — revisão, configurações e progresso
 

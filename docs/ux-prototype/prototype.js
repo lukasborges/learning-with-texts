@@ -19,7 +19,9 @@ function showScreen(name) {
     screen.hidden = !active;
   });
 
-  document.querySelectorAll(".nav-item, .bottom-nav button").forEach((button) => {
+  document
+    .querySelectorAll(".headerbar-view-switcher button, .bottom-nav button")
+    .forEach((button) => {
     const active = button.dataset.screenTarget === name;
     button.classList.toggle("is-active", active);
   });
@@ -46,14 +48,14 @@ document.querySelectorAll("[data-open-import]").forEach((button) => {
   });
 });
 
-const completeReadingButton = document.querySelector("#complete-reading");
+const completeReadingButtons = [...document.querySelectorAll(".complete-reading")];
 
 const previewStateToggle = document.querySelector("#preview-state-toggle");
 const populatedHomeState = document.querySelector("#home-populated-state");
 const emptyHomeState = document.querySelector("#home-empty-state");
 const populatedLibraryState = document.querySelector("#library-populated-state");
 const emptyLibraryState = document.querySelector("#library-empty-state");
-const reviewBadge = document.querySelector(".nav-badge");
+const reviewBadge = document.querySelector(".headerbar-view-switcher i");
 const backupStatus = document.querySelector("#backup-status");
 const activeLanguageCode = document.querySelector("#active-language-code");
 const activeLanguageLabel = document.querySelector("#active-language-label");
@@ -74,9 +76,11 @@ previewStateToggle?.addEventListener("click", () => {
   if (activeLanguageLabel) {
     activeLanguageLabel.textContent = showFirstUse ? "No language set" : "English";
   }
-  previewStateToggle.textContent = showFirstUse
+  previewStateToggle.title = showFirstUse
     ? "Preview returning user"
     : "Preview first use";
+  previewStateToggle.setAttribute("aria-label", previewStateToggle.title);
+  previewStateToggle.textContent = previewStateToggle.title;
   const visibleHeading = showFirstUse
     ? emptyHomeState?.querySelector("h1")
     : populatedHomeState?.querySelector("h1");
@@ -242,8 +246,10 @@ let wordsMarkedAtFinish = [];
 
 function markReadingComplete() {
   wordsMarkedAtFinish = [...document.querySelectorAll(".word--new")];
-  completeReadingButton.textContent = "Lesson finished ✓";
-  completeReadingButton.disabled = true;
+  completeReadingButtons.forEach((button) => {
+    button.querySelector("span").textContent = "Lesson finished";
+    button.disabled = true;
+  });
 
   wordsMarkedAtFinish.forEach((word) => {
     word.classList.remove("word--new");
@@ -266,7 +272,9 @@ function markReadingComplete() {
   );
 }
 
-completeReadingButton?.addEventListener("click", markReadingComplete);
+completeReadingButtons.forEach((button) => {
+  button.addEventListener("click", markReadingComplete);
+});
 
 undoFinishButton?.addEventListener("click", () => {
   wordsMarkedAtFinish.forEach((word) => {
@@ -274,8 +282,10 @@ undoFinishButton?.addEventListener("click", () => {
     word.classList.add("word--new");
     word.dataset.status = "new";
   });
-  completeReadingButton.textContent = "Finish lesson";
-  completeReadingButton.disabled = false;
+  completeReadingButtons.forEach((button) => {
+    button.querySelector("span").textContent = "Finish lesson";
+    button.disabled = false;
+  });
   const progressBar = document.querySelector("#reader-progress-bar");
   const progressLabel = document.querySelector("#reader-progress-label");
   if (progressBar) progressBar.style.width = "75%";

@@ -2787,7 +2787,41 @@ impl Database {
                         terms.translation,
                         COALESCE(terms.romanization, ''),
                         terms.status,
-                        terms.word_count
+                        terms.word_count,
+                        COALESCE(
+                            (SELECT sentences.content
+                             FROM text_items
+                             INNER JOIN sentences ON sentences.id = text_items.sentence_id
+                             INNER JOIN texts ON texts.id = text_items.text_id
+                             WHERE text_items.language_id = terms.language_id
+                               AND text_items.normalized = terms.normalized
+                               AND text_items.is_word = 1
+                             ORDER BY texts.last_opened_at DESC, text_items.id
+                             LIMIT 1),
+                            (SELECT sentences.content
+                             FROM expression_occurrences
+                             INNER JOIN sentences ON sentences.id = expression_occurrences.sentence_id
+                             INNER JOIN texts ON texts.id = expression_occurrences.text_id
+                             WHERE expression_occurrences.term_id = terms.id
+                             ORDER BY texts.last_opened_at DESC, expression_occurrences.id
+                             LIMIT 1)
+                        ),
+                        COALESCE(
+                            (SELECT texts.title
+                             FROM text_items
+                             INNER JOIN texts ON texts.id = text_items.text_id
+                             WHERE text_items.language_id = terms.language_id
+                               AND text_items.normalized = terms.normalized
+                               AND text_items.is_word = 1
+                             ORDER BY texts.last_opened_at DESC, text_items.id
+                             LIMIT 1),
+                            (SELECT texts.title
+                             FROM expression_occurrences
+                             INNER JOIN texts ON texts.id = expression_occurrences.text_id
+                             WHERE expression_occurrences.term_id = terms.id
+                             ORDER BY texts.last_opened_at DESC, expression_occurrences.id
+                             LIMIT 1)
+                        )
                  FROM terms
                  INNER JOIN languages ON languages.id = terms.language_id
                  WHERE terms.status BETWEEN 1 AND 5
@@ -2806,11 +2840,150 @@ impl Database {
                     romanization: row.get(4)?,
                     status: row.get(5)?,
                     word_count: row.get(6)?,
+                    context: row.get(7)?,
+                    source_title: row.get(8)?,
                 })
             })
             .map_err(|error| format!("Unable to load the review queue: {error}"))?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|error| format!("Unable to decode the review queue: {error}"))
+    }
+
+    pub fn list_vocabulary_terms(&self) -> Result<Vec<VocabularyTerm>, String> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| "The desktop database lock is unavailable".to_string())?;
+        let mut statement = connection
+            .prepare(
+                "SELECT terms.id,
+                        terms.display_text,
+                        terms.normalized,
+                        languages.name,
+                        terms.translation,
+                        COALESCE(terms.romanization, ''),
+                        terms.status,
+                        terms.word_count,
+                        (SELECT COUNT(*)
+                         FROM text_items
+                         WHERE text_items.language_id = terms.language_id
+                           AND text_items.normalized = terms.normalized
+                           AND text_items.is_word = 1),
+                        terms.review_count,
+                        terms.next_review_at,
+                        (SELECT texts.title
+                         FROM text_items
+                         INNER JOIN texts ON texts.id = text_items.text_id
+                         WHERE text_items.language_id = terms.language_id
+                           AND text_items.normalized = terms.normalized
+                         ORDER BY texts.last_opened_at DESC, texts.id DESC
+                         LIMIT 1),
+                        COALESCE(
+                            (SELECT sentences.content
+                             FROM text_items
+                             INNER JOIN sentences ON sentences.id = text_items.sentence_id
+                             INNER JOIN texts ON texts.id = text_items.text_id
+                             WHERE text_items.language_id = terms.language_id
+                               AND text_items.normalized = terms.normalized
+                               AND text_items.is_word = 1
+                             ORDER BY texts.last_opened_at DESC, text_items.id
+                             LIMIT 1),
+                            (SELECT sentences.content
+                             FROM expression_occurrences
+                             INNER JOIN sentences ON sentences.id = expression_occurrences.sentence_id
+                             INNER JOIN texts ON texts.id = expression_occurrences.text_id
+                             WHERE expression_occurrences.term_id = terms.id
+                             ORDER BY texts.last_opened_at DESC, expression_occurrences.id
+                             LIMIT 1)
+                        )
+                 FROM terms
+                 INNER JOIN languages ON languages.id = terms.language_id
+                 ORDER BY terms.updated_at DESC, terms.id DESC",
+            )
+            .map_err(|error| format!("Unable to prepare the vocabulary list: {error}"))?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok(VocabularyTerm {
+                    id: row.get(0)?,
+                    display_text: row.get(1)?,
+                    normalized: row.get(2)?,
+                    language: row.get(3)?,
+                    translation: row.get(4)?,
+                    romanization: row.get(5)?,
+                    status: row.get(6)?,
+                    word_count: row.get(7)?,
+                    occurrence_count: row.get(8)?,
+                    review_count: row.get(9)?,
+                    next_review_at: row.get(10)?,
+                    source_title: row.get(11)?,
+                    context: row.get(12)?,
+                })
+            })
+            .map_err(|error| format!("Unable to load the vocabulary list: {error}"))?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| format!("Unable to decode the vocabulary list: {error}"))
+    }
+
+    pub fn update_vocabulary_term(
+        &self,
+        input: UpdateVocabularyTermInput,
+    ) -> Result<TermDetails, String> {
+        if input.id <= 0 {
+            return Err("Vocabulary term was not found".to_string());
+        }
+        if !is_saved_term_status(input.status) {
+            return Err("Choose a saved status for the term".to_string());
+        }
+        let translation = input.translation.trim().to_string();
+        let romanization = input.romanization.trim().to_string();
+        if translation.chars().count() > 500 {
+            return Err("Translation must not exceed 500 characters".to_string());
+        }
+        if romanization.chars().count() > 100 {
+            return Err("Romanization must not exceed 100 characters".to_string());
+        }
+
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| "The desktop database lock is unavailable".to_string())?;
+        let changed = connection
+            .execute(
+                "UPDATE terms
+                 SET status = ?1,
+                     translation = ?2,
+                     romanization = ?3,
+                     next_review_at = CASE
+                         WHEN ?1 BETWEEN 1 AND 5
+                           THEN COALESCE(next_review_at, CURRENT_TIMESTAMP)
+                         ELSE NULL
+                     END,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ?4",
+                params![input.status, translation, romanization, input.id],
+            )
+            .map_err(|error| format!("Unable to update the vocabulary term: {error}"))?;
+        if changed == 0 {
+            return Err("Vocabulary term was not found".to_string());
+        }
+        connection
+            .query_row(
+                "SELECT normalized, display_text, status, translation,
+                        COALESCE(romanization, ''), word_count
+                 FROM terms WHERE id = ?1",
+                [input.id],
+                |row| {
+                    Ok(TermDetails {
+                        normalized: row.get(0)?,
+                        display_text: row.get(1)?,
+                        status: row.get(2)?,
+                        translation: row.get(3)?,
+                        romanization: row.get(4)?,
+                        word_count: row.get(5)?,
+                    })
+                },
+            )
+            .map_err(|error| format!("Unable to load the updated vocabulary term: {error}"))
     }
 
     pub fn record_review(&self, input: RecordReviewInput) -> Result<ReviewOutcome, String> {
@@ -3278,6 +3451,60 @@ mod tests {
                 .unwrap_err(),
             "Lesson completion was already undone"
         );
+    }
+
+    #[test]
+    fn lists_saved_vocabulary_with_language_source_and_occurrences() {
+        let database = Database::in_memory().expect("database should migrate");
+        let text = database
+            .create_text(text_input(
+                "English",
+                "A short lesson",
+                "Along the road, along the river.",
+            ))
+            .expect("text should be created");
+        database
+            .save_term(SaveTermInput {
+                text_id: text.id,
+                normalized: "along".into(),
+                status: 2,
+                translation: "ao longo de".into(),
+                romanization: String::new(),
+            })
+            .expect("term should save");
+
+        let vocabulary = database
+            .list_vocabulary_terms()
+            .expect("vocabulary should load");
+
+        assert_eq!(vocabulary.len(), 1);
+        assert_eq!(vocabulary[0].display_text, "Along");
+        assert_eq!(vocabulary[0].normalized, "along");
+        assert_eq!(vocabulary[0].language, "English");
+        assert_eq!(vocabulary[0].translation, "ao longo de");
+        assert_eq!(vocabulary[0].status, 2);
+        assert_eq!(vocabulary[0].occurrence_count, 2);
+        assert_eq!(vocabulary[0].review_count, 0);
+        assert_eq!(
+            vocabulary[0].source_title.as_deref(),
+            Some("A short lesson")
+        );
+        assert_eq!(
+            vocabulary[0].context.as_deref(),
+            Some("Along the road, along the river.")
+        );
+
+        let updated = database
+            .update_vocabulary_term(UpdateVocabularyTermInput {
+                id: vocabulary[0].id,
+                status: 4,
+                translation: "ao longo".into(),
+                romanization: "along".into(),
+            })
+            .expect("vocabulary term should update");
+        assert_eq!(updated.status, 4);
+        assert_eq!(updated.translation, "ao longo");
+        assert_eq!(updated.romanization, "along");
     }
 
     #[test]
@@ -4426,6 +4653,8 @@ mod tests {
 
         assert_eq!(queue.len(), 1);
         assert_eq!(queue[0].translation, "termo");
+        assert_eq!(queue[0].context.as_deref(), Some("Review term."));
+        assert_eq!(queue[0].source_title.as_deref(), Some("Review"));
         assert_eq!(outcome.status, 2);
         assert_eq!(outcome.due_terms, 0);
         let connection = database.connection.lock().expect("database should lock");

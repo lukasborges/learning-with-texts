@@ -6,6 +6,7 @@ use crate::models::{
     SaveTextAudioInput, SavedTerm, SetTermStatusInput, SetTermTagsInput, SetTextArchivedInput,
     SetTextTagsInput, Tag, TermDetails, TermProgress, TextAudio, TextDetails,
     UndoFinishLessonInput, UndoFinishLessonOutcome, UpdateLanguageInput, UpdateTextInput,
+    UpdateVocabularyTermInput, VocabularyTerm,
 };
 use tauri::Manager;
 
@@ -222,6 +223,21 @@ fn list_review_terms(
 }
 
 #[tauri::command]
+fn list_vocabulary_terms(
+    database: tauri::State<'_, Database>,
+) -> Result<Vec<VocabularyTerm>, String> {
+    database.list_vocabulary_terms()
+}
+
+#[tauri::command]
+fn update_vocabulary_term(
+    database: tauri::State<'_, Database>,
+    input: UpdateVocabularyTermInput,
+) -> Result<TermDetails, String> {
+    database.update_vocabulary_term(input)
+}
+
+#[tauri::command]
 fn record_review(
     database: tauri::State<'_, Database>,
     input: RecordReviewInput,
@@ -275,6 +291,8 @@ pub fn run() {
             get_term_details,
             save_term,
             create_expression,
+            list_vocabulary_terms,
+            update_vocabulary_term,
             list_review_terms,
             record_review,
             review_statistics

@@ -29,7 +29,9 @@ import type {
   UndoFinishLessonInput,
   UndoFinishLessonOutcome,
   UpdateLanguageInput,
-  UpdateTextInput
+  UpdateTextInput,
+  UpdateVocabularyTermInput,
+  VocabularyTerm
 } from '../domain/library';
 import type { LibraryGateway } from './library_gateway';
 
@@ -155,6 +157,14 @@ export class TauriLibraryGateway implements LibraryGateway {
 
   createExpression(input: CreateExpressionInput): Promise<CreatedExpression> {
     return this.invoke<CreatedExpression>('create_expression', { input });
+  }
+
+  listVocabularyTerms(): Promise<readonly VocabularyTerm[]> {
+    return this.invoke<VocabularyTerm[]>('list_vocabulary_terms');
+  }
+
+  updateVocabularyTerm(input: UpdateVocabularyTermInput): Promise<TermDetails> {
+    return this.invoke<TermDetails>('update_vocabulary_term', { input });
   }
 
   listReviewTerms(limit: number): Promise<readonly ReviewCard[]> {

@@ -1,9 +1,8 @@
 # Learning with Texts Desktop
 
 Learning with Texts (LWT) is a local-first application for reading, vocabulary
-tracking, spaced review, and language-learning library management. Rust and
-SQLite provide the native runtime; Tauri hosts the TypeScript interface. End
-users do not need PHP, MySQL, Apache, Docker, or a local web server.
+tracking, spaced review, and language-learning library management. Your library
+stays on your computer, and the main learning workflow is available offline.
 
 ## Install
 
