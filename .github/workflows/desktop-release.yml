@@ -19,22 +19,22 @@ jobs:
             artifact: lwt-desktop-linux-x86_64
             rust_target: x86_64-unknown-linux-gnu
             build_args: --bundles deb,appimage
-            bundle_root: desktop/src-tauri/target/release/bundle
+            bundle_root: target/release/bundle
             paths: |
-              desktop/src-tauri/target/release/bundle/deb/*.deb
-              desktop/src-tauri/target/release/bundle/appimage/*.AppImage
-              desktop/src-tauri/target/release/bundle/lwt-desktop-linux-x86_64.cdx.json
-              desktop/src-tauri/target/release/bundle/SHA256SUMS
+              target/release/bundle/deb/*.deb
+              target/release/bundle/appimage/*.AppImage
+              target/release/bundle/lwt-desktop-linux-x86_64.cdx.json
+              target/release/bundle/SHA256SUMS
           - runner: windows-2025
             artifact: lwt-desktop-windows-x86_64
             rust_target: x86_64-pc-windows-msvc
             build_args: --bundles msi,nsis
-            bundle_root: desktop/src-tauri/target/release/bundle
+            bundle_root: target/release/bundle
             paths: |
-              desktop/src-tauri/target/release/bundle/msi/*.msi
-              desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
-              desktop/src-tauri/target/release/bundle/lwt-desktop-windows-x86_64.cdx.json
-              desktop/src-tauri/target/release/bundle/SHA256SUMS
+              target/release/bundle/msi/*.msi
+              target/release/bundle/nsis/*-setup.exe
+              target/release/bundle/lwt-desktop-windows-x86_64.cdx.json
+              target/release/bundle/SHA256SUMS
     steps:
       - uses: actions/checkout@v6
 
@@ -59,15 +59,14 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: desktop/src-tauri
+          workspaces: .
           key: ${{ matrix.rust_target }}
 
       - run: npm ci
-      - run: npm run desktop:check
-      - run: npm run desktop:test
+      - run: npm run check
+      - run: npm test
 
       - name: Build native installers
-        working-directory: desktop
         env:
           NO_STRIP: ${{ runner.os == 'Linux' && '1' || '' }}
         run: npx tauri build ${{ matrix.build_args }}
@@ -75,7 +74,7 @@ jobs:
       - name: Smoke test Linux package installation and removal
         if: runner.os == 'Linux'
         run: |
-          package_path="$(realpath "$(find desktop/src-tauri/target/release/bundle/deb -name '*.deb' -print -quit)")"
+          package_path="$(realpath "$(find target/release/bundle/deb -name '*.deb' -print -quit)")"
           test -n "$package_path"
           sudo apt-get install -y "$package_path"
           test -x /usr/bin/lwt-desktop
@@ -94,7 +93,7 @@ jobs:
 
       - name: Generate SHA-256 manifest
         run: >-
-          node desktop/scripts/release-integrity.mjs
+          node scripts/release-integrity.mjs
           --root "${{ matrix.bundle_root }}"
           --output "${{ matrix.bundle_root }}/SHA256SUMS"
 
@@ -125,19 +124,19 @@ jobs:
         run: rustup default stable
 
       - run: npm ci
-      - run: npm run desktop:check
-      - run: npm run desktop:test
-      - run: cd desktop && npx tauri build --no-bundle
+      - run: npm run check
+      - run: npm test
+      - run: npx tauri build --no-bundle
 
       - name: Build pacman package as an unprivileged user
         run: |
           useradd --create-home packagebuilder
           chown -R packagebuilder:packagebuilder "$GITHUB_WORKSPACE"
-          runuser -u packagebuilder -- npm run desktop:package:arch:staged
+          runuser -u packagebuilder -- npm run package:arch:staged
 
       - name: Smoke test Arch package installation and removal
         run: |
-          package_path="$(find desktop/artifacts/arch -name '*.pkg.tar.zst' -print -quit)"
+          package_path="$(find artifacts/arch -name '*.pkg.tar.zst' -print -quit)"
           test -n "$package_path"
           pacman -U --noconfirm "$package_path"
           test -x /usr/bin/lwt-desktop
@@ -150,26 +149,26 @@ jobs:
       - name: Generate Arch package SBOM
         uses: anchore/sbom-action@v0
         with:
-          path: desktop/artifacts/arch
+          path: artifacts/arch
           format: cyclonedx-json
-          output-file: desktop/artifacts/arch/lwt-desktop-arch-x86_64.cdx.json
+          output-file: artifacts/arch/lwt-desktop-arch-x86_64.cdx.json
           upload-artifact: false
           upload-release-assets: false
 
       - name: Generate Arch package checksums
         run: >-
-          node desktop/scripts/release-integrity.mjs
-          --root desktop/artifacts/arch
-          --output desktop/artifacts/arch/SHA256SUMS
+          node scripts/release-integrity.mjs
+          --root artifacts/arch
+          --output artifacts/arch/SHA256SUMS
 
       - uses: actions/upload-artifact@v7
         with:
           name: lwt-desktop-arch-x86_64
           path: |
-            desktop/artifacts/arch/*.pkg.tar.zst
-            desktop/artifacts/arch/.SRCINFO
-            desktop/artifacts/arch/*.cdx.json
-            desktop/artifacts/arch/SHA256SUMS
+            artifacts/arch/*.pkg.tar.zst
+            artifacts/arch/.SRCINFO
+            artifacts/arch/*.cdx.json
+            artifacts/arch/SHA256SUMS
           if-no-files-found: error
           include-hidden-files: true
           retention-days: 30

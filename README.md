@@ -1,59 +1,52 @@
 # Learning with Texts Desktop
 
-Learning with Texts (LWT) is now a local-first desktop application for reading,
-tracking vocabulary, reviewing terms, and preserving a language-learning
-library. It runs on SQLite inside a Tauri/Pake desktop shell; end users do not
-install PHP, Apache, MySQL/MariaDB, XAMPP, MAMP, or Docker.
+Learning with Texts (LWT) is a local-first application for reading, vocabulary
+tracking, spaced review, and language-learning library management. Rust and
+SQLite provide the native runtime; Tauri hosts the TypeScript interface. End
+users do not need PHP, MySQL, Apache, Docker, or a local web server.
 
 ## Install
 
-Windows and Linux installers with cryptographically signed updater metadata are
-produced from version tags by the protected release workflow. Windows installers
-are intentionally not Authenticode-signed and may display an unknown-publisher
-warning, matching the accepted distribution model. macOS distribution is
-deferred until Apple build and signing access is available. Until the first production run is verified,
-use artifacts from the manual workflow only for testing; those artifacts are
-explicitly unsigned. Release and verification details are in
-[desktop/RELEASING.md](desktop/RELEASING.md).
+Protected version tags produce Windows MSI/NSIS installers, Linux DEB and
+AppImage packages, and an Arch Linux package. Windows installers are unsigned
+and may display an unknown-publisher warning. Always download from the official
+release and verify the supplied SHA-256 manifest. See
+[Release Builds](docs/RELEASING.md) for installation and verification details.
 
-Arch Linux users can install the native package with
-`sudo pacman -U lwt-desktop-<version>-1-x86_64.pkg.tar.zst`.
-
-Application data is stored in the operating system's per-user application-data
-directory. Use **Backup** in the application to create a portable JSON snapshot
-before upgrading or moving to another computer.
+Application data stays in the operating system's per-user application-data
+directory. Create a portable JSON backup from **Backup** before upgrades or
+moving to another computer.
 
 ## Develop
 
-Install Node.js 20.19 or newer, Rust, and the platform prerequisites from the
-[Tauri documentation](https://v2.tauri.app/start/prerequisites/). Then run:
+Install Node.js 20.19 or newer, Rust, and the platform dependencies listed by
+[Tauri](https://v2.tauri.app/start/prerequisites/). Then run:
 
 ```bash
 npm ci
-npm run desktop:check
-npm run desktop:test
-npm run desktop:tauri:dev
+npm run check
+npm test
+npm run dev
 ```
 
-`npm run desktop:build` creates the static Pake web bundle.
-`npm run desktop:tauri:build` creates native installers with the custom SQLite
-runtime. Packaged Linux end-to-end tests are available through
-`npm run desktop:e2e` after installing the prerequisites in [desktop/E2E.md](desktop/E2E.md).
+Use `npm run build` for native installers, `npm run package:arch` for the Arch
+package, and `npm run test:e2e` for the packaged Linux workflow. Additional
+requirements are documented in [End-to-End Tests](docs/E2E.md). Release
+candidates should also follow the complete [QA Test Scenarios](docs/QA_TEST_SCENARIOS.md).
 
-## Architecture and Migration
+## Repository Layout
 
-The TypeScript frontend is under `desktop/web/`; native commands, SQLite
-migrations, and tests are under `desktop/src-tauri/`. The WebView receives only
-typed, scoped commands—never raw SQL, shell access, or unrestricted filesystem
-access. See [desktop/README.md](desktop/README.md) and
-[desktop/MVP_PARITY.md](desktop/MVP_PARITY.md) for the implemented workflows and
-runtime boundary.
+- `src/`: Rust commands, persistence, parsing, and schema orchestration.
+- `migrations/`: ordered SQLite migrations embedded in the native binary.
+- `web/`: TypeScript domain contracts, gateways, UI modules, and styles.
+- `tests/` and `e2e/`: fixtures and packaged-application tests.
+- `scripts/` and `packaging/`: release validation and native package recipes.
+- `docs/`: architecture, release, security, QA, and operational guidance.
 
-Existing PHP LWT users should follow
-[Migrating from Legacy PHP LWT](MIGRATING_FROM_LEGACY_PHP.md). The frozen
-exporter remains available in the `legacy-php-migration-v25.10.0` tag and
-`legacy-php-maintenance` branch; the maintained desktop branch contains no
-legacy server runtime.
+The WebView receives typed, scoped commands and never raw SQL, shell access, or
+unrestricted filesystem access. See [Architecture](docs/ARCHITECTURE.md) and
+[Legacy Import](docs/LEGACY_IMPORT.md) for implementation and data-transfer
+details.
 
-This project retains the upstream licensing files [LICENSE](LICENSE) and
+This project retains the upstream [LICENSE](LICENSE) and
 [UNLICENSE.txt](UNLICENSE.txt).

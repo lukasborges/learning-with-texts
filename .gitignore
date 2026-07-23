@@ -1,14 +1,24 @@
 # Local agent instructions
 AGENTS.md
 
-# Desktop migration outputs
-/dist-desktop/
-/desktop/artifacts/
+# Build and packaging outputs
+/artifacts/
+/dist/
+/gen/schemas/
+/target/
+/*.AppImage
+/*.deb
+/*.dmg
+/*.msi
+/*.rpm
+/*.pkg.tar.zst
+/*.app/
+/*-binary
+/icons/android/
+/icons/ios/
 
-# Local configuration and dependencies
-/connect.inc.php
+# JavaScript dependencies
 /node_modules/
-/vendor/
 
 # Editor and operating-system files
 .DS_Store
