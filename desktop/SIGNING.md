@@ -14,8 +14,10 @@ Configure required reviewers and allow only protected `v*` tags in the
 or organization-wide secrets:
 
 The environment and tag policy were provisioned on July 22, 2026. The
-`lukasborges` account must approve each deployment; platform credentials and
-the updater key still need to be added before creating the first version tag.
+`lukasborges` account must approve each deployment. The updater private key and
+matching public variable are configured; its password and the Windows and Apple
+platform credentials still need to be added before creating the first version
+tag.
 
 | Name | Scope and purpose |
 | --- | --- |
@@ -37,6 +39,12 @@ provider supports it. The workflow uses only the generated `GITHUB_TOKEN` with
 `contents: write`; do not create a personal access token. CI imports credentials
 into temporary stores and removes them immediately after packaging, before any
 SBOM action runs.
+
+Generate the updater key interactively from the repository root with
+`npm run desktop:generate:updater-key`. The helper installs the locked Tauri CLI
+when necessary, writes the key pair under the user's local data directory,
+refuses to overwrite an existing key, and restricts private-key permissions.
+Keep a separate encrypted recovery copy before adding its contents to GitHub.
 
 ## Release and Verification
 
