@@ -97,7 +97,7 @@ expanded so its remaining work is visible before the next commit.
 
 ### External Completion Gates
 
-- [x] Provide a tested, non-overwriting helper for generating and protecting the Tauri updater key pair (this commit).
+- [x] Provide a tested, non-overwriting helper for generating and protecting the Tauri updater key pair (`a6936c1`).
 - [x] Add `TAURI_SIGNING_PRIVATE_KEY` and the matching `TAURI_UPDATER_PUBLIC_KEY` variable to the protected environment (verified July 22, 2026).
 - [ ] Add `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` to the protected environment without exposing it in logs or chat.
 - [ ] Add the Windows code-signing PFX and password to the protected environment.
