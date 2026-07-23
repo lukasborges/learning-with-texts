@@ -256,6 +256,16 @@ test('local QA exercises the complete supported desktop workflow', { timeout: 24
     );
     await capture(driver, '01-empty-library.png');
     await driver.findElement(buttonWithText('Cancel')).click();
+    await driver.findElement(By.css('.view-switcher__button[aria-label="Home"]')).click();
+    const emptyReadingCard = await visible(driver, By.css('.continue-card--empty'));
+    assert.ok((await emptyReadingCard.getRect()).height <= 220);
+    assert.equal(
+      await driver.executeScript(
+        'return getComputedStyle(arguments[0]).justifyContent',
+        await emptyReadingCard.findElement(By.css('.continue-content'))
+      ),
+      'center'
+    );
     await openPrimaryMenuItem(driver, 'Tags…');
     await visible(driver, By.xpath('//h1[normalize-space(.)="Tags"]'));
     await createTag(driver, 'Priority', 'Review first');

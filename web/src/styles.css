@@ -5970,3 +5970,90 @@ body:has(.desktop-app) {
     grid-row: auto;
   }
 }
+
+/* Adwaita action normalization
+ *
+ * The retired desktop stylesheet above still provides structural fallbacks.
+ * Keep semantic actions here so legacy colors and compact radii cannot leak
+ * into the active window.
+ */
+
+.adw-window .primary-action,
+.adw-window .primary-button {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 7px 12px;
+  border: 1px solid var(--adw-accent);
+  border-radius: 9px;
+  background: var(--adw-accent);
+  color: #fff;
+  box-shadow: none;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.adw-window .primary-action:hover,
+.adw-window .primary-button:hover {
+  border-color: var(--adw-accent-hover);
+  background: var(--adw-accent-hover);
+}
+
+.adw-window .primary-action:focus-visible,
+.adw-window .primary-button:focus-visible,
+.adw-window .button-secondary:focus-visible,
+.adw-window .secondary-button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--adw-accent) 38%, transparent);
+  outline-offset: 2px;
+}
+
+.adw-window .primary-action:disabled,
+.adw-window .primary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.adw-window .button-secondary,
+.adw-window .secondary-button {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 7px 12px;
+  border: 1px solid var(--adw-border);
+  border-radius: 9px;
+  background: #f6f5f4;
+  color: var(--adw-text);
+  box-shadow: none;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.adw-window .button-secondary:hover,
+.adw-window .secondary-button:hover {
+  border-color: rgb(0 0 0 / 22%);
+  background: #fff;
+}
+
+.adw-window .continue-card--empty {
+  align-self: start;
+  min-height: 200px;
+}
+
+.adw-window .continue-card--empty .continue-content {
+  justify-content: center;
+  padding: 26px 24px;
+}
+
+.adw-window .continue-card--empty .continue-content > .section-kicker {
+  margin-bottom: 3px;
+}
+
+.adw-window .continue-card--empty .continue-content > button {
+  margin-top: 16px;
+}

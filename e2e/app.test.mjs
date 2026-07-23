@@ -173,6 +173,14 @@ test('packaged desktop workflows persist and restore local data', { timeout: 120
       await driver.findElement(By.css('.empty-state')).getText(),
       'Your local library is empty. Add your first text to begin.'
     );
+    const saveToLibrary = await driver.findElement(buttonWithText('Save to library'));
+    assert.equal(
+      await driver.executeScript(
+        'return getComputedStyle(arguments[0]).backgroundColor',
+        saveToLibrary
+      ),
+      'rgb(53, 132, 228)'
+    );
     checkpoint('language setup');
     await driver.findElement(By.css('.tag-selector__empty-action')).click();
     await visible(driver, By.xpath('//dialog//h2[normalize-space(.)="No tags have been created"]'));
@@ -182,7 +190,7 @@ test('packaged desktop workflows persist and restore local data', { timeout: 120
     await driver
       .findElement(By.css('[name="content"]'))
       .sendKeys('Hello world. Hello again.');
-    await driver.findElement(buttonWithText('Save to library')).click();
+    await saveToLibrary.click();
     await visible(
       driver,
       By.xpath('//article[contains(@class,"text-card")][.//h2[normalize-space(.)="E2E Story"]]')

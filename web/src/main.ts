@@ -481,6 +481,7 @@ function createImportPanel(
 
   const submit = document.createElement('button');
   submit.type = 'submit';
+  submit.className = 'primary-action';
   submit.textContent = editingText ? 'Save changes' : 'Save to library';
 
   const cancel = document.createElement('button');
@@ -757,6 +758,7 @@ async function renderReading(textId: number): Promise<void> {
         actions.className = 'term-editor__actions';
         const save = document.createElement('button');
         save.type = 'submit';
+        save.className = 'primary-action';
         save.textContent = 'Save term';
         const reset = document.createElement('button');
         reset.type = 'button';
@@ -2041,6 +2043,7 @@ async function renderAppSettings(): Promise<void> {
   );
   const save = document.createElement('button');
   save.type = 'submit';
+  save.className = 'primary-action';
   save.textContent = 'Save settings';
   const feedback = document.createElement('p');
   feedback.className = 'form-status';
@@ -2106,6 +2109,7 @@ async function renderAppSettings(): Promise<void> {
     'Check the signed stable release channel. An update is installed only after its cryptographic signature is verified.';
   const checkForUpdates = document.createElement('button');
   checkForUpdates.type = 'button';
+  checkForUpdates.className = 'primary-action';
   checkForUpdates.textContent = 'Check for updates';
   const updateStatus = document.createElement('p');
   updateStatus.className = 'form-status';
@@ -2164,6 +2168,7 @@ async function renderTags(message = ''): Promise<void> {
   comment.maxLength = 200;
   const submit = document.createElement('button');
   submit.type = 'submit';
+  submit.className = 'primary-action';
   submit.textContent = 'Create tag';
   const feedback = document.createElement('p');
   feedback.className = 'form-status';
@@ -2256,6 +2261,7 @@ async function renderDataManagement(): Promise<void> {
   exportDescription.textContent = 'Download a complete, versioned snapshot of the local library.';
   const exportButton = document.createElement('button');
   exportButton.type = 'button';
+  exportButton.className = 'primary-action';
   exportButton.append(
     createAdwaitaIcon('document-save'),
     document.createTextNode('Download backup')
@@ -2330,6 +2336,7 @@ async function renderDataManagement(): Promise<void> {
   restoreFileField.append(restoreFileCaption, restoreFilePicker);
   const restoreButton = document.createElement('button');
   restoreButton.type = 'button';
+  restoreButton.className = 'primary-action';
   restoreButton.append(
     createAdwaitaIcon('document-open'),
     document.createTextNode('Restore selected backup')
