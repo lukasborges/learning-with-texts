@@ -74,23 +74,6 @@ jobs:
           test -n "$UPDATER_PRIVATE_KEY_PASSWORD" || { echo 'Missing TAURI_SIGNING_PRIVATE_KEY_PASSWORD'; exit 1; }
           test -n "$UPDATER_PUBLIC_KEY" || { echo 'Missing TAURI_UPDATER_PUBLIC_KEY variable'; exit 1; }
 
-      - name: Import Windows signing certificate
-        if: runner.os == 'Windows'
-        shell: pwsh
-        env:
-          CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
-          CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
-        run: |
-          if (-not $env:CERTIFICATE_BASE64 -or -not $env:CERTIFICATE_PASSWORD) {
-            throw 'Missing Windows signing certificate secrets'
-          }
-          $certificatePath = Join-Path $env:RUNNER_TEMP 'lwt-windows-signing.pfx'
-          [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($env:CERTIFICATE_BASE64))
-          $password = ConvertTo-SecureString $env:CERTIFICATE_PASSWORD -AsPlainText -Force
-          $certificate = Import-PfxCertificate -FilePath $certificatePath -CertStoreLocation Cert:\CurrentUser\My -Password $password
-          "WINDOWS_CERTIFICATE_PATH=$certificatePath" >> $env:GITHUB_ENV
-          "WINDOWS_CERTIFICATE_THUMBPRINT=$($certificate.Thumbprint)" >> $env:GITHUB_ENV
-
       - name: Create protected release configuration
         env:
           LWT_UPDATER_PUBLIC_KEY: ${{ vars.TAURI_UPDATER_PUBLIC_KEY }}
@@ -110,31 +93,13 @@ jobs:
           projectPath: desktop
           tagName: ${{ github.ref_name }}
           releaseName: LWT Desktop ${{ github.ref_name }}
-          releaseBody: See the attached checksums and SBOM before installation.
+          releaseBody: Windows installers are unsigned and may show an unknown-publisher warning. Verify the attached checksums and SBOM before installation.
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true
           uploadUpdaterSignatures: true
           updaterJsonPreferNsis: true
           args: ${{ matrix.build_args }} --config ${{ runner.temp }}/tauri.release.conf.json
-
-      - name: Verify Windows installer signatures
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $installers = @(
-            Get-ChildItem -Path "${{ matrix.bundle_root }}" -Recurse -File |
-              Where-Object { $_.Extension -in '.msi', '.exe' }
-          )
-          if ($installers.Count -eq 0) {
-            throw 'No Windows installers were produced'
-          }
-          foreach ($installer in $installers) {
-            $signature = Get-AuthenticodeSignature $installer.FullName
-            if ($signature.Status -ne 'Valid') {
-              throw "Invalid Authenticode signature on $($installer.FullName): $($signature.Status)"
-            }
-          }
 
       - name: Smoke test signed Linux package installation and removal
         if: runner.os == 'Linux'
@@ -147,21 +112,9 @@ jobs:
           sudo apt-get remove -y lwt-desktop
           test ! -e /usr/bin/lwt-desktop
 
-      - name: Remove Windows signing credentials from the runner
-        if: always() && runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $certificate = "Cert:\CurrentUser\My\$env:WINDOWS_CERTIFICATE_THUMBPRINT"
-          if ($env:WINDOWS_CERTIFICATE_THUMBPRINT -and (Test-Path $certificate)) {
-            Remove-Item $certificate -Force
-          }
-          if ($env:WINDOWS_CERTIFICATE_PATH -and (Test-Path $env:WINDOWS_CERTIFICATE_PATH)) {
-            Remove-Item $env:WINDOWS_CERTIFICATE_PATH -Force
-          }
-          Remove-Item "${{ runner.temp }}/tauri.release.conf.json" -Force -ErrorAction SilentlyContinue
-
-      - name: Remove Linux release configuration
-        if: always() && runner.os == 'Linux'
+      - name: Remove release configuration
+        if: always()
+        shell: bash
         run: rm -f "${{ runner.temp }}/tauri.release.conf.json"
 
       - name: Generate release SBOM

@@ -40,6 +40,11 @@ production releases until the signing and updater stage is complete. macOS is
 not part of the current release matrix and remains deferred until Apple build
 and signing access is available.
 
+Windows MSI and NSIS installers intentionally have no Authenticode publisher
+signature and can show an unknown-publisher or SmartScreen warning. Users must
+download them from the official release and verify `SHA256SUMS`. Tauri updater
+artifacts remain cryptographically signed independently of Authenticode.
+
 Production `v*` tags instead invoke `Signed Desktop Release`. That protected
 workflow creates a draft GitHub release with signed updater bundles and a
 user-visible update channel. Provisioning, approval, verification, rotation,

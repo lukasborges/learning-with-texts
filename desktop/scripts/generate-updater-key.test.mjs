@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 
 const script = path.resolve('desktop/scripts/generate-updater-key.sh');
+const skipsPosixPermissionChecks = process.platform === 'win32';
 
 async function createFakeTauri(directory) {
   const executable = path.join(directory, 'tauri');
@@ -22,7 +23,7 @@ printf 'public-key' > "\${output_path}.pub"
   return executable;
 }
 
-test('generates protected updater keys outside the repository', async () => {
+test('generates protected updater keys outside the repository', { skip: skipsPosixPermissionChecks }, async () => {
   const temporaryDirectory = await mkdtemp(path.join(tmpdir(), 'lwt-updater-key-'));
   try {
     const signingDirectory = path.join(temporaryDirectory, 'signing');

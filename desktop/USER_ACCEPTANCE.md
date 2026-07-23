@@ -22,7 +22,9 @@ backup contents before sharing them.
 Ask the tester to complete these tasks in order:
 
 1. Verify the downloaded checksum using the instructions in
-   [RELEASING.md](RELEASING.md), then install and launch LWT Desktop.
+   [RELEASING.md](RELEASING.md), then install and launch LWT Desktop. On
+   Windows, record whether the documented unknown-publisher warning and the
+   steps required to continue are understandable.
 2. Create a language, import or paste a short text, and open it for reading.
 3. Change a term status, add its translation, complete one review, and confirm
    that the statistics screen changes.

@@ -21,7 +21,7 @@ function updaterPublicKey(environment) {
 }
 
 export function createReleaseConfiguration(environment = process.env) {
-  const configuration = {
+  return {
     bundle: {
       createUpdaterArtifacts: true
     },
@@ -36,19 +36,6 @@ export function createReleaseConfiguration(environment = process.env) {
     }
   };
 
-  const thumbprint = environment.WINDOWS_CERTIFICATE_THUMBPRINT?.trim();
-  if (thumbprint) {
-    if (!/^[A-Fa-f0-9]{40}$/.test(thumbprint)) {
-      throw new Error('WINDOWS_CERTIFICATE_THUMBPRINT must contain 40 hexadecimal characters');
-    }
-    configuration.bundle.windows = {
-      certificateThumbprint: thumbprint.toUpperCase(),
-      digestAlgorithm: 'sha256',
-      timestampUrl: 'http://timestamp.digicert.com'
-    };
-  }
-
-  return configuration;
 }
 
 const isCommandLine = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
