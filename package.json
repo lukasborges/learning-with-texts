@@ -19,7 +19,7 @@
     "test": "npm run test:web && npm run test:rust && npm run test:release",
     "test:web": "vitest run",
     "test:rust": "cargo test",
-    "test:release": "node --test scripts/*.test.mjs",
+    "test:release": "node --test scripts/create-release-config.test.mjs scripts/generate-updater-key.test.mjs scripts/package-arch.test.mjs scripts/release-integrity.test.mjs scripts/runtime-boundary.test.mjs scripts/tauri-config.test.mjs scripts/validate-release-assets.test.mjs scripts/validate-release-version.test.mjs",
     "test:e2e:build": "tauri build --debug --bundles deb",
     "test:e2e:run": "node --test e2e/app.test.mjs",
     "test:e2e": "npm run test:e2e:build && npm run test:e2e:run",
