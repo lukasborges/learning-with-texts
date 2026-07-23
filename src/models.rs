@@ -43,6 +43,8 @@ pub struct CreateTextInput {
 pub struct CreateLanguageInput {
     pub name: String,
     pub dictionary_uri_1: String,
+    pub dictionary_uri_2: Option<String>,
+    pub google_translate_uri: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

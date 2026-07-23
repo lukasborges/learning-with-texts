@@ -15,7 +15,7 @@
         "title": "Learning with Texts",
         "width": 1280,
         "height": 800,
-        "minWidth": 900,
+        "minWidth": 420,
         "minHeight": 600,
         "resizable": true,
         "decorations": false,

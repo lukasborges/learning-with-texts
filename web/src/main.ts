@@ -1,5 +1,8 @@
 import addIconSvg from '../assets/icons/list-add-symbolic.svg?raw';
 import alarmIconSvg from '../assets/icons/alarm-symbolic.svg?raw';
+import audioIconSvg from '../assets/icons/audio-x-generic-symbolic.svg?raw';
+import audioVolumeHighIconSvg from '../assets/icons/audio-volume-high-symbolic.svg?raw';
+import audioVolumeMutedIconSvg from '../assets/icons/audio-volume-muted-symbolic.svg?raw';
 import checkedIconSvg from '../assets/icons/checkbox-checked-symbolic.svg?raw';
 import dictionaryIconSvg from '../assets/icons/accessories-dictionary-symbolic.svg?raw';
 import informationIconSvg from '../assets/icons/dialog-information-symbolic.svg?raw';
@@ -10,6 +13,10 @@ import homeIconSvg from '../assets/icons/go-home-symbolic.svg?raw';
 import libraryIconSvg from '../assets/icons/view-grid-symbolic.svg?raw';
 import menuIconSvg from '../assets/icons/open-menu-symbolic.svg?raw';
 import languageIconSvg from '../assets/icons/preferences-desktop-locale-symbolic.svg?raw';
+import mediaPauseIconSvg from '../assets/icons/media-playback-pause-symbolic.svg?raw';
+import mediaPlayIconSvg from '../assets/icons/media-playback-start-symbolic.svg?raw';
+import mediaSeekBackwardIconSvg from '../assets/icons/media-seek-backward-symbolic.svg?raw';
+import mediaSeekForwardIconSvg from '../assets/icons/media-seek-forward-symbolic.svg?raw';
 import reviewIconSvg from '../assets/icons/view-refresh-symbolic.svg?raw';
 import searchIconSvg from '../assets/icons/system-search-symbolic.svg?raw';
 import starredIconSvg from '../assets/icons/starred-symbolic.svg?raw';
@@ -18,6 +25,7 @@ import windowCloseIconSvg from '../assets/icons/window-close-symbolic.svg?raw';
 import windowMaximizeIconSvg from '../assets/icons/window-maximize-symbolic.svg?raw';
 import windowMinimizeIconSvg from '../assets/icons/window-minimize-symbolic.svg?raw';
 import windowRestoreIconSvg from '../assets/icons/window-restore-symbolic.svg?raw';
+import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { check } from '@tauri-apps/plugin-updater';
@@ -31,9 +39,22 @@ import type {
   TextDetails,
   VocabularyTerm
 } from './domain/library';
+import { recommendedDictionaryTemplates } from './ui/dictionaries';
 import { createField, createPager, createTagSelector } from './ui/elements';
-import { buildExternalLookupUrl } from './ui/media';
+import {
+  arrayBufferToBase64,
+  audioImportError,
+  buildExternalLookupUrl,
+  detectAudioType,
+  formatPlaybackTime,
+  textImportError
+} from './ui/media';
 import { termStatusLabel } from './ui/term_status';
+import {
+  googleTranslateTemplate,
+  supportedTranslationLanguages,
+  translationLanguageFromTemplate
+} from './ui/translations';
 import './styles.css';
 
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -59,10 +80,55 @@ let libraryLanguage = '';
 let librarySort: 'recent' | 'title' | 'progress' = 'recent';
 let screenKeyboardController: AbortController | undefined;
 let selectedLanguageId: number | undefined;
+let lookupWindow: WebviewWindow | undefined;
+let playbackRatePreference = 1;
+
+async function openExternalLookup(url: string, title: string): Promise<void> {
+  if (usesNativeDatabase) {
+    if (lookupWindow) {
+      await lookupWindow.close().catch(() => undefined);
+    }
+    const childWindow = new WebviewWindow('external-lookup', {
+      url,
+      title,
+      parent: getCurrentWindow(),
+      center: true,
+      width: 960,
+      height: 720,
+      minWidth: 640,
+      minHeight: 480,
+      resizable: true,
+      decorations: true,
+      focus: true,
+      skipTaskbar: true,
+      preventOverflow: { width: 48, height: 48 }
+    });
+    lookupWindow = childWindow;
+    await new Promise<void>((resolve, reject) => {
+      void childWindow.once('tauri://created', () => {
+        resolve();
+      });
+      void childWindow.once<string>('tauri://error', (event) => {
+        lookupWindow = undefined;
+        reject(new Error(event.payload || 'Could not open the dictionary window.'));
+      });
+      void childWindow.once('tauri://destroyed', () => {
+        if (lookupWindow === childWindow) {
+          lookupWindow = undefined;
+        }
+      });
+    });
+    return;
+  }
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
 
 const adwaitaIconMarkup = {
   add: addIconSvg,
   alarm: alarmIconSvg,
+  audio: audioIconSvg,
+  'audio-volume-high': audioVolumeHighIconSvg,
+  'audio-volume-muted': audioVolumeMutedIconSvg,
   checked: checkedIconSvg,
   dictionary: dictionaryIconSvg,
   information: informationIconSvg,
@@ -73,7 +139,11 @@ const adwaitaIconMarkup = {
   library: libraryIconSvg,
   menu: menuIconSvg,
   language: languageIconSvg,
+  pause: mediaPauseIconSvg,
+  play: mediaPlayIconSvg,
   review: reviewIconSvg,
+  'seek-backward': mediaSeekBackwardIconSvg,
+  'seek-forward': mediaSeekForwardIconSvg,
   search: searchIconSvg,
   starred: starredIconSvg,
   vocabulary: vocabularyIconSvg,
@@ -189,6 +259,7 @@ function createLanguageNameControl(): {
     });
     setOpen(false);
     updateCustomState();
+    element.dispatchEvent(new Event('languagechange'));
     if (value !== '__other__') {
       trigger.focus();
     }
@@ -284,6 +355,19 @@ function createLanguageNameControl(): {
       return customInput.hidden === true || customInput.reportValidity();
     }
   };
+}
+
+function applyRecommendedDictionaries(
+  language: string,
+  nativeLanguage: string,
+  primary: HTMLInputElement,
+  secondary: HTMLInputElement,
+  summary: HTMLElement
+): void {
+  const recommendations = recommendedDictionaryTemplates(language, nativeLanguage);
+  primary.value = recommendations.primaryUrl;
+  secondary.value = recommendations.secondaryUrl;
+  summary.textContent = `Recommended: ${recommendations.primaryName} and ${recommendations.secondaryName}. Both templates can be edited.`;
 }
 
 function createCombobox(select: HTMLSelectElement): HTMLElement {
@@ -394,12 +478,38 @@ function createCombobox(select: HTMLSelectElement): HTMLElement {
   return element;
 }
 
+function createTranslationLanguageControl(): {
+  element: HTMLElement;
+  select: HTMLSelectElement;
+} {
+  const select = document.createElement('select');
+  select.name = 'translationLanguage';
+  select.required = true;
+  select.setAttribute('aria-label', 'Native language');
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = 'Choose a language';
+  placeholder.disabled = true;
+  placeholder.selected = true;
+  select.append(placeholder);
+  for (const language of supportedTranslationLanguages) {
+    const option = document.createElement('option');
+    option.value = language;
+    option.textContent = language;
+    select.append(option);
+  }
+  const element = createCombobox(select);
+  element.classList.add('translation-language-control');
+  return { element, select };
+}
+
 function createImportPanel(
   message = '',
   editingText?: TextDetails,
   tags: readonly Tag[] = [],
   selectedTagIds: readonly number[] = [],
-  defaultLanguage = ''
+  defaultLanguage = '',
+  configuredLanguages: readonly string[] = []
 ): HTMLElement {
   const panel = document.createElement('section');
   panel.className = 'import-panel';
@@ -414,13 +524,37 @@ function createImportPanel(
   const form = document.createElement('form');
   form.className = 'text-form';
 
-  const language = document.createElement('input');
-  language.name = 'language';
-  language.required = true;
-  language.maxLength = 40;
-  language.placeholder = 'e.g. English';
-  language.autocomplete = 'off';
-  language.value = editingText?.language ?? defaultLanguage;
+  const selectedLanguage = editingText?.language ?? defaultLanguage;
+  const languageLocked = editingText === undefined && selectedLanguage !== '';
+  let language: HTMLInputElement | HTMLSelectElement;
+  let languageControl: HTMLElement;
+  if (languageLocked) {
+    const inheritedLanguage = document.createElement('input');
+    inheritedLanguage.type = 'hidden';
+    inheritedLanguage.name = 'language';
+    inheritedLanguage.value = selectedLanguage;
+    language = inheritedLanguage;
+    languageControl = inheritedLanguage;
+    form.classList.add('text-form--language-locked');
+  } else {
+    const languageSelect = document.createElement('select');
+    languageSelect.name = 'language';
+    languageSelect.required = true;
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Choose a language';
+    placeholder.disabled = true;
+    languageSelect.append(placeholder);
+    for (const languageName of configuredLanguages) {
+      const option = document.createElement('option');
+      option.value = languageName;
+      option.textContent = languageName;
+      languageSelect.append(option);
+    }
+    languageSelect.value = selectedLanguage;
+    language = languageSelect;
+    languageControl = createField('Language', createCombobox(languageSelect));
+  }
 
   const title = document.createElement('input');
   title.name = 'title';
@@ -430,8 +564,8 @@ function createImportPanel(
 
   const file = document.createElement('input');
   file.type = 'file';
-  file.accept = '.txt,text/plain';
   file.className = 'file-picker__input';
+  file.accept = '.txt,text/plain';
   const fileField = document.createElement('div');
   fileField.className = 'text-form__file-field';
   const fileCaption = document.createElement('span');
@@ -447,13 +581,44 @@ function createImportPanel(
   const fileTitle = document.createElement('strong');
   fileTitle.textContent = 'Choose a text file';
   const fileHelp = document.createElement('small');
-  fileHelp.textContent = 'UTF-8 plain text · maximum 65 KB';
+  fileHelp.textContent = 'Click or drop · UTF-8 plain text · maximum 65 KB';
   fileCopy.append(fileTitle, fileHelp);
   const fileName = document.createElement('span');
   fileName.className = 'file-picker__name';
   fileName.textContent = 'Browse…';
   filePicker.append(file, fileIcon, fileCopy, fileName);
   fileField.append(fileCaption, filePicker);
+
+  const audioFile = document.createElement('input');
+  audioFile.type = 'file';
+  audioFile.className = 'file-picker__input audio-file-input';
+  const audioField = document.createElement('div');
+  audioField.className = 'text-form__file-field text-form__audio-field';
+  const audioCaption = document.createElement('span');
+  audioCaption.className = 'text-form__field-caption';
+  audioCaption.textContent = editingText?.hasAudio
+    ? 'Replace audio (optional)'
+    : 'Audio file (optional)';
+  const audioPicker = document.createElement('label');
+  audioPicker.className = 'file-picker file-picker--audio';
+  const audioIcon = document.createElement('span');
+  audioIcon.className = 'file-picker__icon';
+  audioIcon.append(createAdwaitaIcon('audio'));
+  const audioCopy = document.createElement('span');
+  audioCopy.className = 'file-picker__copy';
+  const audioTitle = document.createElement('strong');
+  audioTitle.textContent = editingText?.hasAudio
+    ? 'Choose a replacement audio file'
+    : 'Choose an audio file';
+  const audioHelp = document.createElement('small');
+  audioHelp.textContent = 'Click or drop · MP3, M4A, OGG, WAV, WebM or FLAC · maximum 50 MB';
+  audioCopy.append(audioTitle, audioHelp);
+  const audioName = document.createElement('span');
+  audioName.className = 'file-picker__name';
+  audioName.textContent = editingText?.hasAudio ? 'Audio saved' : 'Browse…';
+  audioPicker.classList.toggle('has-saved-file', editingText?.hasAudio === true);
+  audioPicker.append(audioFile, audioIcon, audioCopy, audioName);
+  audioField.append(audioCaption, audioPicker);
 
   const content = document.createElement('textarea');
   content.name = 'content';
@@ -494,11 +659,85 @@ function createImportPanel(
     void render();
   });
 
-  file.addEventListener('change', () => {
-    const selectedFile = file.files?.[0];
-    if (!selectedFile) {
+  const removeAudio = document.createElement('button');
+  removeAudio.type = 'button';
+  removeAudio.className = 'button-secondary remove-audio';
+  removeAudio.textContent = 'Remove saved audio';
+  removeAudio.hidden = !editingText?.hasAudio;
+  removeAudio.addEventListener('click', () => {
+    if (
+      !editingText ||
+      !window.confirm(
+        'Remove the saved audio from this text? The text and learning progress will be kept.'
+      )
+    ) {
       return;
     }
+    removeAudio.disabled = true;
+    status.className = 'form-status';
+    status.textContent = 'Removing audio…';
+    void gateway
+      .removeTextAudio(editingText.id)
+      .then(() => render('Saved audio was removed.', editingText.id))
+      .catch((error: unknown) => {
+        removeAudio.disabled = false;
+        status.className = 'form-status form-status--error';
+        status.textContent = error instanceof Error ? error.message : String(error);
+      });
+  });
+
+  const enableFileDrop = (
+    picker: HTMLElement,
+    receiveFile: (selectedFile: File) => void
+  ): void => {
+    let dragDepth = 0;
+    picker.addEventListener('dragenter', (event) => {
+      event.preventDefault();
+      dragDepth += 1;
+      picker.classList.add('is-drag-over');
+    });
+    picker.addEventListener('dragover', (event) => {
+      event.preventDefault();
+      if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = 'copy';
+      }
+    });
+    picker.addEventListener('dragleave', () => {
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (dragDepth === 0) {
+        picker.classList.remove('is-drag-over');
+      }
+    });
+    picker.addEventListener('drop', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      dragDepth = 0;
+      picker.classList.remove('is-drag-over');
+      const droppedFile = event.dataTransfer?.files[0];
+      if (droppedFile) {
+        receiveFile(droppedFile);
+      }
+    });
+  };
+
+  let handledTextFile: File | undefined;
+  const loadTextFile = (selectedFile: File | undefined): void => {
+    if (!selectedFile || selectedFile === handledTextFile) {
+      return;
+    }
+    handledTextFile = selectedFile;
+    const importError = textImportError(selectedFile);
+    if (importError) {
+      file.value = '';
+      handledTextFile = undefined;
+      fileTitle.textContent = 'Choose a text file';
+      fileName.textContent = 'Browse…';
+      filePicker.classList.remove('has-file');
+      status.className = 'form-status form-status--error';
+      status.textContent = importError;
+      return;
+    }
+    fileTitle.textContent = 'Text file selected';
     fileName.textContent = selectedFile.name;
     filePicker.classList.add('has-file');
 
@@ -513,15 +752,57 @@ function createImportPanel(
         status.textContent = `${selectedFile.name} loaded. Review it before saving.`;
       })
       .catch(() => {
+        file.value = '';
+        handledTextFile = undefined;
+        fileTitle.textContent = 'Choose a text file';
+        fileName.textContent = 'Browse…';
+        filePicker.classList.remove('has-file');
         status.className = 'form-status form-status--error';
         status.textContent = 'The selected file could not be read.';
       });
-  });
+  };
+  file.addEventListener('input', () => loadTextFile(file.files?.[0]));
+  file.addEventListener('change', () => loadTextFile(file.files?.[0]));
+  enableFileDrop(filePicker, loadTextFile);
+
+  let selectedAudioFile: File | undefined;
+  const selectAudioFile = (selectedAudio: File | undefined): void => {
+    if (!selectedAudio) {
+      return;
+    }
+    const importError = audioImportError(selectedAudio);
+    if (importError) {
+      audioFile.value = '';
+      selectedAudioFile = undefined;
+      audioName.textContent = editingText?.hasAudio ? 'Audio saved' : 'Browse…';
+      audioPicker.classList.remove('has-file');
+      status.className = 'form-status form-status--error';
+      status.textContent = importError;
+      return;
+    }
+    selectedAudioFile = selectedAudio;
+    audioName.textContent = selectedAudio.name;
+    audioPicker.classList.add('has-file');
+    status.className = 'form-status';
+    status.textContent = `${selectedAudio.name} selected. It will be saved with the text.`;
+  };
+  audioFile.addEventListener('input', () => selectAudioFile(audioFile.files?.[0]));
+  audioFile.addEventListener('change', () => selectAudioFile(audioFile.files?.[0]));
+  enableFileDrop(audioPicker, selectAudioFile);
 
   form.addEventListener('submit', (event) => {
     event.preventDefault();
     if (!form.reportValidity()) {
       return;
+    }
+    const selectedAudio = selectedAudioFile;
+    if (selectedAudio) {
+      const importError = audioImportError(selectedAudio);
+      if (importError) {
+        status.className = 'form-status form-status--error';
+        status.textContent = importError;
+        return;
+      }
     }
 
     submit.disabled = true;
@@ -542,6 +823,19 @@ function createImportPanel(
       .then((saved) =>
         gateway.setTextTags({ textId: saved.id, tagIds: tagSelector.selected() }).then(() => saved)
       )
+      .then(async (saved) => {
+        if (!selectedAudio) {
+          return saved;
+        }
+        status.textContent = 'Saving audio…';
+        await gateway.saveTextAudio({
+          textId: saved.id,
+          fileName: selectedAudio.name,
+          mediaType: detectAudioType(selectedAudio),
+          dataBase64: arrayBufferToBase64(await selectedAudio.arrayBuffer())
+        });
+        return saved;
+      })
       .then((saved) => {
         addingText = false;
         pendingLanguage = '';
@@ -561,13 +855,18 @@ function createImportPanel(
   const contentField = createField('Text', content);
   contentField.className = 'text-form__content';
   contentField.append(contentHelp);
+  const titleField = createField('Title', title);
+  if (languageLocked) {
+    titleField.classList.add('text-form__title--wide');
+  }
   const actions = document.createElement('div');
   actions.className = 'text-form__actions';
-  actions.append(submit, cancel);
+  actions.append(submit, cancel, removeAudio);
   form.append(
-    createField('Language', language),
-    createField('Title', title),
+    languageControl,
+    titleField,
     fileField,
+    audioField,
     contentField,
     createField('Source URL (optional)', sourceUri),
     tagSelector.element,
@@ -597,18 +896,178 @@ function updateReadingProgress(
   label.textContent = `${knownTerms} of ${reading.totalTerms} unique terms known`;
 }
 
+function createAudioPlayer(source: string, label: string): HTMLElement {
+  const player = document.createElement('div');
+  player.className = 'audio-player';
+  player.setAttribute('role', 'group');
+  player.setAttribute('aria-label', label);
+
+  const media = document.createElement('audio');
+  media.className = 'audio-player__media';
+  media.preload = 'metadata';
+  media.src = source;
+  media.setAttribute('aria-label', label);
+
+  const createControl = (
+    className: string,
+    accessibleLabel: string,
+    icon: AdwaitaIcon
+  ): HTMLButtonElement => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `audio-player__button ${className}`;
+    button.title = accessibleLabel;
+    button.setAttribute('aria-label', accessibleLabel);
+    button.append(createAdwaitaIcon(icon));
+    return button;
+  };
+
+  const transport = document.createElement('div');
+  transport.className = 'audio-player__transport';
+  const rewind = createControl('audio-player__seek', 'Go back 10 seconds', 'seek-backward');
+  const rewindAmount = document.createElement('span');
+  rewindAmount.className = 'audio-player__seek-amount';
+  rewindAmount.textContent = '10';
+  rewind.append(rewindAmount);
+  const play = createControl('audio-player__play', 'Play', 'play');
+  const forward = createControl('audio-player__seek', 'Go forward 10 seconds', 'seek-forward');
+  const forwardAmount = document.createElement('span');
+  forwardAmount.className = 'audio-player__seek-amount';
+  forwardAmount.textContent = '10';
+  forward.append(forwardAmount);
+  transport.append(rewind, play, forward);
+
+  const timeline = document.createElement('div');
+  timeline.className = 'audio-player__timeline';
+  const seek = document.createElement('input');
+  seek.type = 'range';
+  seek.min = '0';
+  seek.max = '0';
+  seek.step = '0.1';
+  seek.value = '0';
+  seek.setAttribute('aria-label', 'Audio position');
+  const time = document.createElement('div');
+  time.className = 'audio-player__time';
+  const currentTime = document.createElement('span');
+  currentTime.textContent = '0:00';
+  const duration = document.createElement('span');
+  duration.textContent = '0:00';
+  time.append(currentTime, duration);
+  timeline.append(seek, time);
+
+  const speedSelect = document.createElement('select');
+  speedSelect.setAttribute('aria-label', 'Playback speed');
+  for (const rate of [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]) {
+    const option = document.createElement('option');
+    option.value = String(rate);
+    option.textContent = `${rate}×`;
+    speedSelect.append(option);
+  }
+  speedSelect.value = String(playbackRatePreference);
+  const speed = createCombobox(speedSelect);
+  speed.classList.add('audio-player__speed');
+
+  const volume = document.createElement('div');
+  volume.className = 'audio-player__volume';
+  const mute = createControl('audio-player__mute', 'Mute', 'audio-volume-high');
+  const volumeLevel = document.createElement('input');
+  volumeLevel.type = 'range';
+  volumeLevel.min = '0';
+  volumeLevel.max = '1';
+  volumeLevel.step = '0.05';
+  volumeLevel.value = '1';
+  volumeLevel.setAttribute('aria-label', 'Volume');
+  volume.append(mute, volumeLevel);
+
+  const feedback = document.createElement('span');
+  feedback.className = 'sr-only';
+  feedback.setAttribute('role', 'status');
+
+  const syncPlayState = (): void => {
+    const playing = !media.paused && !media.ended;
+    play.replaceChildren(createAdwaitaIcon(playing ? 'pause' : 'play'));
+    play.title = playing ? 'Pause' : 'Play';
+    play.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+  };
+  const syncTimeline = (): void => {
+    const mediaDuration = Number.isFinite(media.duration) ? media.duration : 0;
+    seek.max = String(mediaDuration);
+    seek.value = String(Math.min(media.currentTime, mediaDuration));
+    currentTime.textContent = formatPlaybackTime(media.currentTime);
+    duration.textContent = formatPlaybackTime(mediaDuration);
+    seek.setAttribute(
+      'aria-valuetext',
+      `${formatPlaybackTime(media.currentTime)} of ${formatPlaybackTime(mediaDuration)}`
+    );
+  };
+  const syncVolumeState = (): void => {
+    const muted = media.muted || media.volume === 0;
+    mute.replaceChildren(
+      createAdwaitaIcon(muted ? 'audio-volume-muted' : 'audio-volume-high')
+    );
+    mute.title = muted ? 'Unmute' : 'Mute';
+    mute.setAttribute('aria-label', muted ? 'Unmute' : 'Mute');
+  };
+  const moveBy = (seconds: number): void => {
+    const upperBound = Number.isFinite(media.duration)
+      ? media.duration
+      : Math.max(0, media.currentTime + seconds);
+    media.currentTime = Math.min(upperBound, Math.max(0, media.currentTime + seconds));
+    syncTimeline();
+  };
+
+  media.playbackRate = playbackRatePreference;
+  play.addEventListener('click', () => {
+    if (media.paused || media.ended) {
+      void media.play().catch(() => {
+        feedback.textContent = 'The audio could not be played.';
+      });
+    } else {
+      media.pause();
+    }
+  });
+  rewind.addEventListener('click', () => moveBy(-10));
+  forward.addEventListener('click', () => moveBy(10));
+  seek.addEventListener('input', () => {
+    media.currentTime = Number(seek.value);
+    syncTimeline();
+  });
+  speedSelect.addEventListener('change', () => {
+    playbackRatePreference = Number(speedSelect.value);
+    media.playbackRate = playbackRatePreference;
+    feedback.textContent = `Playback speed set to ${speedSelect.value} times.`;
+  });
+  mute.addEventListener('click', () => {
+    media.muted = !media.muted;
+    syncVolumeState();
+  });
+  volumeLevel.addEventListener('input', () => {
+    media.volume = Number(volumeLevel.value);
+    media.muted = media.volume === 0;
+    syncVolumeState();
+  });
+  media.addEventListener('loadedmetadata', syncTimeline);
+  media.addEventListener('durationchange', syncTimeline);
+  media.addEventListener('timeupdate', syncTimeline);
+  media.addEventListener('play', syncPlayState);
+  media.addEventListener('pause', syncPlayState);
+  media.addEventListener('ended', syncPlayState);
+
+  player.append(media, transport, timeline, speed, volume, feedback);
+  return player;
+}
+
 async function renderReading(textId: number): Promise<void> {
-  const [reading, tags] = await Promise.all([
+  const [reading, tags, audio] = await Promise.all([
     gateway.getReadingText(textId),
-    gateway.listTags()
+    gateway.listTags(),
+    gateway.getTextAudio(textId)
   ]);
   const shell = document.createElement('main');
   shell.className = 'shell reading-shell';
 
   const finishButtons: HTMLButtonElement[] = [];
-  const createFinishButton = (
-    placement: 'sidebar'
-  ): HTMLButtonElement => {
+  const createFinishButton = (placement: 'header'): HTMLButtonElement => {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = `finish-lesson primary-button finish-lesson--${placement}`;
@@ -635,7 +1094,11 @@ async function renderReading(textId: number): Promise<void> {
   language.className = 'eyebrow';
   language.textContent = reading.language.toLocaleUpperCase();
   titleCopy.append(language, title);
-  titleRow.append(titleCopy);
+  const headerActions = document.createElement('div');
+  headerActions.className = 'reading-header__actions';
+  const finish = createFinishButton('header');
+  headerActions.append(finish);
+  titleRow.append(titleCopy, headerActions);
   const progress = document.createElement('div');
   progress.className = 'reading-progress';
   const meter = document.createElement('progress');
@@ -644,6 +1107,28 @@ async function renderReading(textId: number): Promise<void> {
   updateReadingProgress(reading, reading.knownTerms, meter, progressLabel);
   progress.append(meter, progressLabel);
   header.append(titleRow, progress);
+  if (audio) {
+    const audioPanel = document.createElement('section');
+    audioPanel.className = 'reading-audio';
+    const audioIdentity = document.createElement('div');
+    audioIdentity.className = 'reading-audio__identity';
+    const audioPanelIcon = document.createElement('span');
+    audioPanelIcon.className = 'reading-audio__icon';
+    audioPanelIcon.append(createAdwaitaIcon('audio'));
+    const audioCopy = document.createElement('div');
+    const audioLabel = document.createElement('strong');
+    audioLabel.textContent = 'Lesson audio';
+    const audioFileName = document.createElement('span');
+    audioFileName.textContent = audio.fileName;
+    audioCopy.append(audioLabel, audioFileName);
+    audioIdentity.append(audioPanelIcon, audioCopy);
+    const player = createAudioPlayer(
+      `data:${audio.mediaType};base64,${audio.dataBase64}`,
+      `Audio for ${reading.title}`
+    );
+    audioPanel.append(audioIdentity, player);
+    header.append(audioPanel);
+  }
 
   const guide = document.createElement('aside');
   guide.className = 'reading-guide';
@@ -675,15 +1160,63 @@ async function renderReading(textId: number): Promise<void> {
   expressionControls.append(expressionToggle, expressionStatus);
   const expressionList = document.createElement('div');
   expressionList.className = 'expression-list';
-  guide.append(expressionControls, expressionList);
+  expressionList.setAttribute('role', 'list');
+  expressionList.setAttribute('aria-label', 'Saved expressions');
+  const expressionCarousel = document.createElement('div');
+  expressionCarousel.className = 'expression-carousel';
+  expressionCarousel.hidden = true;
+  const previousExpressions = document.createElement('button');
+  previousExpressions.type = 'button';
+  previousExpressions.className = 'expression-carousel__previous';
+  previousExpressions.setAttribute('aria-label', 'Previous expressions');
+  previousExpressions.textContent = '‹';
+  const nextExpressions = document.createElement('button');
+  nextExpressions.type = 'button';
+  nextExpressions.className = 'expression-carousel__next';
+  nextExpressions.setAttribute('aria-label', 'Next expressions');
+  nextExpressions.textContent = '›';
+  expressionCarousel.append(previousExpressions, expressionList, nextExpressions);
+  const updateExpressionCarousel = (): void => {
+    const hasOverflow = expressionList.scrollWidth > expressionList.clientWidth + 1;
+    expressionCarousel.classList.toggle('has-overflow', hasOverflow);
+    previousExpressions.disabled = expressionList.scrollLeft <= 1;
+    nextExpressions.disabled =
+      !hasOverflow ||
+      expressionList.scrollLeft + expressionList.clientWidth >=
+        expressionList.scrollWidth - 1;
+  };
+  const scrollExpressions = (direction: -1 | 1): void => {
+    expressionList.scrollBy({
+      left: direction * Math.max(160, expressionList.clientWidth * 0.75),
+      behavior: 'smooth'
+    });
+  };
+  previousExpressions.addEventListener('click', () => scrollExpressions(-1));
+  nextExpressions.addEventListener('click', () => scrollExpressions(1));
+  expressionList.addEventListener('scroll', updateExpressionCarousel);
+  const expressionResizeObserver = new ResizeObserver(() => {
+    if (!expressionList.isConnected) {
+      expressionResizeObserver.disconnect();
+      return;
+    }
+    updateExpressionCarousel();
+  });
+  expressionResizeObserver.observe(expressionList);
+  guide.append(expressionControls, expressionCarousel);
 
   const termButtons = new Map<string, HTMLButtonElement[]>();
   const positionButtons = new Map<string, HTMLButtonElement>();
-  const editor = document.createElement('section');
+  const editor = document.createElement('dialog');
   editor.className = 'term-editor';
-  const editorPlaceholder = document.createElement('p');
-  editorPlaceholder.textContent = 'Select a term in the text to open its editor.';
-  editor.append(editorPlaceholder);
+  const addEditorCloseButton = (): void => {
+    const closeEditor = document.createElement('button');
+    closeEditor.type = 'button';
+    closeEditor.className = 'term-editor__close';
+    closeEditor.setAttribute('aria-label', 'Close term editor');
+    closeEditor.append(createAdwaitaIcon('window-close'));
+    closeEditor.addEventListener('click', () => editor.close());
+    editor.prepend(closeEditor);
+  };
   let editorRequest = 0;
 
   const openTermEditor = (normalized: string): void => {
@@ -692,6 +1225,10 @@ async function renderReading(textId: number): Promise<void> {
     const loading = document.createElement('p');
     loading.textContent = 'Loading term…';
     editor.append(loading);
+    addEditorCloseButton();
+    if (!editor.open) {
+      editor.showModal();
+    }
 
     void Promise.all([
       gateway.getTermDetails(textId, normalized),
@@ -709,22 +1246,52 @@ async function renderReading(textId: number): Promise<void> {
         normalizedLabel.textContent = term.normalized;
         const lookupLinks = document.createElement('div');
         lookupLinks.className = 'term-editor__lookups';
-        for (const [label, template] of [
-          ['Dictionary 1', reading.dictionaryUri1],
-          ['Dictionary 2', reading.dictionaryUri2],
-          ['Translate', reading.googleTranslateUri]
+        const lookupFeedback = document.createElement('p');
+        lookupFeedback.className = 'term-editor__lookup-error form-status--error';
+        lookupFeedback.hidden = true;
+        lookupFeedback.setAttribute('role', 'alert');
+        for (const [label, template, iconName, windowTitle] of [
+          ['Look up in dictionary', reading.dictionaryUri1, 'dictionary', 'Dictionary'],
+          [
+            'Look up in secondary dictionary',
+            reading.dictionaryUri2,
+            'dictionary',
+            'Secondary dictionary'
+          ],
+          [
+            term.wordCount > 1 ? 'Translate expression' : 'Translate word',
+            reading.googleTranslateUri,
+            'language',
+            'Translation'
+          ]
         ] as const) {
           const url = buildExternalLookupUrl(template, term.normalized);
           if (!url) {
             continue;
           }
           const link = document.createElement('a');
+          link.className = 'secondary-button term-editor__lookup';
           link.href = url;
-          link.target = '_blank';
-          link.rel = 'noreferrer';
-          link.textContent = label;
+          link.rel = 'external noreferrer';
+          const linkLabel = document.createElement('span');
+          linkLabel.textContent = label;
+          link.append(createAdwaitaIcon(iconName), linkLabel);
+          link.addEventListener('click', (event) => {
+            event.preventDefault();
+            lookupFeedback.hidden = true;
+            void openExternalLookup(url, `${windowTitle} — ${term.displayText}`).catch(
+              (error: unknown) => {
+                lookupFeedback.textContent =
+                  error instanceof Error
+                    ? error.message
+                    : 'Could not open the external dictionary.';
+                lookupFeedback.hidden = false;
+              }
+            );
+          });
           lookupLinks.append(link);
         }
+        lookupLinks.append(lookupFeedback);
 
         const form = document.createElement('form');
         form.className = 'term-editor__form';
@@ -852,6 +1419,7 @@ async function renderReading(textId: number): Promise<void> {
           feedback
         );
         editor.replaceChildren(heading, normalizedLabel, lookupLinks, form);
+        addEditorCloseButton();
       })
       .catch((error: unknown) => {
         if (request === editorRequest) {
@@ -859,6 +1427,7 @@ async function renderReading(textId: number): Promise<void> {
           message.className = 'form-status form-status--error';
           message.textContent = error instanceof Error ? error.message : String(error);
           editor.replaceChildren(message);
+          addEditorCloseButton();
         }
       });
   };
@@ -870,9 +1439,12 @@ async function renderReading(textId: number): Promise<void> {
     const chip = document.createElement('button');
     chip.type = 'button';
     chip.dataset.normalized = normalized;
+    chip.setAttribute('role', 'listitem');
     chip.textContent = displayText;
     chip.addEventListener('click', () => openTermEditor(normalized));
     expressionList.append(chip);
+    expressionCarousel.hidden = false;
+    window.requestAnimationFrame(updateExpressionCarousel);
   };
 
   let expressionMode = false;
@@ -961,6 +1533,44 @@ async function renderReading(textId: number): Promise<void> {
       });
       paragraph.append(button);
     }
+    const sentenceText = sentence.items
+      .map(({ surface }) => surface)
+      .join('')
+      .trim();
+    const sentenceTranslationUrl = buildExternalLookupUrl(
+      reading.googleTranslateUri,
+      sentenceText
+    );
+    if (sentenceTranslationUrl) {
+      const sentenceActions = document.createElement('span');
+      sentenceActions.className = 'reading-sentence__actions';
+      const translateSentence = document.createElement('button');
+      translateSentence.type = 'button';
+      translateSentence.className = 'reading-sentence__translate';
+      translateSentence.append(
+        createAdwaitaIcon('language'),
+        document.createTextNode('Translate sentence')
+      );
+      const translationStatus = document.createElement('span');
+      translationStatus.className = 'sr-only';
+      translationStatus.setAttribute('role', 'status');
+      translateSentence.addEventListener('click', () => {
+        translateSentence.disabled = true;
+        void openExternalLookup(
+          sentenceTranslationUrl,
+          `Translation — Sentence ${sentence.position}`
+        )
+          .catch((error: unknown) => {
+            translationStatus.textContent =
+              error instanceof Error ? error.message : 'Could not open the translation window.';
+          })
+          .finally(() => {
+            translateSentence.disabled = false;
+          });
+      });
+      sentenceActions.append(translateSentence, translationStatus);
+      paragraph.append(sentenceActions);
+    }
     article.append(paragraph);
   }
   for (const expression of reading.expressions) {
@@ -976,15 +1586,8 @@ async function renderReading(textId: number): Promise<void> {
   workspace.className = 'reading-workspace';
   const studyColumn = document.createElement('div');
   studyColumn.className = 'reading-study';
-  studyColumn.append(guide, article);
-  const sidebar = document.createElement('aside');
-  sidebar.className = 'reading-sidebar';
-  const finishPanel = document.createElement('section');
-  finishPanel.className = 'reading-finish-panel';
-  const finish = createFinishButton('sidebar');
-  finishPanel.append(finish);
-  sidebar.append(editor, finishPanel);
-  workspace.append(studyColumn, sidebar);
+  studyColumn.append(article);
+  workspace.append(studyColumn, editor);
 
   const completionNotice = document.createElement('div');
   completionNotice.className = 'completion-notice';
@@ -1047,7 +1650,10 @@ async function renderReading(textId: number): Promise<void> {
   };
   finishButtons.forEach((button) => button.addEventListener('click', finishLesson));
 
-  shell.append(header, workspace, completionNotice);
+  const fixedHeader = document.createElement('section');
+  fixedHeader.className = 'reading-fixed-header';
+  fixedHeader.append(header, guide);
+  shell.append(fixedHeader, workspace, completionNotice);
   mountScreen(shell, 'reader', reading.language);
 }
 
@@ -1734,12 +2340,36 @@ async function renderLanguages(): Promise<void> {
   addLanguageHeading.textContent = 'Add a learning language';
   const addLanguageDescription = document.createElement('p');
   addLanguageDescription.textContent =
-    'Create the language first, then configure its parsing and reading behavior.';
+    'Choose the learning and translation languages. Recommended lookup services remain editable.';
   const newLanguageName = createLanguageNameControl();
+  const newTranslationLanguage = createTranslationLanguageControl();
   const newLanguageDictionary = document.createElement('input');
   newLanguageDictionary.type = 'url';
   newLanguageDictionary.maxLength = 1_000;
   newLanguageDictionary.placeholder = 'https://dictionary.example/?q=###';
+  const newLanguageDictionary2 = document.createElement('input');
+  newLanguageDictionary2.type = 'url';
+  newLanguageDictionary2.maxLength = 1_000;
+  newLanguageDictionary2.placeholder = 'https://another-dictionary.example/?q=###';
+  const newLanguageRecommendations = document.createElement('small');
+  newLanguageRecommendations.className = 'dictionary-recommendation-copy';
+  const refreshNewLanguageRecommendations = (): void => {
+    applyRecommendedDictionaries(
+      newLanguageName.value(),
+      newTranslationLanguage.select.value,
+      newLanguageDictionary,
+      newLanguageDictionary2,
+      newLanguageRecommendations
+    );
+  };
+  newLanguageName.element.addEventListener(
+    'languagechange',
+    refreshNewLanguageRecommendations
+  );
+  newTranslationLanguage.select.addEventListener(
+    'change',
+    refreshNewLanguageRecommendations
+  );
   const addLanguageFeedback = document.createElement('p');
   addLanguageFeedback.className = 'form-status';
   addLanguageFeedback.setAttribute('role', 'status');
@@ -1766,7 +2396,12 @@ async function renderLanguages(): Promise<void> {
     void gateway
       .createLanguage({
         name: newLanguageName.value(),
-        dictionaryUri1: newLanguageDictionary.value
+        dictionaryUri1: newLanguageDictionary.value,
+        dictionaryUri2: newLanguageDictionary2.value,
+        googleTranslateUri: googleTranslateTemplate(
+          newLanguageName.value(),
+          newTranslationLanguage.select.value
+        )
       })
       .then((created) => {
         selectedLanguageId = created.id;
@@ -1784,15 +2419,22 @@ async function renderLanguages(): Promise<void> {
   addLanguageForm.append(
     addLanguageHeading,
     addLanguageDescription,
-    createField('Language', newLanguageName.element),
+    createField('Language you are learning', newLanguageName.element),
+    createField('Your native language', newTranslationLanguage.element),
     createField('Primary dictionary URL (optional)', newLanguageDictionary),
+    createField('Secondary dictionary URL (optional)', newLanguageDictionary2),
+    newLanguageRecommendations,
     addLanguageFeedback,
     addLanguageActions
   );
   addLanguageDialog.append(addLanguageForm);
   addLanguage.addEventListener('click', () => {
     newLanguageName.reset();
+    newTranslationLanguage.select.value = '';
+    newTranslationLanguage.select.dispatchEvent(new Event('change'));
     newLanguageDictionary.value = '';
+    newLanguageDictionary2.value = '';
+    newLanguageRecommendations.textContent = '';
     addLanguageFeedback.textContent = '';
     addLanguageDialog.showModal();
     newLanguageName.trigger.focus();
@@ -1945,6 +2587,30 @@ async function renderLanguages(): Promise<void> {
           save.disabled = false;
         });
     });
+    const nativeLanguage =
+      translationLanguageFromTemplate(language.googleTranslateUri) ?? '';
+    const recommended = recommendedDictionaryTemplates(language.name, nativeLanguage);
+    const recommendationRow = document.createElement('div');
+    recommendationRow.className = 'dictionary-recommendation';
+    const recommendationCopy = document.createElement('span');
+    recommendationCopy.textContent = `Recommended for ${language.name}${
+      nativeLanguage ? ` with ${nativeLanguage} as your native language` : ''
+    }: ${recommended.primaryName} and ${recommended.secondaryName}.`;
+    const useRecommended = document.createElement('button');
+    useRecommended.type = 'button';
+    useRecommended.className = 'secondary-button';
+    useRecommended.append(
+      createAdwaitaIcon('dictionary'),
+      document.createTextNode('Use recommended')
+    );
+    useRecommended.addEventListener('click', () => {
+      dictionary1.value = recommended.primaryUrl;
+      dictionary2.value = recommended.secondaryUrl;
+      feedback.className = 'form-status';
+      feedback.textContent =
+        'Recommended dictionary templates selected. Save settings to apply.';
+    });
+    recommendationRow.append(recommendationCopy, useRecommended);
     const dictionaryGroup = createSettingsSection(
       'Dictionaries and translation',
       'Use ### where the selected word or expression should be inserted.',
@@ -1952,7 +2618,8 @@ async function renderLanguages(): Promise<void> {
       [
         createField('Primary dictionary URL template', dictionary1),
         createField('Secondary dictionary URL template', dictionary2),
-        createField('Translation URL template', googleTranslate)
+        createField('Translation URL template', googleTranslate),
+        recommendationRow
       ]
     );
     const readingGroup = createSettingsSection(
@@ -2720,7 +3387,7 @@ function mountScreen(
 
   const addText = document.createElement('button');
   addText.type = 'button';
-  addText.className = 'headerbar-button headerbar-button--suggested';
+  addText.className = 'headerbar-button';
   addText.title = 'Add text';
   addText.setAttribute('aria-label', 'Add text');
   const addTextIcon = createAdwaitaIcon('add');
@@ -2834,6 +3501,7 @@ function mountScreen(
   body.className = 'adw-body';
   const workArea = document.createElement('div');
   workArea.className = 'adw-workspace';
+  workArea.classList.toggle('adw-workspace--reader', active === 'reader');
   workArea.append(content);
   body.append(workArea);
 
@@ -2913,18 +3581,34 @@ async function renderHome(): Promise<void> {
     heading.textContent = 'Set up the language you want to learn';
     const description = document.createElement('p');
     description.textContent =
-      'Choose your learning language and dictionary here. You will add your first text next.';
+      'Choose the language you are learning and your native language. Recommended dictionaries and translation will be configured for you.';
     introductionHeading.append(eyebrow, heading, description);
 
     const form = document.createElement('form');
     form.className = 'first-language-form first-language-card';
     const language = createLanguageNameControl();
+    const translationLanguage = createTranslationLanguageControl();
     const dictionary = document.createElement('input');
     dictionary.type = 'url';
     dictionary.maxLength = 1000;
     dictionary.placeholder = 'https://dictionary.example/search?q=###';
+    const dictionary2 = document.createElement('input');
+    dictionary2.type = 'url';
+    dictionary2.maxLength = 1000;
+    dictionary2.placeholder = 'https://another-dictionary.example/search?q=###';
     const help = document.createElement('small');
-    help.textContent = 'Optional. Use ### where the selected word should appear.';
+    help.className = 'dictionary-recommendation-copy';
+    const refreshRecommendations = (): void => {
+      applyRecommendedDictionaries(
+        language.value(),
+        translationLanguage.select.value,
+        dictionary,
+        dictionary2,
+        help
+      );
+    };
+    language.element.addEventListener('languagechange', refreshRecommendations);
+    translationLanguage.select.addEventListener('change', refreshRecommendations);
     const submit = document.createElement('button');
     submit.type = 'submit';
     submit.className = 'primary-button';
@@ -2940,7 +3624,15 @@ async function renderHome(): Promise<void> {
       submit.disabled = true;
       status.textContent = 'Saving language…';
       void gateway
-        .createLanguage({ name: language.value(), dictionaryUri1: dictionary.value })
+        .createLanguage({
+          name: language.value(),
+          dictionaryUri1: dictionary.value,
+          dictionaryUri2: dictionary2.value,
+          googleTranslateUri: googleTranslateTemplate(
+            language.value(),
+            translationLanguage.select.value
+          )
+        })
         .then((saved) => {
           pendingLanguage = saved.name;
           addingText = true;
@@ -2961,29 +3653,44 @@ async function renderHome(): Promise<void> {
     const formTitle = document.createElement('h2');
     formTitle.textContent = 'Language details';
     const requirement = document.createElement('span');
-    requirement.textContent = 'Language is required';
+    requirement.textContent = 'Both languages are required';
     formHeadingCopy.append(step, formTitle);
     formHeading.append(formHeadingCopy, requirement);
 
     const fields = document.createElement('div');
     fields.className = 'dialog-grid';
     const languageField = createField('Language you are learning', language.element);
+    const translationLanguageField = createField(
+      'Your native language',
+      translationLanguage.element
+    );
     const dictionaryField = createField('Primary dictionary URL (optional)', dictionary);
-    dictionaryField.append(help);
-    fields.append(languageField, dictionaryField);
+    const dictionary2Field = createField('Secondary dictionary URL (optional)', dictionary2);
+    help.classList.add('dictionary-recommendation-copy--wide');
+    fields.append(
+      languageField,
+      translationLanguageField,
+      dictionaryField,
+      dictionary2Field,
+      help
+    );
 
     const footer = document.createElement('div');
     footer.className = 'first-language-card__footer';
     const footerNote = document.createElement('span');
     footerNote.textContent =
-      'Advanced language rules and additional dictionaries can be changed later in Preferences.';
+      'Dictionaries, translation, and advanced language rules can be changed later in Preferences.';
     footer.append(footerNote, submit);
     form.append(formHeading, fields, footer, status);
 
     const steps = document.createElement('div');
     steps.className = 'first-use-steps';
     for (const [number, title, copy] of [
-      ['1', 'Choose a language', 'Set the language you are learning and your dictionary.'],
+      [
+        '1',
+        'Choose your languages',
+        'Set the language you are learning and your native language.'
+      ],
       ['2', 'Add your first text', 'Paste or upload content that matches your interests.'],
       ['3', 'Read and review', 'Save unfamiliar terms and return to them in Review.']
     ] as const) {
@@ -3174,12 +3881,13 @@ async function renderHome(): Promise<void> {
 }
 
 async function render(message = '', editingId?: number): Promise<void> {
-  const [texts, editingText, tags, selectedTagIds, settings] = await Promise.all([
+  const [texts, editingText, tags, selectedTagIds, settings, languages] = await Promise.all([
     gateway.listTexts(),
     editingId === undefined ? Promise.resolve(undefined) : gateway.getText(editingId),
     gateway.listTags(),
     editingId === undefined ? Promise.resolve([]) : gateway.listTextTagIds(editingId),
-    gateway.appSettings()
+    gateway.appSettings(),
+    gateway.listLanguages()
   ]);
 
   const shell = document.createElement('main');
@@ -3204,7 +3912,8 @@ async function render(message = '', editingId?: number): Promise<void> {
   addTextButton.append(createAdwaitaIcon('add'), addTextLabel);
   addTextButton.addEventListener('click', () => {
     addingText = true;
-    pendingLanguage = texts.find(({ archived }) => !archived)?.language ?? '';
+    pendingLanguage =
+      libraryLanguage || (texts.find(({ archived }) => !archived)?.language ?? '');
     void render();
   });
   const archiveViewButton = document.createElement('button');
@@ -3351,7 +4060,14 @@ async function render(message = '', editingId?: number): Promise<void> {
     editorDialog = document.createElement('dialog');
     editorDialog.className = 'editor-dialog';
     editorDialog.append(
-      createImportPanel(message, editingText, tags, selectedTagIds, pendingLanguage)
+      createImportPanel(
+        message,
+        editingText,
+        tags,
+        selectedTagIds,
+        pendingLanguage,
+        languages.map(({ name }) => name)
+      )
     );
     shell.append(editorDialog);
   } else if (message) {
@@ -3365,7 +4081,10 @@ async function render(message = '', editingId?: number): Promise<void> {
   mountScreen(
     shell,
     'library',
-    editingText?.language ?? texts.find(({ archived }) => !archived)?.language ?? 'All languages'
+    editingText?.language ??
+      (libraryLanguage ||
+        texts.find(({ archived }) => !archived)?.language ||
+        'All languages')
   );
   editorDialog?.showModal();
 }

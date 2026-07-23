@@ -62,7 +62,9 @@ describe('TauriLibraryGateway', () => {
   it('creates the first language before a text exists', async () => {
     const input = {
       name: 'English',
-      dictionaryUri1: 'https://example.com/dictionary?q=###'
+      dictionaryUri1: 'https://example.com/dictionary?q=###',
+      dictionaryUri2: 'https://example.com/secondary?q=###',
+      googleTranslateUri: 'https://translate.example/?text=###'
     };
     const response = { id: 1, ...input, textCount: 0 };
     const invoke = vi.fn().mockResolvedValue(response);

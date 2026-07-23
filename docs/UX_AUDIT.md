@@ -19,8 +19,8 @@ As três mudanças de maior impacto são:
 1. Transformar a página inicial em um painel de continuidade, deixando
    “Adicionar conteúdo” como ação sob demanda em vez de um formulário sempre
    aberto.
-2. Reestruturar o leitor em texto + painel contextual fixo, usando um painel
-   lateral no desktop e uma folha inferior no mobile.
+2. Reestruturar o leitor como área de leitura em largura total, abrindo os
+   detalhes do termo em um diálogo somente após selecionar palavra ou expressão.
 3. Corrigir imediatamente três problemas de interface: posição de rolagem
    preservada entre telas, elementos com `hidden` que continuam visíveis e
    contraste quebrado em Configurações no modo escuro.
@@ -31,8 +31,9 @@ Um protótipo navegável das propostas prioritárias acompanha este documento em
 > **Atualização de implementação — 23 de julho de 2026:** foram entregues a
 > Home separada da Library, navegação primária, estados de primeiro uso/sem
 > leitura atual/usuário recorrente, configuração direta do primeiro idioma e
-> dicionário, formulário Add content sob demanda, até três textos recentes sem
-> repetir o destaque, leitor em duas colunas, níveis exatos Learning 1–4 e
+> língua nativa, dicionários e tradução, formulário Add content sob demanda,
+> até três textos recentes sem repetir o destaque, leitor em largura total com
+> editor modal sob demanda, níveis exatos Learning 1–4 e
 > `Finish lesson` em um clique com persistência e `Undo`, busca/filtros da
 > Library e a tela global Vocabulary. O shell foi refinado para uma linguagem
 > visual clara inspirada no GNOME/libadwaita: headerbar de 54 px, controles
@@ -43,11 +44,16 @@ Um protótipo navegável das propostas prioritárias acompanha este documento em
 > nativa, com ícones oficiais Adwaita, controles de janela, borda e cantos
 > arredondados reais. Vocabulary agora permite edição direta com frase de
 > contexto; Review apresenta contexto, intervalos e atalhos; idiomas são
-> editados um por vez; Estatísticas sugere a próxima ação. O áudio local foi
-> removido da interface, preservando dados legados apenas para round-trip de
-> backup. Uma rodada final de fidelidade levou os componentes do protótipo para
+> editados um por vez; Estatísticas sugere a próxima ação. O áudio local voltou
+> como recurso opcional, com upload/troca/remoção no editor e player próprio no
+> Reader, incluindo timeline, saltos de 10 segundos, volume e velocidade. O
+> cabeçalho do leitor permanece fixo com `Finish lesson`, enquanto somente o
+> texto rola; em telas estreitas, expressões usam um carrossel horizontal para
+> não aumentar indefinidamente a altura. O backup preserva o round-trip do
+> áudio. Uma rodada final de fidelidade
+> levou os componentes do protótipo para
 > a aplicação real: capas e progresso na Home/Library, documento tipográfico e
-> painel contextual no Reader, densidade de Vocabulary, sessão focada de Review
+> diálogo contextual no Reader, densidade de Vocabulary, sessão focada de Review
 > e cartão guiado de primeiro idioma.
 
 ## Como a análise foi feita
@@ -213,7 +219,7 @@ Legenda:
 | My Texts | **Parcial** | Criar, editar, abrir, arquivar e excluir existem. Faltam busca por título, idioma/tags, ordenação, contagem clicável de termos, seleção múltipla, teste por texto, impressão e reprocessamento manual. |
 | My Text Archive | **Migrado com mudança** | Arquivar/restaurar existe. Diferentemente do PHP, arquivar apenas muda uma flag e mantém sentenças/itens no SQLite. A economia de espaço do arquivo legado não foi preservada, mas isso pode ser uma decisão adequada para desktop. |
 | My Text Tags | **Parcial** | Tags foram unificadas e podem ser criadas/atribuídas. Não podem ser editadas, excluídas ou pesquisadas, e não há visão separada para organização de textos. |
-| My Languages | **Parcial** | O primeiro idioma e dicionário podem ser criados antes do primeiro texto. Ainda faltam excluir idioma, definir/trocar idioma atual, testar termos por idioma e reprocessar manualmente. |
+| My Languages | **Parcial** | O primeiro idioma, a língua nativa, dois dicionários recomendados e a direção de tradução podem ser configurados antes do primeiro texto; para inglês, o segundo dicionário usa a edição bilíngue Cambridge quando o par é suportado. Ainda faltam excluir idioma, definir/trocar idioma atual, testar termos por idioma e reprocessar manualmente. |
 | My Terms (Words and Expressions) | **Ausente** | Não existe tela nem endpoint de listagem global. Termos só aparecem dentro do leitor ou na fila automática. Criar uma área Vocabulário com busca, filtros, edição, seleção e ações em lote é prioridade alta. |
 | My Term Tags | **Parcial** | A mesma infraestrutura de tags atende termos, mas não há gestão específica, edição/exclusão nem filtro global porque “Meus termos” não existe. |
 | My Statistics | **Parcial** | Totais e revisão recente existem. Faltam drill-down clicável para termos por status/idioma, tendências completas e relação direta com a lista de vocabulário. A comparação do agendador legado é técnica e não substitui esse drill-down. |
@@ -233,7 +239,7 @@ Legenda:
 | Termos e expressões de 2–9 palavras | **Migrado** | Criação e persistência existem. Falta uma seleção mais natural e o modo Show All para lidar com expressões sobrepostas. |
 | Tradução, romanização e tags | **Migrado** | Funcionam no leitor. Falta frase de exemplo própria do termo e gestão global. |
 | Frase de exemplo armazenada por termo | **Ausente** | A revisão não recebe sentença de contexto e o schema de `terms` não tem o campo legado. Ocorrências do parser podem gerar contexto dinamicamente, mas isso ainda não foi implementado. |
-| Três dicionários/tradução de sentença | **Parcial** | Há Dictionary 1, Dictionary 2 e Translate por palavra. Não há ação de traduzir a sentença atual nem integração local semelhante ao `trans`. |
+| Três dicionários/tradução de sentença | **Migrado com mudança** | Há ações para consultar dois dicionários, traduzir a palavra ou expressão selecionada e traduzir a sentença completa em uma janela auxiliar interna. A integração usa serviços configuráveis em vez do `trans` local. |
 | Status 1–5, Ignorado e Bem conhecido | **Migrado** | Banco e editor preservam os sete valores; salvar tradução, romanização ou tags não colapsa um status migrado. |
 | `I KNOW ALL` para as palavras novas do texto | **Migrado com mudança** | `Finish lesson` executa a ação em um clique, persiste a conclusão, mantém termos clicados/em aprendizagem e converte apenas palavras ainda não marcadas para 99; `Undo` reverte somente os termos criados por aquela conclusão. |
 | Teste L2→L1 | **Parcial** | A revisão atual cobre reconhecimento básico, mas sem sentença de contexto e sem escolher termos por texto/idioma/tag. |
@@ -250,7 +256,7 @@ Legenda:
 | Prévia do parsing antes de salvar | **Ausente** | Erros de idioma ou segmentação só ficam claros depois da criação. |
 | Reprocessamento de textos | **Migrado parcialmente** | Editar texto e mudar regras relevantes reprocessa automaticamente e de forma transacional. Não há ação manual nem indicação detalhada do impacto. |
 | Regras avançadas de idioma | **Dados preservados, mecanismo substituído** | `exceptions_split_sentences` e `regexp_word_characters` permanecem no banco/backup, mas o parser desktop usa regras Unicode simplificadas e a UI não expõe esses campos. |
-| Assistente de idioma | **Ausente** | No legado, o primeiro passo podia ser configurar L1/L2. No desktop, o idioma é um texto livre no cadastro e só depois ganha configurações. |
+| Assistente de idioma | **Migrado com mudança** | O primeiro passo pergunta a língua estudada e a língua nativa, preenche dois templates de dicionário recomendados e editáveis e configura a tradução entre o par antes do primeiro texto. |
 | Áudio local | **Migrado e melhorado** | Upload, armazenamento gerenciado, troca e remoção existem. |
 | Velocidade, repetição, saltos e sincronização aproximada | **Ausente** | O player nativo oferece play/pause/seek, mas faltam 0,5–1,5x explícito, loop, ± segundos e duplo clique na palavra para aproximar o áudio. |
 | Atalhos no leitor e teste | **Ausente** | O legado tinha navegação de termos, status 1–5, editar, ignorar, bem conhecido, áudio e revelar resposta. O desktop depende principalmente de Tab/Enter do navegador. |
@@ -264,8 +270,9 @@ Estes casos merecem atenção especial porque podem criar uma falsa sensação d
 migração completa:
 
 - `texts.annotated_content`: é restaurado e reexportado, porém invisível.
-- `texts.audio_uri` e `text_audio`: preservados na migração e no backup para não
-  causar perda silenciosa, mas deliberadamente não expostos na interface.
+- `texts.audio_uri`: preservado na migração e no backup, mas o player atual usa
+  o conteúdo gerenciado em `text_audio`; referências URI legadas não são abertas
+  automaticamente.
 - `languages.export_template`: é editável, mas não existe exportação de termos.
 - `languages.exceptions_split_sentences` e
   `languages.regexp_word_characters`: são preservados, mas não usados pelo parser
@@ -367,8 +374,8 @@ O usuário perde o contexto que motivou a consulta.
 
 **Proposta:**
 
-- Desktop: texto em uma coluna de leitura e editor em painel lateral fixo.
-- Mobile: tradução rápida inline e detalhes em uma folha inferior expansível.
+- Em qualquer tamanho: texto usando toda a largura útil e editor em diálogo
+  centralizado, fechado por padrão e aberto somente após selecionar um termo.
 - Manter a frase atual destacada no texto.
 - Ao trocar de palavra, atualizar o painel sem mudar a posição de leitura.
 - Dar foco primeiro à tradução, deixando romanização, tags e ações avançadas
@@ -489,8 +496,9 @@ O resultado era “zero pendentes”; não havia um estado persistente separado 
 
 **Proposta:**
 
-- Expor `Finish lesson` como uma única ação abaixo do painel contextual de
-  vocabulário. Não repetir no cabeçalho, no rodapé ou como ação flutuante.
+- Expor `Finish lesson` como uma única ação no cabeçalho fixo do leitor. Não
+  repetir no rodapé, sobrepor o conteúdo nem colocar dentro do diálogo de
+  termos.
 - Executar diretamente, sem diálogo intermediário: termos clicados já estão
   salvos no vocabulário; palavras simples nunca clicadas passam para status 99.
 - Não modificar termos em aprendizagem, ignorados nem expressões.
@@ -669,8 +677,9 @@ Sistema
 - Títulos curtos, metadados discretos e ações secundárias em menus.
 - Tema claro intencional e consistente, independentemente da preferência escura
   do sistema operacional.
-- No leitor, largura de texto controlada e painel lateral entre 320 e 380 px.
-- No mobile, navegação inferior e painel de termo em folha inferior.
+- No leitor, texto em largura total e diálogo de termo com largura máxima
+  controlada em qualquer tamanho de janela.
+- No mobile, navegação inferior e o mesmo diálogo responsivo do desktop.
 
 ## Plano de implementação sugerido
 
@@ -701,12 +710,13 @@ Sistema
 
 ### Etapa 2 — leitor contextual
 
-1. Criar layout de duas colunas.
-2. Transformar editor em painel lateral/folha inferior.
+1. Criar layout de leitura em largura total.
+2. Transformar o editor em diálogo contextual responsivo para todas as larguras.
 3. Preservar seleção, contexto e posição de leitura.
 4. Simplificar status, tradução e expressões.
 5. Implementar `Finish lesson` em um clique, registro de leitura e `Undo`.
-6. Integrar a chamada de revisão ao leitor; não expor áudio local na interface.
+6. Integrar a chamada de revisão ao leitor e manter o áudio local opcional,
+   sem ocupar espaço em textos que não o utilizam.
 
 ### Etapa 3 — revisão, configurações e progresso
 

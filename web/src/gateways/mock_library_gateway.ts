@@ -246,7 +246,12 @@ export class MockLibraryGateway implements LibraryGateway {
       throw new Error('Language name is required');
     }
     const settings = this.settingsFor(name);
-    const updated = { ...settings, dictionaryUri1: input.dictionaryUri1.trim() };
+    const updated = {
+      ...settings,
+      dictionaryUri1: input.dictionaryUri1.trim(),
+      dictionaryUri2: input.dictionaryUri2?.trim() || undefined,
+      googleTranslateUri: input.googleTranslateUri?.trim() || undefined
+    };
     this.languageSettings.set(name.toLocaleLowerCase(), updated);
     return { ...updated };
   }

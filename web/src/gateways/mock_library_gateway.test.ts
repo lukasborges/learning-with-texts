@@ -69,12 +69,16 @@ describe('MockLibraryGateway', () => {
 
     const language = await gateway.createLanguage({
       name: 'Korean',
-      dictionaryUri1: 'https://example.com?q=###'
+      dictionaryUri1: 'https://example.com?q=###',
+      dictionaryUri2: 'https://example.org?q=###',
+      googleTranslateUri: 'https://translate.example/?text=###'
     });
 
     expect(language).toMatchObject({
       name: 'Korean',
       dictionaryUri1: 'https://example.com?q=###',
+      dictionaryUri2: 'https://example.org?q=###',
+      googleTranslateUri: 'https://translate.example/?text=###',
       textCount: 0
     });
   });

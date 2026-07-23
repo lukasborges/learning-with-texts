@@ -165,6 +165,23 @@ test('packaged desktop workflows persist and restore local data', { timeout: 120
       By.css('.first-language-form .language-name-control'),
       'English'
     );
+    await chooseCombobox(
+      driver,
+      By.css('.first-language-form .translation-language-control'),
+      'Portuguese'
+    );
+    const recommendedDictionaries = await driver.findElements(
+      By.css('.first-language-form input[type="url"]')
+    );
+    assert.deepEqual(
+      await Promise.all(
+        recommendedDictionaries.map((input) => input.getAttribute('value'))
+      ),
+      [
+        'https://dictionary.cambridge.org/dictionary/english/###',
+        'https://dictionary.cambridge.org/dictionary/english-portuguese/###'
+      ]
+    );
     await driver
       .findElement(buttonWithText('Save language and add your first text'))
       .click();
@@ -172,6 +189,17 @@ test('packaged desktop workflows persist and restore local data', { timeout: 120
     assert.equal(
       await driver.findElement(By.css('.empty-state')).getText(),
       'Your local library is empty. Add your first text to begin.'
+    );
+    const inheritedLanguage = await driver.findElement(By.css('.text-form [name="language"]'));
+    assert.equal(await inheritedLanguage.getAttribute('type'), 'hidden');
+    assert.equal(await inheritedLanguage.getAttribute('value'), 'English');
+    assert.equal(
+      await driver.findElements(By.xpath('//form[contains(@class,"text-form")]//label[normalize-space(.)="Language"]')).then((items) => items.length),
+      0
+    );
+    assert.equal(
+      await driver.findElement(By.css('.audio-file-input')).isDisplayed(),
+      true
     );
     const saveToLibrary = await driver.findElement(buttonWithText('Save to library'));
     assert.equal(
@@ -205,6 +233,10 @@ test('packaged desktop workflows persist and restore local data', { timeout: 120
       )
       .click();
     await visible(driver, By.xpath('//h1[normalize-space(.)="E2E Story"]'));
+    assert.equal(
+      await driver.findElements(By.css('.term-editor[open]')).then((items) => items.length),
+      0
+    );
     await driver
       .findElement(
         By.xpath(
@@ -220,11 +252,22 @@ test('packaged desktop workflows persist and restore local data', { timeout: 120
       10_000
     );
     checkpoint('term save');
+    await driver.findElement(By.css('.term-editor__close')).click();
     const finishLessonButton = await driver.findElement(buttonWithText('Finish lesson'));
-    await driver.executeScript(
-      'arguments[0].scrollIntoView({ block: "center", inline: "nearest" })',
+    const finishLessonRect = await finishLessonButton.getRect();
+    assert.ok(finishLessonRect.y < 120);
+    assert.ok(1280 - (finishLessonRect.x + finishLessonRect.width) < 40);
+    const finishLessonIsUnobstructed = await driver.executeScript(
+      `const button = arguments[0];
+       const rect = button.getBoundingClientRect();
+       const target = document.elementFromPoint(
+         rect.left + rect.width / 2,
+         rect.top + rect.height / 2
+       );
+       return target === button || button.contains(target);`,
       finishLessonButton
     );
+    assert.equal(finishLessonIsUnobstructed, true);
     await finishLessonButton.click();
     await visible(driver, By.xpath('//button[normalize-space(.)="Lesson finished"]'));
     assert.match(

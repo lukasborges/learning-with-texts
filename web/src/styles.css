@@ -714,6 +714,16 @@ textarea {
   gap: 0.75rem;
 }
 
+.term-editor__lookup {
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.term-editor__lookup .adw-icon {
+  width: 16px;
+  height: 16px;
+}
+
 .data-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
@@ -1830,8 +1840,12 @@ textarea {
   position: sticky;
   top: 0;
   display: grid;
+  max-height: calc(100vh - 118px);
   align-content: start;
   gap: 10px;
+  padding: 0 4px 10px 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .adw-window .reading-sidebar .term-editor {
@@ -2846,6 +2860,10 @@ textarea {
   box-shadow: 0 1px 3px rgb(0 0 0 / 8%);
 }
 
+.adw-window .reading-shell .reading-sidebar .term-editor {
+  position: static;
+}
+
 .adw-window .reading-shell .term-editor > p {
   margin: 0;
   color: var(--adw-muted);
@@ -3087,9 +3105,19 @@ textarea {
 }
 
 .adw-window .file-picker:hover,
-.adw-window .file-picker:focus-within {
+.adw-window .file-picker:focus-within,
+.adw-window .file-picker.is-drag-over {
   border-color: #62a0ea;
   background: #eef4fc;
+}
+
+.adw-window .file-picker.is-drag-over {
+  outline: 2px solid color-mix(in srgb, var(--adw-accent) 26%, transparent);
+  outline-offset: 2px;
+}
+
+.adw-window .file-picker.is-drag-over .file-picker__icon {
+  transform: scale(1.06);
 }
 
 .adw-window .file-picker__input,
@@ -3113,6 +3141,7 @@ textarea {
   border-radius: 9px;
   background: var(--adw-accent-soft);
   color: var(--adw-accent-hover);
+  transition: transform 120ms ease;
 }
 
 .adw-window .file-picker__icon .adw-icon {
@@ -3153,6 +3182,22 @@ textarea {
   border-color: #62a0ea;
   background: #eef4fc;
   color: #1a5fb4;
+}
+
+.adw-window .file-picker.has-saved-file {
+  border-color: #8bc7a8;
+  background: #f2faf5;
+}
+
+.adw-window .file-picker.has-saved-file .file-picker__name {
+  border-color: #8bc7a8;
+  background: #fff;
+  color: #1f6b45;
+}
+
+.adw-window .text-form__audio-field .file-picker__icon {
+  background: #f1e8ff;
+  color: #613583;
 }
 
 .adw-window .tag-shell > h1 {
@@ -3779,6 +3824,34 @@ textarea {
   gap: 14px;
 }
 
+.adw-window .first-language-card__language-field {
+  grid-column: 1 / -1;
+}
+
+.adw-window .dictionary-recommendation-copy {
+  color: var(--adw-muted);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.adw-window .dictionary-recommendation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 12px;
+  border-radius: 9px;
+  background: #f6f5f4;
+  color: var(--adw-muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.adw-window .dictionary-recommendation .secondary-button {
+  min-width: max-content;
+}
+
 .adw-window .first-language-card label {
   display: grid;
   gap: 7px;
@@ -3863,6 +3936,9 @@ textarea {
 @media (max-width: 900px) {
   .adw-window .reading-sidebar {
     position: static;
+    max-height: none;
+    padding-right: 0;
+    overflow: visible;
   }
 
   .adw-window .home-dashboard.next-actions {
@@ -4616,18 +4692,6 @@ body:has(.adw-window) {
   box-shadow: none;
 }
 
-.headerbar-button--suggested {
-  border-color: #1c71d8;
-  background: var(--adw-accent);
-  color: #fff;
-  font-size: 21px;
-}
-
-.headerbar-button--suggested:hover {
-  background: var(--adw-accent-hover);
-}
-
-.headerbar-button--suggested .adw-icon,
 .window-control--close:hover .adw-icon {
   filter: brightness(0) invert(1);
 }
@@ -6040,6 +6104,340 @@ body:has(.desktop-app) {
   background: #fff;
 }
 
+/* Reading focus mode: the text always owns the workspace. */
+
+.adw-window .reading-shell .reading-workspace {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.adw-window .reading-shell .term-editor {
+  position: fixed;
+  inset: 0;
+  width: min(430px, calc(100vw - 32px));
+  max-height: calc(100vh - 64px);
+  box-sizing: border-box;
+  padding: 24px;
+  margin: auto;
+  overflow: auto;
+  border: 1px solid var(--adw-border);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--adw-text);
+  box-shadow: 0 18px 55px rgb(0 0 0 / 28%);
+}
+
+.adw-window .reading-shell .term-editor:not([open]) {
+  display: none;
+}
+
+.adw-window .reading-shell .term-editor::backdrop {
+  background: rgb(0 0 0 / 38%);
+}
+
+.adw-window .reading-shell .term-editor__close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--adw-muted);
+  cursor: pointer;
+}
+
+.adw-window .reading-shell .term-editor__close:hover {
+  background: #f0efed;
+  color: var(--adw-text);
+}
+
+.adw-window .reading-shell .term-editor__close .adw-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.adw-window .reading-shell .term-editor > h2 {
+  padding-right: 34px;
+}
+
+.adw-window .reading-shell .reading-finish-panel {
+  position: fixed;
+  z-index: 45;
+  top: 62px;
+  right: 18px;
+}
+
+.adw-window .reading-shell .reading-finish-panel .finish-lesson {
+  width: auto;
+  box-shadow: 0 6px 18px rgb(28 113 216 / 24%);
+}
+
+.adw-window .dictionary-recommendation-copy--wide {
+  grid-column: 1 / -1;
+  min-height: 34px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  background: #f6f5f4;
+}
+
+.adw-window .reading-sentence__actions {
+  display: inline-flex;
+  margin-inline-start: 12px;
+  vertical-align: middle;
+}
+
+.adw-window .reading-sentence__translate {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border: 1px solid var(--adw-border);
+  border-radius: 8px;
+  background: #f6f5f4;
+  color: var(--adw-muted);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.adw-window .reading-sentence__translate:hover,
+.adw-window .reading-sentence__translate:focus-visible {
+  border-color: rgb(0 0 0 / 22%);
+  background: #fff;
+  color: var(--adw-text);
+}
+
+.adw-window .reading-sentence__translate .adw-icon {
+  width: 15px;
+  height: 15px;
+}
+
+.adw-window .reading-shell .reading-audio {
+  display: grid;
+  grid-template-columns: minmax(170px, 220px) minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--adw-border);
+  border-radius: 11px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 7%);
+}
+
+.adw-window .reading-audio__identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.adw-window .reading-audio__identity > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.adw-window .reading-audio__identity strong {
+  color: var(--adw-text);
+  font-size: 11px;
+}
+
+.adw-window .reading-audio__identity span {
+  overflow: hidden;
+  color: var(--adw-muted);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adw-window .reading-audio__icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 9px;
+  background: #f1e8ff;
+  color: #613583;
+}
+
+.adw-window .reading-audio__icon .adw-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.adw-window .audio-player {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: auto minmax(150px, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.adw-window .audio-player__media {
+  display: none;
+}
+
+.adw-window .audio-player__transport,
+.adw-window .audio-player__volume {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.adw-window .audio-player__button {
+  position: relative;
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--adw-border);
+  border-radius: 8px;
+  background: #f6f5f4;
+  color: var(--adw-text);
+  cursor: pointer;
+}
+
+.adw-window .audio-player__button:hover {
+  border-color: rgb(0 0 0 / 24%);
+  background: #fff;
+}
+
+.adw-window .audio-player__button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--adw-accent) 30%, transparent);
+  outline-offset: 1px;
+}
+
+.adw-window .audio-player__button .adw-icon {
+  width: 15px;
+  height: 15px;
+}
+
+.adw-window .audio-player__play {
+  border-color: var(--adw-accent);
+  background: var(--adw-accent);
+  color: #fff;
+}
+
+.adw-window .audio-player__play:hover {
+  border-color: var(--adw-accent-hover);
+  background: var(--adw-accent-hover);
+}
+
+.adw-window .audio-player__play .adw-icon path,
+.adw-window .audio-player__play .adw-icon g {
+  fill: currentColor;
+}
+
+.adw-window .audio-player__seek .adw-icon {
+  width: 17px;
+  height: 17px;
+  opacity: 0.75;
+}
+
+.adw-window .audio-player__seek-amount {
+  position: absolute;
+  right: 3px;
+  bottom: 2px;
+  min-width: 13px;
+  border-radius: 4px;
+  background: #fff;
+  color: var(--adw-muted);
+  font-size: 7px;
+  font-weight: 850;
+  line-height: 11px;
+}
+
+.adw-window .audio-player__timeline {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.adw-window .audio-player input[type='range'] {
+  width: 100%;
+  height: 18px;
+  min-height: 18px;
+  padding: 0;
+  border: 0;
+  accent-color: var(--adw-accent);
+  background: transparent;
+  cursor: pointer;
+}
+
+.adw-window .audio-player__time {
+  display: flex;
+  justify-content: space-between;
+  color: var(--adw-muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 8px;
+  font-weight: 650;
+}
+
+.adw-window .audio-player__speed {
+  min-width: 72px;
+}
+
+.adw-window .audio-player__speed > .app-combobox__trigger {
+  min-height: 34px;
+  padding: 6px 9px;
+}
+
+.adw-window .audio-player__volume {
+  min-width: 112px;
+}
+
+.adw-window .audio-player__volume input[type='range'] {
+  width: 72px;
+}
+
+.adw-window .audio-player__mute {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 820px) {
+  .adw-window .reading-shell .reading-audio {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
+
+@media (max-width: 620px) {
+  .adw-window .audio-player {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .adw-window .audio-player__timeline {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .adw-window .audio-player__transport {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .adw-window .audio-player__speed {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: end;
+  }
+
+  .adw-window .audio-player__volume {
+    grid-column: 3;
+    grid-row: 2;
+  }
+}
+
 .adw-window .continue-card--empty {
   align-self: start;
   min-height: 200px;
@@ -6056,4 +6454,356 @@ body:has(.desktop-app) {
 
 .adw-window .continue-card--empty .continue-content > button {
   margin-top: 16px;
+}
+
+.adw-window .text-form__title--wide {
+  grid-column: 1 / -1;
+}
+
+/* Keep the Library filter row visually unified as one Adwaita control group. */
+
+.adw-window .library-toolbar {
+  align-items: center;
+  gap: 8px;
+}
+
+.adw-window .library-toolbar .search-field {
+  min-height: 38px;
+  border: 1px solid var(--adw-border);
+  border-radius: 9px;
+  background: #fff;
+  box-shadow: none;
+}
+
+.adw-window .library-toolbar .search-field:hover {
+  border-color: rgb(0 0 0 / 28%);
+}
+
+.adw-window .library-toolbar .search-field:focus-within {
+  border-color: var(--adw-accent);
+  outline: 2px solid color-mix(in srgb, var(--adw-accent) 24%, transparent);
+  outline-offset: 1px;
+}
+
+.adw-window .library-toolbar .search-field .adw-icon {
+  left: 12px;
+  width: 16px;
+  height: 16px;
+  color: #5e5c64;
+}
+
+.adw-window .library-toolbar .search-field input {
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 12px 8px 38px;
+  border: 0;
+  border-radius: inherit;
+  outline: 0;
+  background: transparent;
+  color: var(--adw-text);
+  box-shadow: none;
+  font-size: 11px;
+}
+
+.adw-window .library-toolbar .search-field input::placeholder {
+  color: var(--adw-muted);
+  opacity: 1;
+}
+
+.adw-window .library-toolbar > .filter-button {
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid var(--adw-border);
+  border-radius: 9px;
+  background: #f6f5f4;
+  color: var(--adw-text);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.adw-window .library-toolbar > .filter-button:hover {
+  border-color: rgb(0 0 0 / 22%);
+  background: #fff;
+}
+
+/* Reader workspace: keep study controls visible and scroll only the text. */
+
+.adw-workspace--reader {
+  overflow: hidden;
+}
+
+.adw-workspace--reader > .reading-shell {
+  display: grid;
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  box-sizing: border-box;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.adw-window .reading-fixed-header {
+  position: relative;
+  z-index: 20;
+  display: grid;
+  min-width: 0;
+  gap: 9px;
+  padding-bottom: 10px;
+  background: var(--adw-bg);
+}
+
+.adw-window .reading-fixed-header .reading-header {
+  gap: 7px;
+  margin: 0;
+}
+
+.adw-window .reading-fixed-header .reading-title-row {
+  align-items: center;
+}
+
+.adw-window .reading-shell .finish-lesson--header {
+  width: max-content;
+  min-width: max-content;
+  box-shadow: 0 4px 12px rgb(28 113 216 / 20%);
+}
+
+.adw-window .reading-fixed-header .reading-guide {
+  display: grid;
+  min-height: 58px;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  gap: 16px;
+  padding: 9px 12px;
+  overflow: hidden;
+  border: 1px solid var(--adw-border-soft);
+  border-radius: 11px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 7%);
+}
+
+.adw-window .reading-fixed-header .reading-legend {
+  flex-wrap: nowrap;
+}
+
+.adw-window .reading-fixed-header .expression-controls {
+  margin-left: 0;
+}
+
+.adw-window .expression-carousel {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 5px;
+}
+
+.adw-window .expression-carousel > button {
+  display: grid;
+  width: 28px;
+  height: 30px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--adw-border);
+  border-radius: 7px;
+  background: #f6f5f4;
+  color: var(--adw-text);
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.adw-window .expression-carousel > button:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.adw-window .expression-carousel:not(.has-overflow) > button {
+  display: none;
+}
+
+.adw-window .reading-shell .expression-carousel .expression-list {
+  display: flex;
+  min-width: 0;
+  flex-wrap: nowrap;
+  gap: 5px;
+  margin: 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scroll-behavior: smooth;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+
+.adw-window .expression-carousel .expression-list::-webkit-scrollbar {
+  display: none;
+}
+
+.adw-window .expression-carousel .expression-list button {
+  min-height: 30px;
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  border-radius: 7px;
+  font-size: 10px;
+  scroll-snap-align: start;
+  white-space: nowrap;
+}
+
+.adw-window .reading-shell .reading-workspace,
+.adw-window .reading-shell .reading-study {
+  height: 100%;
+  min-height: 0;
+}
+
+.adw-window .reading-shell .reading-workspace {
+  display: block;
+  overflow: hidden;
+}
+
+.adw-window .reading-shell .reading-study {
+  overflow: hidden;
+}
+
+.adw-window .reading-shell .reading-content {
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+@media (max-width: 680px) {
+  .adw-workspace--reader > .reading-shell {
+    width: calc(100% - 16px);
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+
+  .adw-window .reading-fixed-header {
+    gap: 6px;
+    padding-bottom: 7px;
+  }
+
+  .adw-window .reading-fixed-header .reading-title-row {
+    align-items: center;
+    flex-direction: row;
+    gap: 8px;
+  }
+
+  .adw-window .reading-fixed-header .reading-title-group {
+    min-width: 0;
+  }
+
+  .adw-window .reading-fixed-header .reading-title-group h1 {
+    overflow: hidden;
+    font-size: 21px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .adw-window .reading-fixed-header .eyebrow {
+    font-size: 8px;
+  }
+
+  .adw-window .reading-shell .finish-lesson--header {
+    min-height: 32px;
+    padding: 6px 9px;
+    font-size: 9px;
+  }
+
+  .adw-window .reading-fixed-header .reading-progress {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 7px;
+  }
+
+  .adw-window .reading-fixed-header .reading-audio {
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: 8px;
+    padding: 7px 8px;
+  }
+
+  .adw-window .reading-fixed-header .reading-audio__identity {
+    width: 36px;
+  }
+
+  .adw-window .reading-fixed-header .reading-audio__identity > div {
+    display: none;
+  }
+
+  .adw-window .reading-fixed-header .audio-player {
+    grid-template-columns: auto minmax(70px, 1fr) auto auto;
+    gap: 7px;
+  }
+
+  .adw-window .reading-fixed-header .audio-player__timeline,
+  .adw-window .reading-fixed-header .audio-player__transport,
+  .adw-window .reading-fixed-header .audio-player__speed,
+  .adw-window .reading-fixed-header .audio-player__volume {
+    grid-row: auto;
+    grid-column: auto;
+  }
+
+  .adw-window .reading-fixed-header .audio-player__speed {
+    justify-self: auto;
+  }
+
+  .adw-window .reading-fixed-header .audio-player__volume {
+    min-width: 34px;
+  }
+
+  .adw-window .reading-fixed-header .audio-player__volume input[type='range'] {
+    display: none;
+  }
+
+  .adw-window .reading-fixed-header .reading-guide {
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 7px;
+    padding: 7px 8px;
+  }
+
+  .adw-window .reading-fixed-header .reading-legend {
+    gap: 12px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .adw-window .reading-fixed-header .reading-legend::-webkit-scrollbar {
+    display: none;
+  }
+
+  .adw-window .reading-fixed-header .reading-legend__item {
+    flex: 0 0 auto;
+    font-size: 8px;
+  }
+
+  .adw-window .reading-fixed-header .expression-controls {
+    align-self: center;
+  }
+
+  .adw-window .reading-fixed-header .expression-controls span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+  }
+
+  .adw-window .reading-fixed-header .expression-carousel {
+    grid-column: 1 / -1;
+  }
+
+  .adw-window .reading-shell .reading-content {
+    padding: 26px 22px 50px;
+  }
+}
+
+@media (max-width: 460px) {
+  .adw-window .reading-fixed-header .audio-player__volume {
+    min-width: 34px;
+  }
+
+  .adw-window .reading-fixed-header .audio-player__volume input[type='range'] {
+    display: none;
+  }
 }

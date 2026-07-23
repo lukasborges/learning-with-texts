@@ -20,6 +20,9 @@ AGENTS.md
 # JavaScript dependencies
 /node_modules/
 
+# Personal study materials
+/materials/
+
 # Editor and operating-system files
 .DS_Store
 .vscode/

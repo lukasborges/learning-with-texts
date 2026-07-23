@@ -27,6 +27,7 @@ test('custom titlebar grants only its required window commands', async () => {
   assert.equal(configuration.app.windows[0].decorations, false);
   assert.equal(configuration.app.windows[0].transparent, true);
   assert.equal(configuration.app.windows[0].resizable, true);
+  assert.equal(configuration.app.windows[0].minWidth, 420);
   assert.deepEqual(
     capability.permissions.filter((permission) => permission.startsWith('core:window:allow-')),
     [
@@ -38,4 +39,13 @@ test('custom titlebar grants only its required window commands', async () => {
       'core:window:allow-toggle-maximize'
     ]
   );
+});
+
+test('dictionary lookups can create an isolated auxiliary webview window', async () => {
+  const capability = JSON.parse(
+    await readFile(path.join(repositoryRoot, 'capabilities', 'default.json'), 'utf8')
+  );
+
+  assert.ok(capability.permissions.includes('core:webview:allow-create-webview-window'));
+  assert.deepEqual(capability.windows, ['main']);
 });

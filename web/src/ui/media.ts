@@ -53,3 +53,38 @@ export function buildExternalLookupUrl(
     return undefined;
   }
 }
+
+export function textImportError(file: Pick<File, 'name' | 'size'>): string | undefined {
+  if (!/\.txt$/iu.test(file.name)) {
+    return 'Choose a .txt plain-text file.';
+  }
+  if (file.size > 65_000) {
+    return 'The selected text file exceeds the 65 KB limit.';
+  }
+  return undefined;
+}
+
+export function audioImportError(
+  file: Pick<File, 'name' | 'size' | 'type'>
+): string | undefined {
+  if (file.size === 0 || file.size > 50_000_000) {
+    return 'Audio must be between 1 byte and 50 MB.';
+  }
+  if (detectAudioType(file) === 'application/octet-stream') {
+    return 'Choose a supported MP3, M4A, MP4, OGG, WAV, WebM, or FLAC audio file.';
+  }
+  return undefined;
+}
+
+export function formatPlaybackTime(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) {
+    return '0:00';
+  }
+  const wholeSeconds = Math.floor(seconds);
+  const hours = Math.floor(wholeSeconds / 3_600);
+  const minutes = Math.floor((wholeSeconds % 3_600) / 60);
+  const remainder = wholeSeconds % 60;
+  return hours > 0
+    ? `${hours}:${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`
+    : `${minutes}:${String(remainder).padStart(2, '0')}`;
+}

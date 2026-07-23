@@ -1473,14 +1473,29 @@ impl Database {
     pub fn create_language(&self, input: CreateLanguageInput) -> Result<LanguageSettings, String> {
         let name = input.name.trim().to_string();
         let dictionary_uri_1 = input.dictionary_uri_1.trim().to_string();
+        let dictionary_uri_2 = input
+            .dictionary_uri_2
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+        let google_translate_uri = input
+            .google_translate_uri
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
         if name.is_empty() {
             return Err("Language is required".to_string());
         }
         if name.chars().count() > 40 {
             return Err("Language must not exceed 40 characters".to_string());
         }
-        if dictionary_uri_1.chars().count() > 1_000 {
-            return Err("Dictionary URL must not exceed 1,000 characters".to_string());
+        if dictionary_uri_1.chars().count() > 1_000
+            || dictionary_uri_2
+                .as_deref()
+                .is_some_and(|value| value.chars().count() > 1_000)
+            || google_translate_uri
+                .as_deref()
+                .is_some_and(|value| value.chars().count() > 1_000)
+        {
+            return Err("Dictionary URLs must not exceed 1,000 characters".to_string());
         }
 
         let mut connection = self
@@ -1493,8 +1508,12 @@ impl Database {
         let (id, _) = find_or_create_language(&transaction, &name)?;
         transaction
             .execute(
-                "UPDATE languages SET dictionary_uri_1 = ?1 WHERE id = ?2",
-                params![dictionary_uri_1, id],
+                "UPDATE languages
+                 SET dictionary_uri_1 = ?1,
+                     dictionary_uri_2 = ?2,
+                     google_translate_uri = ?3
+                 WHERE id = ?4",
+                params![dictionary_uri_1, dictionary_uri_2, google_translate_uri, id],
             )
             .map_err(|error| format!("Unable to configure the language: {error}"))?;
         let language = transaction
@@ -3378,6 +3397,8 @@ mod tests {
             .create_language(CreateLanguageInput {
                 name: " English ".into(),
                 dictionary_uri_1: " https://example.com/dictionary?q=### ".into(),
+                dictionary_uri_2: Some(" https://example.com/secondary?q=### ".into()),
+                google_translate_uri: Some(" https://translate.example/?text=### ".into()),
             })
             .expect("language should be created");
 
@@ -3385,6 +3406,14 @@ mod tests {
         assert_eq!(
             language.dictionary_uri_1,
             "https://example.com/dictionary?q=###"
+        );
+        assert_eq!(
+            language.dictionary_uri_2.as_deref(),
+            Some("https://example.com/secondary?q=###")
+        );
+        assert_eq!(
+            language.google_translate_uri.as_deref(),
+            Some("https://translate.example/?text=###")
         );
         assert_eq!(language.text_count, 0);
         assert!(database.list_texts().unwrap().is_empty());

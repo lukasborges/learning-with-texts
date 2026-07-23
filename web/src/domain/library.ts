@@ -224,6 +224,8 @@ export interface LanguageSettings {
 export interface CreateLanguageInput {
   readonly name: string;
   readonly dictionaryUri1: string;
+  readonly dictionaryUri2?: string;
+  readonly googleTranslateUri?: string;
 }
 
 export interface UpdateLanguageInput {
