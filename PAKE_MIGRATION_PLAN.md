@@ -81,8 +81,8 @@ expanded so its remaining work is visible before the next commit.
 
 - [x] Generate checksums for every release artifact (`07f4559`).
 - [x] Generate and retain a machine-readable software bill of materials (SBOM) (`07f4559`).
-- [x] Remove obsolete platform-certificate secrets after accepting unsigned Windows distribution (`812d57a`, updated this commit).
-- [x] Publish Windows installers without Authenticode, document the expected unknown-publisher warning, and retain signed updater verification (this commit).
+- [x] Remove obsolete platform-certificate secrets after accepting unsigned Windows distribution (`812d57a`, `3b1e0a3`).
+- [x] Publish Windows installers without Authenticode, document the expected unknown-publisher warning, and retain signed updater verification (`3b1e0a3`).
 - [x] Configure cryptographically signed application updates (`812d57a`).
 - [x] Document verification, key rotation, and release recovery procedures (`812d57a`).
 - [x] Build and inspect PHP-free DEB, AppImage, and Arch Linux packages (`ee667a3`, `38337dc`).
@@ -92,9 +92,9 @@ expanded so its remaining work is visible before the next commit.
 - [x] Protect production releases with the `desktop-production` environment, required owner approval, and a `v*` tag-only policy (`f0e8ccd`).
 - [x] Generate and verify a release-wide checksum manifest covering every draft asset, including updater bundles and `latest.json` (`8eec9f6`).
 - [x] Reject release tags whose version differs from npm, Cargo, or Tauri manifests before signing starts (`87147cb`).
-- [x] Validate all supported installers, updater signatures, checksums, and SBOMs before publishing (`b2ab2f1`, `2d4bd86`, updated this commit).
+- [x] Validate all supported installers, updater signatures, checksums, and SBOMs before publishing (`b2ab2f1`, `2d4bd86`, `3b1e0a3`).
 - [x] Reject draft releases missing any required platform package, signed updater metadata, SBOM, or checksum manifest (`2d4bd86`).
-- [x] Defer macOS distribution and remove its builds, credentials, artifacts, and updater entries from the supported release matrix (this commit).
+- [x] Defer macOS distribution and remove its builds, credentials, artifacts, and updater entries from the supported release matrix (`d9ec795`).
 
 ### External Completion Gates
 
@@ -136,7 +136,7 @@ expanded so its remaining work is visible before the next commit.
 
 - [x] Produce local Linux DEB and AppImage proof-of-concept packages.
 - [x] Produce and validate a native Arch Linux pacman package (`ee667a3`).
-- [x] Build the currently supported Windows, Linux, and Arch release artifacts in CI; retain the historical macOS proof build as non-supported evidence ([run `29965703267`](https://github.com/lukasborges/learning-with-texts/actions/runs/29965703267)).
+- [x] Build the supported Windows, Linux, and Arch release artifacts in CI ([run `29969072632`](https://github.com/lukasborges/learning-with-texts/actions/runs/29969072632)); retain [run `29965703267`](https://github.com/lukasborges/learning-with-texts/actions/runs/29965703267) only as historical macOS proof.
 - [x] Add upgrade tests covering older desktop schema versions (`352a3b0`).
 - [ ] Publish checksums, SBOM, and signed updates in the first protected release. **Implementation complete; first protected CI release pending.**
 - [ ] Validate installation, backup, upgrade, and removal with nontechnical users.
