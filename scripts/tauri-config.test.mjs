@@ -26,6 +26,7 @@ test('custom titlebar grants only its required window commands', async () => {
 
   assert.equal(configuration.app.windows[0].decorations, false);
   assert.equal(configuration.app.windows[0].transparent, true);
+  assert.equal(configuration.app.windows[0].resizable, true);
   assert.deepEqual(
     capability.permissions.filter((permission) => permission.startsWith('core:window:allow-')),
     [
@@ -33,6 +34,7 @@ test('custom titlebar grants only its required window commands', async () => {
       'core:window:allow-is-maximized',
       'core:window:allow-minimize',
       'core:window:allow-start-dragging',
+      'core:window:allow-start-resize-dragging',
       'core:window:allow-toggle-maximize'
     ]
   );

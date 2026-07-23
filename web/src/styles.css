@@ -4411,6 +4411,7 @@ textarea {
   --adw-border-soft: rgb(0 0 0 / 8%);
   --adw-text: #2e3436;
   --adw-muted: #77767b;
+  position: relative;
   display: grid;
   height: 100vh;
   min-height: 34rem;
@@ -4428,6 +4429,85 @@ textarea {
   border: 0;
   border-radius: 0;
   box-shadow: none;
+}
+
+.window-resize-handle {
+  position: absolute;
+  z-index: 200;
+}
+
+.window-resize-handle--north,
+.window-resize-handle--south {
+  right: 12px;
+  left: 12px;
+  height: 7px;
+  cursor: ns-resize;
+}
+
+.window-resize-handle--north {
+  top: 0;
+}
+
+.window-resize-handle--south {
+  bottom: 0;
+}
+
+.window-resize-handle--east,
+.window-resize-handle--west {
+  top: 12px;
+  bottom: 12px;
+  width: 7px;
+  cursor: ew-resize;
+}
+
+.window-resize-handle--east {
+  right: 0;
+}
+
+.window-resize-handle--west {
+  left: 0;
+}
+
+.window-resize-handle--north-east,
+.window-resize-handle--north-west,
+.window-resize-handle--south-east,
+.window-resize-handle--south-west {
+  width: 12px;
+  height: 12px;
+}
+
+.window-resize-handle--north-east,
+.window-resize-handle--south-west {
+  cursor: nesw-resize;
+}
+
+.window-resize-handle--north-west,
+.window-resize-handle--south-east {
+  cursor: nwse-resize;
+}
+
+.window-resize-handle--north-east,
+.window-resize-handle--north-west {
+  top: 0;
+}
+
+.window-resize-handle--south-east,
+.window-resize-handle--south-west {
+  bottom: 0;
+}
+
+.window-resize-handle--north-east,
+.window-resize-handle--south-east {
+  right: 0;
+}
+
+.window-resize-handle--north-west,
+.window-resize-handle--south-west {
+  left: 0;
+}
+
+.adw-window.is-maximized .window-resize-handle {
+  display: none;
 }
 
 html:has(.adw-window),

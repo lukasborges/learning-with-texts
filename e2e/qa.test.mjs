@@ -245,6 +245,10 @@ test('local QA exercises the complete supported desktop workflow', { timeout: 24
       'Your local library is empty. Add your first text to begin.'
     );
     assert.equal(await driver.findElements(By.css('.window-control')).then((items) => items.length), 3);
+    assert.equal(
+      await driver.findElements(By.css('.window-resize-handle')).then((items) => items.length),
+      8
+    );
     await driver.findElement(buttonWithText('Save to library')).click();
     assert.notEqual(
       await driver.findElement(By.css('[name="title"]')).getAttribute('validationMessage'),

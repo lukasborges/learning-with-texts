@@ -43,6 +43,9 @@ if (!app) {
 }
 
 const applicationRoot = app;
+type WindowResizeDirection = Parameters<
+  ReturnType<typeof getCurrentWindow>['startResizeDragging']
+>[0];
 const usesNativeDatabase = import.meta.env.MODE === 'tauri';
 const updatesEnabled = usesNativeDatabase && import.meta.env.VITE_LWT_UPDATES_ENABLED === 'true';
 const gateway = createLibraryGateway();
@@ -2625,6 +2628,30 @@ function mountScreen(
   const frame = document.createElement('div');
   frame.className = 'adw-window';
   const nativeWindow = usesNativeDatabase ? getCurrentWindow() : undefined;
+  if (nativeWindow) {
+    const resizeHandles = [
+      ['North', 'north'],
+      ['NorthEast', 'north-east'],
+      ['East', 'east'],
+      ['SouthEast', 'south-east'],
+      ['South', 'south'],
+      ['SouthWest', 'south-west'],
+      ['West', 'west'],
+      ['NorthWest', 'north-west']
+    ] as const satisfies ReadonlyArray<readonly [WindowResizeDirection, string]>;
+    for (const [direction, position] of resizeHandles) {
+      const handle = document.createElement('div');
+      handle.className = `window-resize-handle window-resize-handle--${position}`;
+      handle.setAttribute('aria-hidden', 'true');
+      handle.addEventListener('mousedown', (event) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        void nativeWindow.startResizeDragging(direction);
+      });
+      frame.append(handle);
+    }
+  }
 
   const headerbar = document.createElement('header');
   headerbar.className = 'adw-headerbar';

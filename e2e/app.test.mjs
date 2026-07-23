@@ -145,6 +145,10 @@ test('packaged desktop workflows persist and restore local data', { timeout: 120
     assert.equal(await heading.getText(), 'Set up the language you want to learn');
     assert.equal(await driver.findElements(By.css('.window-control')).then((items) => items.length), 3);
     assert.equal(
+      await driver.findElements(By.css('.window-resize-handle')).then((items) => items.length),
+      8
+    );
+    assert.equal(
       await driver.findElement(By.css('.window-control[aria-label="Maximize window"]')).isDisplayed(),
       true
     );
@@ -208,7 +212,12 @@ test('packaged desktop workflows persist and restore local data', { timeout: 120
       10_000
     );
     checkpoint('term save');
-    await driver.findElement(buttonWithText('Finish lesson')).click();
+    const finishLessonButton = await driver.findElement(buttonWithText('Finish lesson'));
+    await driver.executeScript(
+      'arguments[0].scrollIntoView({ block: "center", inline: "nearest" })',
+      finishLessonButton
+    );
+    await finishLessonButton.click();
     await visible(driver, By.xpath('//button[normalize-space(.)="Lesson finished"]'));
     assert.match(
       await driver.findElement(By.css('.completion-notice span')).getText(),
