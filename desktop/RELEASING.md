@@ -8,8 +8,6 @@ their target operating systems. It runs only when manually dispatched.
 | `lwt-desktop-linux-x86_64` | Ubuntu 24.04 | DEB, AppImage |
 | `lwt-desktop-arch-x86_64` | Arch Linux container | pacman `.pkg.tar.zst` |
 | `lwt-desktop-windows-x86_64` | Windows 2025 | MSI, NSIS setup |
-| `lwt-desktop-macos-aarch64` | macOS 15 ARM | DMG |
-| `lwt-desktop-macos-x86_64` | macOS 15 Intel | DMG |
 
 Every matrix job installs from `package-lock.json`, runs TypeScript/Rust checks
 and tests, then builds with the repository-pinned Tauri CLI. Each retained
@@ -35,14 +33,12 @@ npm run desktop:package:arch
 
 # Windows
 npx tauri build --bundles msi,nsis
-
-# macOS
-npx tauri build --bundles dmg
 ```
 
 These artifacts are intentionally unsigned. Do not present them as trusted
-production releases until the signing, notarization, and updater stage is
-complete.
+production releases until the signing and updater stage is complete. macOS is
+not part of the current release matrix and remains deferred until Apple build
+and signing access is available.
 
 Production `v*` tags instead invoke `Signed Desktop Release`. That protected
 workflow creates a draft GitHub release with signed updater bundles and a

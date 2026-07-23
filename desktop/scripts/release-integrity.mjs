@@ -6,10 +6,8 @@ import { fileURLToPath } from 'node:url';
 const RELEASE_SUFFIXES = [
   '.AppImage',
   '.AppImage.tar.gz',
-  '.app.tar.gz',
   '.cdx.json',
   '.deb',
-  '.dmg',
   '.msi',
   '.nsis.zip',
   '.pkg.tar.zst',

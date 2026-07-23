@@ -2,7 +2,7 @@
 
 ## Objective
 
-Turn the official `hapepo23/learning-with-texts` codebase into an installable Windows, macOS, and Linux desktop application. End users must not need to install PHP, Apache, MySQL/MariaDB, XAMPP, MAMP, or Docker. The final application should preserve LWT's core reading and vocabulary workflows and work offline.
+Turn the official `hapepo23/learning-with-texts` codebase into an installable Windows and Linux desktop application, including a native Arch Linux package. macOS distribution is deferred until Apple build and signing access is available. End users must not need to install PHP, Apache, MySQL/MariaDB, XAMPP, MAMP, or Docker. The final application should preserve LWT's core reading and vocabulary workflows and work offline.
 
 ## Current-State Assessment
 
@@ -81,8 +81,8 @@ expanded so its remaining work is visible before the next commit.
 
 - [x] Generate checksums for every release artifact (`07f4559`).
 - [x] Generate and retain a machine-readable software bill of materials (SBOM) (`07f4559`).
-- [x] Define least-privilege secret contracts for Windows and macOS signing (`812d57a`).
-- [ ] Sign Windows installers and notarize macOS DMGs in CI. **Workflow ready; protected credentials and first CI evidence pending.**
+- [x] Define a least-privilege secret contract for Windows signing (`812d57a`, updated this commit).
+- [ ] Sign Windows installers in CI. **Individual Brazilian publisher identity, provider integration, and first CI evidence pending.**
 - [x] Configure cryptographically signed application updates (`812d57a`).
 - [x] Document verification, key rotation, and release recovery procedures (`812d57a`).
 - [x] Build and inspect PHP-free DEB, AppImage, and Arch Linux packages (`ee667a3`, `38337dc`).
@@ -92,18 +92,18 @@ expanded so its remaining work is visible before the next commit.
 - [x] Protect production releases with the `desktop-production` environment, required owner approval, and a `v*` tag-only policy (`f0e8ccd`).
 - [x] Generate and verify a release-wide checksum manifest covering every draft asset, including updater bundles and `latest.json` (`8eec9f6`).
 - [x] Reject release tags whose version differs from npm, Cargo, or Tauri manifests before signing starts (`87147cb`).
-- [x] Fail protected releases unless Windows installers pass Authenticode verification and macOS apps/DMGs pass signature and notarization checks (`b2ab2f1`).
+- [x] Fail protected releases unless Windows installers pass Authenticode verification (`b2ab2f1`, updated this commit).
 - [x] Reject draft releases missing any required platform package, signed updater metadata, SBOM, or checksum manifest (`2d4bd86`).
+- [x] Defer macOS distribution and remove its builds, credentials, artifacts, and updater entries from the supported release matrix (this commit).
 
 ### External Completion Gates
 
 - [x] Provide a tested, non-overwriting helper for generating and protecting the Tauri updater key pair (`a6936c1`).
 - [x] Add `TAURI_SIGNING_PRIVATE_KEY` and the matching `TAURI_UPDATER_PUBLIC_KEY` variable to the protected environment (verified July 22, 2026).
 - [x] Add `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` to the protected environment without exposing it in logs or chat (verified July 22, 2026).
-- [ ] Add the Windows code-signing PFX and password to the protected environment.
-- [ ] Add the Apple Developer ID certificate, temporary keychain password, and App Store Connect notarization credentials to the protected environment.
+- [ ] Obtain an individual Windows code-signing identity available to a Brazilian publisher and integrate its provider with GitHub Actions.
 - [ ] Create and approve the first protected version tag; retain a successful signed-release run and verify its draft artifacts on clean systems.
-- [ ] Complete and retain the acceptance records from at least two nontechnical users following `desktop/USER_ACCEPTANCE.md`.
+- [ ] Complete and retain the acceptance records from at least two nontechnical users—one Windows and one Linux—following `desktop/USER_ACCEPTANCE.md`.
 
 ### Completed Desktop Workflows
 
@@ -137,9 +137,9 @@ expanded so its remaining work is visible before the next commit.
 
 - [x] Produce local Linux DEB and AppImage proof-of-concept packages.
 - [x] Produce and validate a native Arch Linux pacman package (`ee667a3`).
-- [x] Build Windows, macOS, Linux, and Arch release artifacts in CI ([run `29965703267`](https://github.com/lukasborges/learning-with-texts/actions/runs/29965703267)).
+- [x] Build the currently supported Windows, Linux, and Arch release artifacts in CI; retain the historical macOS proof build as non-supported evidence ([run `29965703267`](https://github.com/lukasborges/learning-with-texts/actions/runs/29965703267)).
 - [x] Add upgrade tests covering older desktop schema versions (`352a3b0`).
-- [ ] Add signing/notarization, checksums, SBOM, and signed updates. **Implementation complete; first protected CI release pending.**
+- [ ] Add Windows signing, checksums, SBOM, and signed updates. **Updater and integrity implementation complete; Windows provider integration and first protected CI release pending.**
 - [ ] Validate installation, backup, upgrade, and removal with nontechnical users.
 
 Update this checklist whenever a slice is committed: check its completed tasks,
@@ -216,8 +216,8 @@ For each workflow, record current behavior, expose Rust commands, connect the Ty
 
 ### Phase 5 — Hardening and Distribution
 
-- Produce MSI/NSIS, DMG, and AppImage/DEB artifacts in GitHub Actions.
-- Sign/notarize releases, publish checksums and an SBOM, and configure signed updates.
+- Produce MSI/NSIS, AppImage/DEB, and Arch Linux artifacts in GitHub Actions.
+- Sign releases, publish checksums and an SBOM, and configure signed updates.
 - Store databases, backups, logs, and media in platform-specific app-data directories.
 - Test upgrades with databases from at least two earlier desktop versions.
 - Add crash-safe writes, recovery instructions, and a user-visible backup command.

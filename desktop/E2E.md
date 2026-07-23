@@ -24,6 +24,6 @@ To reuse an existing debug binary, run `npm run desktop:test:e2e`. Set
 `desktop/src-tauri/target/debug/lwt-desktop`. Set `TAURI_DRIVER` if the driver
 is not installed in Cargo's default binary directory.
 
-Linux and Windows can use the official `tauri-driver`. macOS has no native
-WKWebView driver, so cross-platform CI should adopt WebdriverIO's embedded Tauri
-driver for the same scenarios when the macOS release job is introduced.
+Linux and Windows can use the official `tauri-driver`. macOS distribution and
+its WKWebView test strategy are deferred until Apple build and signing access
+is available.

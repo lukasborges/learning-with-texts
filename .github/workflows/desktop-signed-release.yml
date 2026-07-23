@@ -29,16 +29,6 @@ jobs:
             rust_target: x86_64-pc-windows-msvc
             build_args: --bundles msi,nsis
             bundle_root: desktop/src-tauri/target/release/bundle
-          - runner: macos-15
-            artifact: lwt-desktop-macos-aarch64
-            rust_target: aarch64-apple-darwin
-            build_args: --target aarch64-apple-darwin --bundles dmg
-            bundle_root: desktop/src-tauri/target/aarch64-apple-darwin/release/bundle
-          - runner: macos-15-intel
-            artifact: lwt-desktop-macos-x86_64
-            rust_target: x86_64-apple-darwin
-            build_args: --target x86_64-apple-darwin --bundles dmg
-            bundle_root: desktop/src-tauri/target/x86_64-apple-darwin/release/bundle
 
     steps:
       - uses: actions/checkout@v6
@@ -101,43 +91,6 @@ jobs:
           "WINDOWS_CERTIFICATE_PATH=$certificatePath" >> $env:GITHUB_ENV
           "WINDOWS_CERTIFICATE_THUMBPRINT=$($certificate.Thumbprint)" >> $env:GITHUB_ENV
 
-      - name: Import Apple signing certificate
-        if: runner.os == 'macOS'
-        shell: bash
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
-          APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-        run: |
-          test -n "$APPLE_CERTIFICATE" || { echo 'Missing APPLE_CERTIFICATE'; exit 1; }
-          test -n "$APPLE_CERTIFICATE_PASSWORD" || { echo 'Missing APPLE_CERTIFICATE_PASSWORD'; exit 1; }
-          test -n "$APPLE_KEYCHAIN_PASSWORD" || { echo 'Missing APPLE_KEYCHAIN_PASSWORD'; exit 1; }
-          test -n "$APPLE_API_PRIVATE_KEY" || { echo 'Missing APPLE_API_PRIVATE_KEY'; exit 1; }
-          test -n "$APPLE_API_ISSUER" || { echo 'Missing APPLE_API_ISSUER'; exit 1; }
-          test -n "$APPLE_API_KEY_ID" || { echo 'Missing APPLE_API_KEY_ID'; exit 1; }
-          certificate_path="$RUNNER_TEMP/lwt-apple-signing.p12"
-          keychain_path="$RUNNER_TEMP/lwt-build.keychain-db"
-          api_key_path="$RUNNER_TEMP/AuthKey.p8"
-          printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$certificate_path"
-          printf '%s' "$APPLE_API_PRIVATE_KEY" > "$api_key_path"
-          security create-keychain -p "$APPLE_KEYCHAIN_PASSWORD" "$keychain_path"
-          security set-keychain-settings -lut 21600 "$keychain_path"
-          security unlock-keychain -p "$APPLE_KEYCHAIN_PASSWORD" "$keychain_path"
-          security import "$certificate_path" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain_path"
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$APPLE_KEYCHAIN_PASSWORD" "$keychain_path"
-          security list-keychains -d user -s "$keychain_path"
-          signing_identity=$(security find-identity -v -p codesigning "$keychain_path" | awk -F '"' '/Developer ID Application/ { print $2; exit }')
-          test -n "$signing_identity" || { echo 'Developer ID Application identity was not found'; exit 1; }
-          {
-            echo "APPLE_SIGNING_IDENTITY=$signing_identity"
-            echo "APPLE_API_KEY_PATH=$api_key_path"
-            echo "APPLE_KEYCHAIN_PATH=$keychain_path"
-            echo "APPLE_CERTIFICATE_PATH=$certificate_path"
-          } >> "$GITHUB_ENV"
-
       - name: Create protected release configuration
         env:
           LWT_UPDATER_PUBLIC_KEY: ${{ vars.TAURI_UPDATER_PUBLIC_KEY }}
@@ -145,7 +98,7 @@ jobs:
           node desktop/scripts/create-release-config.mjs
           --output "${{ runner.temp }}/tauri.release.conf.json"
 
-      - name: Build, sign, notarize, and publish
+      - name: Build, sign, and publish
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -153,10 +106,6 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           VITE_LWT_UPDATES_ENABLED: 'true'
           NO_STRIP: ${{ runner.os == 'Linux' && '1' || '' }}
-          APPLE_SIGNING_IDENTITY: ${{ env.APPLE_SIGNING_IDENTITY }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY_ID }}
-          APPLE_API_KEY_PATH: ${{ env.APPLE_API_KEY_PATH }}
         with:
           projectPath: desktop
           tagName: ${{ github.ref_name }}
@@ -187,26 +136,6 @@ jobs:
             }
           }
 
-      - name: Verify Apple signatures and notarization
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          verified_apps=0
-          while IFS= read -r -d '' app_path; do
-            codesign --verify --deep --strict "$app_path"
-            verified_apps=$((verified_apps + 1))
-          done < <(find "${{ matrix.bundle_root }}" -type d -name '*.app' -print0)
-          test "$verified_apps" -gt 0 || { echo 'No macOS application bundle was produced'; exit 1; }
-
-          verified_dmgs=0
-          while IFS= read -r -d '' dmg_path; do
-            codesign --verify --deep --strict "$dmg_path"
-            spctl --assess --type open "$dmg_path"
-            xcrun stapler validate "$dmg_path"
-            verified_dmgs=$((verified_dmgs + 1))
-          done < <(find "${{ matrix.bundle_root }}" -type f -name '*.dmg' -print0)
-          test "$verified_dmgs" -gt 0 || { echo 'No macOS disk image was produced'; exit 1; }
-
       - name: Smoke test signed Linux package installation and removal
         if: runner.os == 'Linux'
         run: |
@@ -230,14 +159,6 @@ jobs:
             Remove-Item $env:WINDOWS_CERTIFICATE_PATH -Force
           }
           Remove-Item "${{ runner.temp }}/tauri.release.conf.json" -Force -ErrorAction SilentlyContinue
-
-      - name: Remove Apple signing credentials from the runner
-        if: always() && runner.os == 'macOS'
-        shell: bash
-        run: |
-          security delete-keychain "$APPLE_KEYCHAIN_PATH" 2>/dev/null || true
-          rm -f "$APPLE_CERTIFICATE_PATH" "$APPLE_API_KEY_PATH"
-          rm -f "${{ runner.temp }}/tauri.release.conf.json"
 
       - name: Remove Linux release configuration
         if: always() && runner.os == 'Linux'

@@ -35,25 +35,6 @@ jobs:
               desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
               desktop/src-tauri/target/release/bundle/lwt-desktop-windows-x86_64.cdx.json
               desktop/src-tauri/target/release/bundle/SHA256SUMS
-          - runner: macos-15
-            artifact: lwt-desktop-macos-aarch64
-            rust_target: aarch64-apple-darwin
-            build_args: --target aarch64-apple-darwin --bundles dmg
-            bundle_root: desktop/src-tauri/target/aarch64-apple-darwin/release/bundle
-            paths: |
-              desktop/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
-              desktop/src-tauri/target/aarch64-apple-darwin/release/bundle/lwt-desktop-macos-aarch64.cdx.json
-              desktop/src-tauri/target/aarch64-apple-darwin/release/bundle/SHA256SUMS
-          - runner: macos-15-intel
-            artifact: lwt-desktop-macos-x86_64
-            rust_target: x86_64-apple-darwin
-            build_args: --target x86_64-apple-darwin --bundles dmg
-            bundle_root: desktop/src-tauri/target/x86_64-apple-darwin/release/bundle
-            paths: |
-              desktop/src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
-              desktop/src-tauri/target/x86_64-apple-darwin/release/bundle/lwt-desktop-macos-x86_64.cdx.json
-              desktop/src-tauri/target/x86_64-apple-darwin/release/bundle/SHA256SUMS
-
     steps:
       - uses: actions/checkout@v6
 

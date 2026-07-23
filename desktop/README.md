@@ -25,9 +25,9 @@ npm run desktop:tauri:build
 review, statistics, backup, and restore through the native WebView. See
 [E2E.md](E2E.md) for local and CI prerequisites.
 
-Release CI produces Linux, Windows, and Intel/Apple Silicon macOS installers.
-The manual matrix is unsigned; version tags use the protected signing,
-notarization, SBOM, checksum, and updater workflow. See
+Release CI produces Linux and Windows installers plus the Arch Linux package.
+macOS distribution is intentionally deferred. The manual matrix is unsigned;
+version tags use the protected signing, SBOM, checksum, and updater workflow. See
 [RELEASING.md](RELEASING.md) and [SIGNING.md](SIGNING.md).
 
 SQLite versions 1 through 10 have explicit upgrade and rollback coverage. See

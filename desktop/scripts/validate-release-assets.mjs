@@ -6,22 +6,17 @@ import { fileURLToPath } from 'node:url';
 const REQUIREMENTS = [
   ['Linux DEB installer', (name) => name.endsWith('.deb'), 1],
   ['Linux AppImage', (name) => name.endsWith('.AppImage'), 1],
-  ['Linux updater bundle', (name) => name.endsWith('.AppImage.tar.gz'), 1],
+  ['Linux updater signature', (name) => name.endsWith('.AppImage.sig'), 1],
   ['Windows MSI installer', (name) => name.endsWith('.msi'), 1],
   ['Windows NSIS installer', (name) => name.endsWith('-setup.exe'), 1],
-  ['macOS DMGs', (name) => name.endsWith('.dmg'), 2],
+  ['Windows MSI updater signature', (name) => name.endsWith('.msi.sig'), 1],
+  ['Windows NSIS updater signature', (name) => name.endsWith('-setup.exe.sig'), 1],
   ['Arch Linux package', (name) => name.endsWith('.pkg.tar.zst'), 1],
-  ['signed updater bundles', (name) => name.endsWith('.sig'), 4],
   ['updater manifest', (name) => name === 'latest.json', 1],
-  ['CycloneDX SBOMs', (name) => name.endsWith('.cdx.json'), 5],
-  ['platform checksum manifests', (name) => name.endsWith('.SHA256SUMS'), 5]
+  ['CycloneDX SBOMs', (name) => name.endsWith('.cdx.json'), 3],
+  ['platform checksum manifests', (name) => name.endsWith('.SHA256SUMS'), 3]
 ];
-const UPDATE_PLATFORMS = [
-  'darwin-aarch64',
-  'darwin-x86_64',
-  'linux-x86_64',
-  'windows-x86_64'
-];
+const UPDATE_PLATFORMS = ['linux-x86_64', 'windows-x86_64'];
 
 export async function validateReleaseAssets(directory, expectedVersion) {
   const entries = await readdir(directory, { withFileTypes: true });

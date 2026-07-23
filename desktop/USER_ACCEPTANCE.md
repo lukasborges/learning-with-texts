@@ -3,7 +3,9 @@
 Use this script with at least two people who did not build the application and
 are not regular contributors. Give each tester only the installer, its checksum
 file, and this page. Do not coach them unless they become blocked; record every
-place where assistance is needed.
+place where assistance is needed. The retained records must cover at least one
+Windows tester and one Linux tester; the Linux tester may use DEB, AppImage, or
+the Arch Linux package.
 
 Unsigned workflow artifacts are test builds only. Perform public testing with a
 signed draft release once signing credentials are provisioned.

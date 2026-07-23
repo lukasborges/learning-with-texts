@@ -7,8 +7,9 @@ install PHP, Apache, MySQL/MariaDB, XAMPP, MAMP, or Docker.
 
 ## Install
 
-Signed Windows, macOS, and Linux installers are produced from version tags by
-the protected release workflow. Until its first production run is verified,
+Signed Windows and Linux installers are produced from version tags by the
+protected release workflow. macOS distribution is deferred until Apple build
+and signing access is available. Until the first production run is verified,
 use artifacts from the manual workflow only for testing; those artifacts are
 explicitly unsigned. Release and verification details are in
 [desktop/RELEASING.md](desktop/RELEASING.md).
