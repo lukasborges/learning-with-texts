@@ -85,15 +85,23 @@ expanded so its remaining work is visible before the next commit.
 - [ ] Sign Windows installers and notarize macOS DMGs in CI. **Workflow ready; protected credentials and first CI evidence pending.**
 - [x] Configure cryptographically signed application updates (`812d57a`).
 - [x] Document verification, key rotation, and release recovery procedures (`812d57a`).
-- [x] Build and inspect PHP-free DEB, AppImage, and Arch Linux packages (`ee667a3` and this commit).
-- [x] Run packaged first-launch, persistence, backup, and restore E2E after PHP removal (this commit).
-- [x] Keep the updater inert in local and distribution-managed builds while preserving signed release overrides (this commit).
+- [x] Build and inspect PHP-free DEB, AppImage, and Arch Linux packages (`ee667a3`, `38337dc`).
+- [x] Run packaged first-launch, persistence, backup, and restore E2E after PHP removal (`38337dc`).
+- [x] Keep the updater inert in local and distribution-managed builds while preserving signed release overrides (`38337dc`).
 - [x] Install and remove DEB and pacman packages in clean CI environments before publishing artifacts ([run `29966876339`](https://github.com/lukasborges/learning-with-texts/actions/runs/29966876339)).
-- [x] Protect production releases with the `desktop-production` environment, required owner approval, and a `v*` tag-only policy (this commit).
-- [x] Generate and verify a release-wide checksum manifest covering every draft asset, including updater bundles and `latest.json` (this commit).
-- [x] Reject release tags whose version differs from npm, Cargo, or Tauri manifests before signing starts (this commit).
-- [x] Fail protected releases unless Windows installers pass Authenticode verification and macOS apps/DMGs pass signature and notarization checks (this commit).
-- [x] Reject draft releases missing any required platform package, signed updater metadata, SBOM, or checksum manifest (this commit).
+- [x] Protect production releases with the `desktop-production` environment, required owner approval, and a `v*` tag-only policy (`f0e8ccd`).
+- [x] Generate and verify a release-wide checksum manifest covering every draft asset, including updater bundles and `latest.json` (`8eec9f6`).
+- [x] Reject release tags whose version differs from npm, Cargo, or Tauri manifests before signing starts (`87147cb`).
+- [x] Fail protected releases unless Windows installers pass Authenticode verification and macOS apps/DMGs pass signature and notarization checks (`b2ab2f1`).
+- [x] Reject draft releases missing any required platform package, signed updater metadata, SBOM, or checksum manifest (`2d4bd86`).
+
+### External Completion Gates
+
+- [ ] Add `TAURI_SIGNING_PRIVATE_KEY` and its password to the protected environment, and add the matching `TAURI_UPDATER_PUBLIC_KEY` variable.
+- [ ] Add the Windows code-signing PFX and password to the protected environment.
+- [ ] Add the Apple Developer ID certificate, temporary keychain password, and App Store Connect notarization credentials to the protected environment.
+- [ ] Create and approve the first protected version tag; retain a successful signed-release run and verify its draft artifacts on clean systems.
+- [ ] Complete and retain the acceptance records from at least two nontechnical users following `desktop/USER_ACCEPTANCE.md`.
 
 ### Completed Desktop Workflows
 
@@ -200,7 +208,7 @@ For each workflow, record current behavior, expose Rust commands, connect the Ty
 - [x] Preserve the legacy application and exporter in the remote `legacy-php-maintenance` branch and annotated `legacy-php-migration-v25.10.0` tag (`01d534a`).
 - [x] Confirm every MVP workflow has desktop parity and no longer invokes PHP or MySQL (`7da80bd`).
 - [x] Remove PHP pages, MySQL connection templates, and obsolete browser dependencies from the desktop branch (`9fbac1a`).
-- [x] Verify clean builds, tests, installers, backup/restore, and upgrades without PHP or MySQL files (this commit).
+- [x] Verify clean builds, tests, installers, backup/restore, and upgrades without PHP or MySQL files (`38337dc`).
 
 **Exit criterion:** the maintained desktop branch contains no PHP/MySQL runtime dependency, while the tagged legacy branch remains available for data migration and historical support.
 
