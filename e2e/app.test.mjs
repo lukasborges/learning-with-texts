@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
-import { access, mkdtemp, rm } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
+import { once } from 'node:events';
 import { test } from 'node:test';
 import { Builder, By, Capabilities, until } from 'selenium-webdriver';
 
@@ -68,9 +69,30 @@ test('packaged desktop workflows persist and restore local data', { timeout: 120
     'tauri-driver is required; install it with `cargo install tauri-driver --locked`'
   );
 
-  const appDataDirectory = await mkdtemp(path.join(os.tmpdir(), 'lwt-desktop-e2e-'));
+  const sandboxDirectory = await mkdtemp(path.join(os.tmpdir(), 'lwt-desktop-e2e-'));
+  const homeDirectory = path.join(sandboxDirectory, 'home');
+  const appDataDirectory = path.join(sandboxDirectory, 'data');
+  const configDirectory = path.join(sandboxDirectory, 'config');
+  const cacheDirectory = path.join(sandboxDirectory, 'cache');
+  await Promise.all([
+    mkdir(path.join(homeDirectory, 'Downloads'), { recursive: true }),
+    mkdir(appDataDirectory, { recursive: true }),
+    mkdir(configDirectory, { recursive: true }),
+    mkdir(cacheDirectory, { recursive: true })
+  ]);
+  await writeFile(
+    path.join(configDirectory, 'user-dirs.dirs'),
+    'XDG_DOWNLOAD_DIR="$HOME/Downloads"\n'
+  );
   const driverProcess = spawn(tauriDriver, [], {
-    env: { ...process.env, XDG_DATA_HOME: appDataDirectory },
+    env: {
+      ...process.env,
+      HOME: homeDirectory,
+      XDG_DATA_HOME: appDataDirectory,
+      XDG_CONFIG_HOME: configDirectory,
+      XDG_CACHE_HOME: cacheDirectory
+    },
+    cwd: homeDirectory,
     stdio: 'inherit'
   });
   let driver;
@@ -179,7 +201,18 @@ test('packaged desktop workflows persist and restore local data', { timeout: 120
     );
   } finally {
     if (driver) await driver.quit().catch(() => undefined);
-    driverProcess.kill();
-    await rm(appDataDirectory, { recursive: true, force: true });
+    if (driverProcess.exitCode === null) {
+      driverProcess.kill();
+      await Promise.race([
+        once(driverProcess, 'exit'),
+        new Promise((resolve) => setTimeout(resolve, 2_000))
+      ]);
+    }
+    await rm(sandboxDirectory, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 100
+    });
   }
 });

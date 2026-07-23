@@ -4,6 +4,7 @@ Use these scenarios to validate a release candidate end to end. Record the app
 version, operating system, installer type, tester, date, result, and defect link
 for every run. Execute the complete suite on Windows and one Linux package;
 repeat installation, launch, update, and removal on every supported package.
+The latest local results are recorded in [QA_EXECUTION_REPORT.md](QA_EXECUTION_REPORT.md).
 
 ## Test Matrix and Data
 
@@ -49,7 +50,7 @@ with a verified backup.
 | --- | --- | --- | --- |
 | READ-01 | Parse and open | Open texts containing Unicode, repeated words, separators, and multiple sentence terminators. | Text order and punctuation are preserved; equal normalized terms share progress. |
 | READ-02 | Term states | Change a term through Unknown, Learning, Known, and Ignored states. | Styling, accessible label, progress, review eligibility, and relaunch state match each status. |
-| READ-03 | Term details | Save translation, romanization, and notes; reopen another occurrence of the same term. | Shared details appear everywhere in the same language and stay isolated from other languages. |
+| READ-03 | Term details | Save translation, romanization, and tags; reopen another occurrence of the same term. | Shared details appear everywhere in the same language and stay isolated from other languages. |
 | READ-04 | External lookup | Configure valid dictionary/translation URL templates and click lookup links; also try malformed and non-HTTP templates. | Valid links contain the encoded term; unsafe or malformed links are not offered. |
 | READ-05 | Compound expression | Select and save a multiword expression, reopen the text, then edit surrounding content. | The expression reopens at the correct occurrence or produces a safe warning instead of a wrong link. |
 | READ-06 | Audio lifecycle | Add supported local audio, play/pause/seek, relaunch, replace it, and remove it. | Playback works without exposing its source path; each mutation persists. |

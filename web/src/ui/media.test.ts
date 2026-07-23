@@ -12,6 +12,12 @@ describe('detectAudioType', () => {
       'application/octet-stream'
     );
   });
+
+  it('uses the extension when the browser reports a generic binary type', () => {
+    expect(detectAudioType({ name: 'lesson.wav', type: 'application/octet-stream' })).toBe(
+      'audio/wav'
+    );
+  });
 });
 
 describe('buildExternalLookupUrl', () => {

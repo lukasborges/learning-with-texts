@@ -249,7 +249,29 @@ fn validate_audio(
     if content.is_empty() || content.len() > MAX_AUDIO_BYTES {
         return Err("Audio must be between 1 byte and 50 MB".to_string());
     }
+    if !audio_content_matches_type(&media_type, &content) {
+        return Err("Audio content does not match its declared type.".to_string());
+    }
     Ok((file_name, media_type, content))
+}
+
+fn audio_content_matches_type(media_type: &str, content: &[u8]) -> bool {
+    match media_type {
+        "audio/mpeg" => {
+            content.starts_with(b"ID3")
+                || content
+                    .get(..2)
+                    .is_some_and(|header| header[0] == 0xff && header[1] & 0xe0 == 0xe0)
+        }
+        "audio/mp4" => content.get(4..8) == Some(b"ftyp"),
+        "audio/ogg" => content.starts_with(b"OggS"),
+        "audio/wav" | "audio/x-wav" => {
+            content.starts_with(b"RIFF") && content.get(8..12) == Some(b"WAVE")
+        }
+        "audio/webm" => content.starts_with(&[0x1a, 0x45, 0xdf, 0xa3]),
+        "audio/flac" => content.starts_with(b"fLaC"),
+        _ => false,
+    }
 }
 
 fn validate_app_settings(settings: &AppSettings) -> Result<(), String> {
@@ -668,6 +690,18 @@ impl Database {
             .connection
             .lock()
             .map_err(|_| "The desktop database lock is unavailable".to_string())?;
+        let duplicate = connection
+            .query_row(
+                "SELECT 1 FROM tags WHERE name = ?1 COLLATE NOCASE",
+                [name],
+                |_| Ok(()),
+            )
+            .optional()
+            .map_err(|error| format!("Unable to validate the tag name: {error}"))?
+            .is_some();
+        if duplicate {
+            return Err("A tag with this name already exists.".to_string());
+        }
         connection
             .execute(
                 "INSERT INTO tags (name, comment) VALUES (?1, ?2)",
@@ -3053,6 +3087,21 @@ mod tests {
                 .expect_err("empty tag should fail"),
             "Tag name is required"
         );
+        database
+            .create_tag(CreateTagInput {
+                name: "Important".into(),
+                comment: String::new(),
+            })
+            .expect("first tag should save");
+        assert_eq!(
+            database
+                .create_tag(CreateTagInput {
+                    name: " important ".into(),
+                    comment: String::new(),
+                })
+                .expect_err("case-insensitive duplicate tag should fail"),
+            "A tag with this name already exists."
+        );
         assert_eq!(
             database
                 .set_text_tags(SetTextTagsInput {
@@ -3085,7 +3134,7 @@ mod tests {
                 text_id: created.id,
                 file_name: "story.mp3".into(),
                 media_type: "audio/mpeg".into(),
-                data_base64: "AQID".into(),
+                data_base64: "SUQz".into(),
             })
             .expect("audio should save");
         let reading = database
@@ -3171,7 +3220,7 @@ mod tests {
         assert_eq!(restored.expressions.len(), 1);
         assert_eq!(statistics.reviews_today, 1);
         assert_eq!(restored_audio.file_name, "story.mp3");
-        assert_eq!(restored_audio.data_base64, "AQID");
+        assert_eq!(restored_audio.data_base64, "SUQz");
         assert_eq!(database.app_settings().unwrap(), settings);
         let restored_tags = database.list_tags().expect("restored tags should load");
         assert_eq!(restored_tags[0].term_count, 1);
@@ -3471,6 +3520,17 @@ mod tests {
                 .unwrap_err(),
             "Audio data is not valid base64"
         );
+        assert_eq!(
+            database
+                .save_text_audio(SaveTextAudioInput {
+                    text_id: created.id,
+                    file_name: "lesson.wav".into(),
+                    media_type: "audio/wav".into(),
+                    data_base64: "bm90IGEgd2F2ZSBmaWxl".into(),
+                })
+                .unwrap_err(),
+            "Audio content does not match its declared type."
+        );
     }
 
     #[test]
@@ -3484,7 +3544,7 @@ mod tests {
                 text_id: created.id,
                 file_name: "disposable.mp3".into(),
                 media_type: "audio/mpeg".into(),
-                data_base64: "AQID".into(),
+                data_base64: "SUQz".into(),
             })
             .expect("audio should save");
 

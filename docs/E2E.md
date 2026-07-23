@@ -19,6 +19,11 @@ Run the packaged build and suite together:
 npm run test:e2e
 ```
 
+The command runs a short packaged-app smoke test followed by the extended local
+QA workflow. Use `npm run test:e2e:smoke` for only the smoke path or
+`npm run test:qa` to reuse an existing debug binary for the extended workflow.
+Both suites isolate application data, configuration, cache, home, and downloads.
+
 To reuse an existing debug binary, run `npm run test:e2e:run`. Set
 `LWT_E2E_BINARY` when the binary is not at
 `target/debug/lwt-desktop`. Set `TAURI_DRIVER` if the driver

@@ -8,6 +8,15 @@ const AUDIO_TYPES_BY_EXTENSION: Readonly<Record<string, string>> = {
   wav: 'audio/wav',
   webm: 'audio/webm'
 };
+const SUPPORTED_AUDIO_TYPES = new Set([
+  'audio/flac',
+  'audio/mp4',
+  'audio/mpeg',
+  'audio/ogg',
+  'audio/wav',
+  'audio/webm',
+  'audio/x-wav'
+]);
 
 type NamedMedia = Pick<File, 'name' | 'type'>;
 
@@ -22,8 +31,9 @@ export function arrayBufferToBase64(buffer: ArrayBuffer): string {
 }
 
 export function detectAudioType(file: NamedMedia): string {
-  if (file.type) {
-    return file.type.toLocaleLowerCase();
+  const browserType = file.type.toLocaleLowerCase();
+  if (SUPPORTED_AUDIO_TYPES.has(browserType)) {
+    return browserType;
   }
   const extension = file.name.split('.').pop()?.toLocaleLowerCase() ?? '';
   return AUDIO_TYPES_BY_EXTENSION[extension] ?? 'application/octet-stream';
