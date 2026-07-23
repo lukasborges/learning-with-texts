@@ -99,7 +99,7 @@ expanded so its remaining work is visible before the next commit.
 
 - [x] Provide a tested, non-overwriting helper for generating and protecting the Tauri updater key pair (`a6936c1`).
 - [x] Add `TAURI_SIGNING_PRIVATE_KEY` and the matching `TAURI_UPDATER_PUBLIC_KEY` variable to the protected environment (verified July 22, 2026).
-- [ ] Add `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` to the protected environment without exposing it in logs or chat.
+- [x] Add `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` to the protected environment without exposing it in logs or chat (verified July 22, 2026).
 - [ ] Add the Windows code-signing PFX and password to the protected environment.
 - [ ] Add the Apple Developer ID certificate, temporary keychain password, and App Store Connect notarization credentials to the protected environment.
 - [ ] Create and approve the first protected version tag; retain a successful signed-release run and verify its draft artifacts on clean systems.

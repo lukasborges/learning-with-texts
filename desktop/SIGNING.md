@@ -14,8 +14,8 @@ Configure required reviewers and allow only protected `v*` tags in the
 or organization-wide secrets:
 
 The environment and tag policy were provisioned on July 22, 2026. The
-`lukasborges` account must approve each deployment. The updater private key and
-matching public variable are configured; its password and the Windows and Apple
+`lukasborges` account must approve each deployment. The updater private key,
+password, and matching public variable are configured; the Windows and Apple
 platform credentials still need to be added before creating the first version
 tag.
 
