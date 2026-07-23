@@ -20,6 +20,18 @@ over 50 MB, an application backup, the legacy fixture in
 right-to-left text, punctuation, and repeated terms. Start destructive scenarios
 with a verified backup.
 
+## Navigation, Home, and First Use
+
+| ID | Scenario | Steps | Expected result |
+| --- | --- | --- | --- |
+| HOME-01 | First language setup | Launch with a new application-data directory, enter a learning language and optional dictionary template, then submit. | The setup fields are visible directly on Home, the language is saved before any text exists, and Add content opens with that language prefilled. |
+| HOME-02 | First text invitation | Save a language without adding a text, cancel Add content, and return Home. | Home says no text has been added and offers a direct Add your first text action. |
+| HOME-03 | Current reading | Open an unfinished text, return Home, and select Continue reading. | The in-progress text is featured and reopens in the Reader; a completed text is not presented as in progress. |
+| HOME-04 | Recent content | Populate at least four active texts with different open/add histories. | Home shows at most three recently studied or added texts and never repeats the featured text. |
+| HOME-05 | No current reading | Populate the library without opening a text, then return Home. | Home offers Choose a text and still shows recent additions without inventing a current reading. |
+| NAV-01 | Primary navigation | Move among Home, Library, Review, and Settings using the primary navigation and keyboard. | The selected destination opens, has one current-page state, preserves data, and does not duplicate Home and Library content. |
+| NAV-02 | Responsive shell | Exercise the primary shell at minimum window width and 200% zoom. | Navigation wraps without hiding destinations, focus remains visible, and content is not covered. |
+
 ## Installation and Lifecycle
 
 | ID | Scenario | Steps | Expected result |
@@ -35,7 +47,7 @@ with a verified backup.
 
 | ID | Scenario | Steps | Expected result |
 | --- | --- | --- | --- |
-| LIB-01 | Empty library | Launch with a new application-data directory. | Empty-state guidance and the add-text form are visible. |
+| LIB-01 | Empty library | Complete first-language setup with no texts and cancel Add content. | Library is a separate screen with empty-state guidance and an Add content action; the full form is not permanently displayed. |
 | LIB-02 | Create pasted text | Enter language, title, content, optional source URL, and save. | A library card appears with correct metadata and parsed word counts. |
 | LIB-03 | Import text file | Select a UTF-8 `.txt` file and save it. | Content loads correctly; the filename suggests a title without overwriting a typed title. |
 | LIB-04 | Validation | Try blank required fields, overlong values, invalid URLs, empty content, and content over 65,000 bytes. | Saving is blocked with a clear message and no partial record is created. |
@@ -56,6 +68,18 @@ with a verified backup.
 | READ-06 | Audio lifecycle | Add supported local audio, play/pause/seek, relaunch, replace it, and remove it. | Playback works without exposing its source path; each mutation persists. |
 | READ-07 | Audio validation | Try empty, unsupported, malformed, and over-50-MB files. | The app rejects invalid media without changing previously saved audio. |
 | READ-08 | Reading progress | Mark repeated and unique terms known. | Progress counts unique terms accurately and never exceeds the total. |
+| READ-09 | One-click finish | Set one term to Learning 2, leave other terms unclicked, and select Finish lesson once. | No confirmation dialog opens; each unclicked unique term becomes Well Known (99), the Learning 2 term and its details remain unchanged, completion is persisted, and progress is correct. |
+| READ-10 | Undo finish | Immediately select Undo after READ-09, then try Undo a second time through the data boundary. | Only terms created by that completion return to Unknown, the previous completion state is restored, user-edited terms remain intact, and a second undo is rejected safely. |
+| READ-11 | Contextual term panel | Select different words, including repeated words and an expression, while reading. | The term editor stays beside the text on wide screens, moves into the document flow on narrow screens, and always shows the selected term without losing reading position. |
+
+## Vocabulary Screen
+
+| ID | Scenario | Steps | Expected result |
+| --- | --- | --- | --- |
+| VOC-01 | Vocabulary inventory | Open Vocabulary after saving Learning, Known, Well Known, and Ignored terms in multiple languages. | Every saved term appears once with language, exact status, translation, and review metadata; unclicked/Unknown words do not appear. |
+| VOC-02 | Search and filters | Search by term/translation and combine language and status filters. | Results update predictably, filter state is clear, and a helpful empty result appears when nothing matches. |
+| VOC-03 | Edit from inventory | Change a term’s exact Learning 1–4 status, translation, and tags, then reopen its source text. | Changes persist and every occurrence in the same language reflects the update. |
+| VOC-04 | Large inventory | Load enough terms to exceed one page and navigate or virtual-scroll the list at 200% zoom. | No terms are duplicated or skipped and controls stay keyboard accessible. |
 
 ## Tags, Languages, and Settings
 

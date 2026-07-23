@@ -6,6 +6,7 @@ export interface LibraryText {
   readonly totalTerms: number;
   readonly lastOpened: string;
   readonly archived: boolean;
+  readonly completedAt?: string;
 }
 
 export interface CreateTextInput {
@@ -195,6 +196,11 @@ export interface LanguageSettings {
   readonly textCount: number;
 }
 
+export interface CreateLanguageInput {
+  readonly name: string;
+  readonly dictionaryUri1: string;
+}
+
 export interface UpdateLanguageInput {
   readonly id: number;
   readonly dictionaryUri1: string;
@@ -251,4 +257,25 @@ export interface SetTermTagsInput {
   readonly textId: number;
   readonly normalized: string;
   readonly tagIds: readonly number[];
+}
+
+export interface FinishLessonOutcome {
+  readonly completionId: number;
+  readonly textId: number;
+  readonly markedKnown: number;
+  readonly knownTerms: number;
+  readonly totalTerms: number;
+  readonly completedAt: string;
+}
+
+export interface UndoFinishLessonInput {
+  readonly completionId: number;
+}
+
+export interface UndoFinishLessonOutcome {
+  readonly textId: number;
+  readonly revertedTerms: number;
+  readonly knownTerms: number;
+  readonly totalTerms: number;
+  readonly completedAt?: string;
 }

@@ -28,12 +28,15 @@ const gateway = createLibraryGateway();
 let showingArchivedTexts = false;
 let libraryPage = 0;
 let tagPage = 0;
+let addingText = false;
+let pendingLanguage = '';
 
 function createImportPanel(
   message = '',
   editingText?: TextDetails,
   tags: readonly Tag[] = [],
-  selectedTagIds: readonly number[] = []
+  selectedTagIds: readonly number[] = [],
+  defaultLanguage = ''
 ): HTMLElement {
   const panel = document.createElement('section');
   panel.className = 'import-panel';
@@ -54,7 +57,7 @@ function createImportPanel(
   language.maxLength = 40;
   language.placeholder = 'e.g. English';
   language.autocomplete = 'off';
-  language.value = editingText?.language ?? '';
+  language.value = editingText?.language ?? defaultLanguage;
 
   const title = document.createElement('input');
   title.name = 'title';
@@ -101,9 +104,10 @@ function createImportPanel(
   const cancel = document.createElement('button');
   cancel.type = 'button';
   cancel.className = 'button-secondary';
-  cancel.textContent = 'Cancel editing';
-  cancel.hidden = !editingText;
+  cancel.textContent = editingText ? 'Cancel editing' : 'Cancel';
   cancel.addEventListener('click', () => {
+    addingText = false;
+    pendingLanguage = '';
     void render();
   });
 
@@ -189,13 +193,15 @@ function createImportPanel(
         });
         return saved;
       })
-      .then((saved) =>
-        render(
+      .then((saved) => {
+        addingText = false;
+        pendingLanguage = '';
+        return render(
           editingText
             ? `“${saved.title}” was updated.`
             : `“${saved.title}” was added to the library.`
-        )
-      )
+        );
+      })
       .catch((error: unknown) => {
         submit.disabled = false;
         status.className = 'form-status form-status--error';
@@ -261,6 +267,12 @@ async function renderReading(textId: number): Promise<void> {
     void render();
   });
   toolbar.append(back);
+
+  const finish = document.createElement('button');
+  finish.type = 'button';
+  finish.className = 'finish-lesson';
+  finish.textContent = 'Finish lesson';
+  toolbar.append(finish);
 
   const header = document.createElement('header');
   header.className = 'reading-header';
@@ -367,24 +379,20 @@ async function renderReading(textId: number): Promise<void> {
         form.className = 'term-editor__form';
         const status = document.createElement('select');
         for (const [value, label] of [
-          [1, 'Learning'],
+          [1, 'Learning 1'],
+          [2, 'Learning 2'],
+          [3, 'Learning 3'],
+          [4, 'Learning 4'],
           [5, 'Known'],
-          [98, 'Ignored']
+          [98, 'Ignored'],
+          [99, 'Well Known']
         ] as const) {
           const option = document.createElement('option');
           option.value = String(value);
           option.textContent = label;
           status.append(option);
         }
-        status.value = String(
-          term.status >= 1 && term.status <= 4
-            ? 1
-            : term.status === 5 || term.status === 99
-              ? 5
-              : term.status === 98
-                ? 98
-                : 1
-        );
+        status.value = String(term.status === 0 ? 1 : term.status);
 
         const translation = document.createElement('textarea');
         translation.rows = 3;
@@ -427,7 +435,7 @@ async function renderReading(textId: number): Promise<void> {
             .saveTerm({
               textId,
               normalized,
-              status: Number(status.value) as 1 | 5 | 98,
+              status: Number(status.value) as 1 | 2 | 3 | 4 | 5 | 98 | 99,
               translation: translation.value,
               romanization: romanization.value
             })
@@ -612,7 +620,77 @@ async function renderReading(textId: number): Promise<void> {
     }
   }
 
-  shell.append(toolbar, header, guide, editor, article);
+  const workspace = document.createElement('div');
+  workspace.className = 'reading-workspace';
+  const studyColumn = document.createElement('div');
+  studyColumn.className = 'reading-study';
+  studyColumn.append(guide, article);
+  workspace.append(studyColumn, editor);
+
+  const completionNotice = document.createElement('div');
+  completionNotice.className = 'completion-notice';
+  completionNotice.setAttribute('role', 'status');
+  completionNotice.hidden = true;
+
+  finish.addEventListener('click', () => {
+    finish.disabled = true;
+    finish.textContent = 'Finishing…';
+    const originallyUnknown = [...termButtons.entries()]
+      .filter(([, buttons]) => buttons[0]?.dataset.status === '0')
+      .map(([normalized]) => normalized);
+    void gateway
+      .finishLesson(textId)
+      .then((outcome) => {
+        originallyUnknown.forEach((normalized) => {
+          termButtons.get(normalized)?.forEach((button) => updateTermButton(button, 99));
+        });
+        updateReadingProgress(reading, outcome.knownTerms, meter, progressLabel);
+        finish.textContent = 'Lesson finished ✓';
+        const message = document.createElement('span');
+        message.textContent = `${outcome.markedKnown} unmarked ${
+          outcome.markedKnown === 1 ? 'word was' : 'words were'
+        } set to Well Known. Learning terms stayed in Vocabulary.`;
+        const undo = document.createElement('button');
+        undo.type = 'button';
+        undo.textContent = 'Undo';
+        undo.addEventListener('click', () => {
+          undo.disabled = true;
+          void gateway
+            .undoFinishLesson({ completionId: outcome.completionId })
+            .then((undone) => {
+              if (undone.revertedTerms !== originallyUnknown.length) {
+                return renderReading(textId);
+              }
+              originallyUnknown.forEach((normalized) => {
+                termButtons.get(normalized)?.forEach((button) => updateTermButton(button, 0));
+              });
+              updateReadingProgress(reading, undone.knownTerms, meter, progressLabel);
+              finish.disabled = false;
+              finish.textContent = 'Finish lesson';
+              completionNotice.textContent = 'Lesson completion undone.';
+              window.setTimeout(() => {
+                completionNotice.hidden = true;
+              }, 800);
+              return undefined;
+            })
+            .catch((error: unknown) => {
+              undo.disabled = false;
+              completionNotice.textContent =
+                error instanceof Error ? error.message : String(error);
+            });
+        });
+        completionNotice.replaceChildren(message, undo);
+        completionNotice.hidden = false;
+      })
+      .catch((error: unknown) => {
+        finish.disabled = false;
+        finish.textContent = 'Finish lesson';
+        completionNotice.textContent = error instanceof Error ? error.message : String(error);
+        completionNotice.hidden = false;
+      });
+  });
+
+  shell.append(toolbar, header, workspace, completionNotice);
   applicationRoot.replaceChildren(shell);
 }
 
@@ -1415,6 +1493,265 @@ function createTextCard(text: LibraryText, showWordCounts: boolean): HTMLElement
   return card;
 }
 
+function createAppHeader(active: 'home' | 'library' | 'review' | 'settings'): HTMLElement {
+  const header = document.createElement('header');
+  header.className = 'app-header app-header--navigation';
+
+  const brand = document.createElement('button');
+  brand.type = 'button';
+  brand.className = 'app-brand';
+  const logo = document.createElement('img');
+  logo.src = logoUrl;
+  logo.alt = '';
+  logo.width = 48;
+  logo.height = 48;
+  const brandText = document.createElement('span');
+  brandText.textContent = 'Learning with Texts';
+  brand.append(logo, brandText);
+  brand.addEventListener('click', () => void renderHome());
+
+  const nav = document.createElement('nav');
+  nav.className = 'primary-nav';
+  nav.setAttribute('aria-label', 'Primary navigation');
+  const destinations = [
+    ['home', 'Home', () => renderHome()],
+    ['library', 'Library', () => render()],
+    ['review', 'Review', () => renderReview()],
+    ['settings', 'Settings', () => renderAppSettings()]
+  ] as const;
+  for (const [name, label, destination] of destinations) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = label;
+    button.className = name === active ? 'is-active' : '';
+    if (name === active) {
+      button.setAttribute('aria-current', 'page');
+    }
+    button.addEventListener('click', () => {
+      void destination().catch((error: unknown) => {
+        window.alert(error instanceof Error ? error.message : String(error));
+      });
+    });
+    nav.append(button);
+  }
+  header.append(brand, nav);
+  return header;
+}
+
+function createHomeTextCard(text: LibraryText): HTMLElement {
+  const card = document.createElement('article');
+  card.className = 'home-text-card';
+  const meta = document.createElement('p');
+  meta.textContent = text.language;
+  const heading = document.createElement('h3');
+  heading.textContent = text.title;
+  const progress = document.createElement('p');
+  progress.textContent = text.totalTerms
+    ? `${text.knownTerms} of ${text.totalTerms} terms known`
+    : 'No terms detected';
+  const open = document.createElement('button');
+  open.type = 'button';
+  open.textContent = text.lastOpened ? 'Continue reading →' : 'Open text →';
+  open.addEventListener('click', () => void renderReading(text.id));
+  card.append(meta, heading, progress, open);
+  return card;
+}
+
+async function renderHome(): Promise<void> {
+  const [texts, languages, statistics] = await Promise.all([
+    gateway.listTexts(),
+    gateway.listLanguages(),
+    gateway.reviewStatistics()
+  ]);
+  const shell = document.createElement('main');
+  shell.className = 'shell home-shell';
+  shell.append(createAppHeader('home'));
+
+  if (languages.length === 0) {
+    const introduction = document.createElement('section');
+    introduction.className = 'first-use';
+    const eyebrow = document.createElement('p');
+    eyebrow.className = 'eyebrow';
+    eyebrow.textContent = 'WELCOME TO LEARNING WITH TEXTS';
+    const heading = document.createElement('h1');
+    heading.textContent = 'Set up the language you want to learn';
+    const description = document.createElement('p');
+    description.textContent =
+      'Choose your learning language and dictionary here. You will add your first text next.';
+
+    const form = document.createElement('form');
+    form.className = 'first-language-form';
+    const language = document.createElement('input');
+    language.name = 'language';
+    language.required = true;
+    language.maxLength = 40;
+    language.placeholder = 'e.g. English';
+    language.autocomplete = 'off';
+    const suggestions = document.createElement('datalist');
+    suggestions.id = 'learning-language-suggestions';
+    for (const name of ['English', 'Spanish', 'French', 'German', 'Italian', 'Japanese']) {
+      const option = document.createElement('option');
+      option.value = name;
+      suggestions.append(option);
+    }
+    language.setAttribute('list', suggestions.id);
+    const dictionary = document.createElement('input');
+    dictionary.type = 'url';
+    dictionary.maxLength = 1000;
+    dictionary.placeholder = 'https://dictionary.example/search?q=###';
+    const help = document.createElement('small');
+    help.textContent = 'Optional. Use ### where the selected word should appear.';
+    const submit = document.createElement('button');
+    submit.type = 'submit';
+    submit.textContent = 'Save language and add your first text';
+    const status = document.createElement('p');
+    status.className = 'form-status';
+    status.setAttribute('role', 'status');
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      if (!form.reportValidity()) {
+        return;
+      }
+      submit.disabled = true;
+      status.textContent = 'Saving language…';
+      void gateway
+        .createLanguage({ name: language.value, dictionaryUri1: dictionary.value })
+        .then((saved) => {
+          pendingLanguage = saved.name;
+          addingText = true;
+          return render();
+        })
+        .catch((error: unknown) => {
+          submit.disabled = false;
+          status.className = 'form-status form-status--error';
+          status.textContent = error instanceof Error ? error.message : String(error);
+        });
+    });
+    form.append(
+      createField('Learning language', language),
+      suggestions,
+      createField('Dictionary URL (optional)', dictionary),
+      help,
+      submit,
+      status
+    );
+    introduction.append(eyebrow, heading, description, form);
+    shell.append(introduction);
+    applicationRoot.replaceChildren(shell);
+    return;
+  }
+
+  const activeTexts = texts.filter(({ archived }) => !archived);
+  const featured = activeTexts.find(({ lastOpened, completedAt }) => lastOpened && !completedAt);
+  const recent = activeTexts.filter(({ id }) => id !== featured?.id).slice(0, 3);
+  const headingRow = document.createElement('div');
+  headingRow.className = 'home-heading';
+  const headingGroup = document.createElement('div');
+  const eyebrow = document.createElement('p');
+  eyebrow.className = 'eyebrow';
+  eyebrow.textContent = 'YOUR STUDY SPACE';
+  const heading = document.createElement('h1');
+  heading.textContent = featured ? 'Pick up where you left off' : 'Start your next reading';
+  const description = document.createElement('p');
+  description.textContent = 'Your current text, recent content, and review queue in one place.';
+  headingGroup.append(eyebrow, heading, description);
+  const add = document.createElement('button');
+  add.type = 'button';
+  add.className = 'primary-action';
+  add.textContent = 'Add content';
+  add.addEventListener('click', () => {
+    pendingLanguage = languages[0]?.name ?? '';
+    addingText = true;
+    void render();
+  });
+  headingRow.append(headingGroup, add);
+  shell.append(headingRow);
+
+  const dashboard = document.createElement('section');
+  dashboard.className = 'home-dashboard';
+  const continueCard = document.createElement('article');
+  continueCard.className = 'continue-card';
+  if (featured) {
+    const label = document.createElement('p');
+    label.className = 'eyebrow';
+    label.textContent = 'CONTINUE READING';
+    const title = document.createElement('h2');
+    title.textContent = featured.title;
+    const meta = document.createElement('p');
+    meta.textContent = `${featured.language} · ${featured.knownTerms} of ${featured.totalTerms} terms known`;
+    const meter = document.createElement('progress');
+    meter.max = Math.max(1, featured.totalTerms);
+    meter.value = featured.knownTerms;
+    const open = document.createElement('button');
+    open.type = 'button';
+    open.textContent = 'Continue reading →';
+    open.addEventListener('click', () => void renderReading(featured.id));
+    continueCard.append(label, title, meta, meter, open);
+  } else {
+    const title = document.createElement('h2');
+    title.textContent = activeTexts.length === 0 ? 'No text added to your library' : 'No reading in progress';
+    const message = document.createElement('p');
+    message.textContent =
+      activeTexts.length === 0
+        ? 'Add a text you care about and start learning from real context.'
+        : 'Open a text from your library to make it your current reading.';
+    const action = document.createElement('button');
+    action.type = 'button';
+    action.textContent = activeTexts.length === 0 ? 'Add your first text →' : 'Choose a text →';
+    action.addEventListener('click', () => {
+      if (activeTexts.length === 0) {
+        pendingLanguage = languages[0]?.name ?? '';
+        addingText = true;
+      }
+      void render();
+    });
+    continueCard.append(title, message, action);
+  }
+  const reviewCard = document.createElement('article');
+  reviewCard.className = 'review-summary';
+  const reviewTitle = document.createElement('h2');
+  reviewTitle.textContent = `${statistics.dueTerms} terms due`;
+  const reviewDescription = document.createElement('p');
+  reviewDescription.textContent =
+    statistics.dueTerms === 0
+      ? 'You are caught up. Saved learning terms will appear here.'
+      : 'Keep your vocabulary moving with a short review.';
+  const reviewAction = document.createElement('button');
+  reviewAction.type = 'button';
+  reviewAction.textContent = statistics.dueTerms === 0 ? 'Open review' : 'Start review →';
+  reviewAction.addEventListener('click', () => void renderReview());
+  reviewCard.append(reviewTitle, reviewDescription, reviewAction);
+  dashboard.append(continueCard, reviewCard);
+  shell.append(dashboard);
+
+  const recentSection = document.createElement('section');
+  recentSection.className = 'recent-section';
+  const recentHeader = document.createElement('div');
+  recentHeader.className = 'library-header';
+  const recentTitle = document.createElement('h2');
+  recentTitle.textContent = 'Recently studied or added';
+  const viewLibrary = document.createElement('button');
+  viewLibrary.type = 'button';
+  viewLibrary.textContent = 'View library →';
+  viewLibrary.addEventListener('click', () => void render());
+  recentHeader.append(recentTitle, viewLibrary);
+  const recentGrid = document.createElement('div');
+  recentGrid.className = 'recent-grid';
+  if (recent.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'empty-state';
+    empty.textContent = activeTexts.length === 0
+      ? 'No text has been added to the library yet.'
+      : 'No other recent texts yet.';
+    recentGrid.append(empty);
+  } else {
+    recentGrid.append(...recent.map(createHomeTextCard));
+  }
+  recentSection.append(recentHeader, recentGrid);
+  shell.append(recentSection);
+  applicationRoot.replaceChildren(shell);
+}
+
 async function render(message = '', editingId?: number): Promise<void> {
   const [texts, editingText, tags, selectedTagIds, settings] = await Promise.all([
     gateway.listTexts(),
@@ -1427,34 +1764,20 @@ async function render(message = '', editingId?: number): Promise<void> {
   const shell = document.createElement('main');
   shell.className = 'shell';
 
-  const header = document.createElement('header');
-  header.className = 'app-header';
-
-  const logo = document.createElement('img');
-  logo.src = logoUrl;
-  logo.alt = '';
-  logo.width = 64;
-  logo.height = 64;
-
-  const titleGroup = document.createElement('div');
-  const title = document.createElement('h1');
-  title.textContent = 'Learning with Texts';
-  const subtitle = document.createElement('p');
-  subtitle.textContent = usesNativeDatabase
-    ? 'Desktop foundation · local SQLite mode'
-    : 'Desktop foundation · offline fixture mode';
-  titleGroup.append(title, subtitle);
-  header.append(logo, titleGroup);
-
-  const notice = document.createElement('aside');
-  notice.className = 'migration-notice';
-  notice.textContent = usesNativeDatabase
-    ? 'This shell is running without PHP or MySQL. Library data is loaded from the local SQLite database.'
-    : 'This shell is running without PHP or MySQL. Data is currently read from a typed fixture gateway.';
+  const header = createAppHeader('library');
 
   const libraryHeading = document.createElement('h2');
   libraryHeading.className = 'section-title';
   libraryHeading.textContent = showingArchivedTexts ? 'Archived texts' : 'Library';
+  const addTextButton = document.createElement('button');
+  addTextButton.type = 'button';
+  addTextButton.className = 'primary-action';
+  addTextButton.textContent = 'Add content';
+  addTextButton.addEventListener('click', () => {
+    addingText = true;
+    pendingLanguage = texts.find(({ archived }) => !archived)?.language ?? '';
+    void render();
+  });
   const archiveViewButton = document.createElement('button');
   archiveViewButton.type = 'button';
   archiveViewButton.className = 'review-start';
@@ -1523,6 +1846,7 @@ async function render(message = '', editingId?: number): Promise<void> {
   const libraryActions = document.createElement('div');
   libraryActions.className = 'library-actions';
   libraryActions.append(
+    addTextButton,
     archiveViewButton,
     settingsButton,
     dataButton,
@@ -1550,7 +1874,7 @@ async function render(message = '', editingId?: number): Promise<void> {
     emptyState.className = 'empty-state';
     emptyState.textContent = showingArchivedTexts
       ? 'The text archive is empty.'
-      : 'Your local library is empty. Use the form above to add a text.';
+      : 'Your local library is empty. Add your first text to begin.';
     library.append(emptyState);
   } else {
     library.append(...pageTexts.map((text) => createTextCard(text, settings.showWordCounts)));
@@ -1564,14 +1888,20 @@ async function render(message = '', editingId?: number): Promise<void> {
     }
   }
 
-  shell.append(
-    header,
-    notice,
-    createImportPanel(message, editingText, tags, selectedTagIds),
-    libraryHeader,
-    library
-  );
+  shell.append(header);
+  if (addingText || editingText) {
+    shell.append(
+      createImportPanel(message, editingText, tags, selectedTagIds, pendingLanguage)
+    );
+  } else if (message) {
+    const feedback = document.createElement('p');
+    feedback.className = 'library-feedback';
+    feedback.setAttribute('role', 'status');
+    feedback.textContent = message;
+    shell.append(feedback);
+  }
+  shell.append(libraryHeader, library);
   applicationRoot.replaceChildren(shell);
 }
 
-void render();
+void renderHome();

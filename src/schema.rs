@@ -8,8 +8,9 @@ const TAGS: &str = include_str!("../migrations/0007_tags.sql");
 const ARCHIVED_TEXTS: &str = include_str!("../migrations/0008_archived_texts.sql");
 const TEXT_AUDIO: &str = include_str!("../migrations/0009_text_audio.sql");
 const APP_SETTINGS: &str = include_str!("../migrations/0010_app_settings.sql");
+const LESSON_COMPLETION: &str = include_str!("../migrations/0011_lesson_completion.sql");
 
-pub(crate) const LATEST_SCHEMA_VERSION: i64 = 10;
+pub(crate) const LATEST_SCHEMA_VERSION: i64 = 11;
 pub(crate) const MIGRATIONS: [(i64, &str); LATEST_SCHEMA_VERSION as usize] = [
     (1, INITIAL_MIGRATION),
     (2, TEXT_PARSING_MIGRATION),
@@ -20,5 +21,6 @@ pub(crate) const MIGRATIONS: [(i64, &str); LATEST_SCHEMA_VERSION as usize] = [
     (7, TAGS),
     (8, ARCHIVED_TEXTS),
     (9, TEXT_AUDIO),
-    (LATEST_SCHEMA_VERSION, APP_SETTINGS),
+    (10, APP_SETTINGS),
+    (LATEST_SCHEMA_VERSION, LESSON_COMPLETION),
 ];

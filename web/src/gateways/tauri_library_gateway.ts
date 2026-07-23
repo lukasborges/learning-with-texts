@@ -1,10 +1,12 @@
 import type {
   AppSettings,
   BackupSummary,
+  CreateLanguageInput,
   CreateTagInput,
   CreateTextInput,
   CreateExpressionInput,
   CreatedExpression,
+  FinishLessonOutcome,
   LanguageSettings,
   LibraryText,
   ReadingText,
@@ -24,6 +26,8 @@ import type {
   TermProgress,
   TextDetails,
   TextAudio,
+  UndoFinishLessonInput,
+  UndoFinishLessonOutcome,
   UpdateLanguageInput,
   UpdateTextInput
 } from '../domain/library';
@@ -43,6 +47,10 @@ export class TauriLibraryGateway implements LibraryGateway {
 
   listLanguages(): Promise<readonly LanguageSettings[]> {
     return this.invoke<LanguageSettings[]>('list_languages');
+  }
+
+  createLanguage(input: CreateLanguageInput): Promise<LanguageSettings> {
+    return this.invoke<LanguageSettings>('create_language', { input });
   }
 
   appSettings(): Promise<AppSettings> {
@@ -123,6 +131,14 @@ export class TauriLibraryGateway implements LibraryGateway {
 
   getReadingText(id: number): Promise<ReadingText> {
     return this.invoke<ReadingText>('get_reading_text', { id });
+  }
+
+  finishLesson(textId: number): Promise<FinishLessonOutcome> {
+    return this.invoke<FinishLessonOutcome>('finish_lesson', { textId });
+  }
+
+  undoFinishLesson(input: UndoFinishLessonInput): Promise<UndoFinishLessonOutcome> {
+    return this.invoke<UndoFinishLessonOutcome>('undo_finish_lesson', { input });
   }
 
   setTermStatus(input: SetTermStatusInput): Promise<TermProgress> {

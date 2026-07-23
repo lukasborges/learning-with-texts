@@ -1,10 +1,12 @@
 import type {
   AppSettings,
   BackupSummary,
+  CreateLanguageInput,
   CreateTagInput,
   CreateTextInput,
   CreateExpressionInput,
   CreatedExpression,
+  FinishLessonOutcome,
   LanguageSettings,
   LibraryText,
   ReadingItem,
@@ -26,6 +28,8 @@ import type {
   TermStatus,
   TextDetails,
   TextAudio,
+  UndoFinishLessonInput,
+  UndoFinishLessonOutcome,
   UpdateLanguageInput,
   UpdateTextInput
 } from '../domain/library';
@@ -135,6 +139,11 @@ export class MockLibraryGateway implements LibraryGateway {
   private readonly textTagIds = new Map<number, Set<number>>();
   private readonly termTagIds = new Map<string, Set<number>>();
   private readonly media = new Map<number, TextAudio>();
+  private nextCompletionId = 1;
+  private readonly lessonCompletions = new Map<
+    number,
+    { textId: number; termKeys: string[]; previousCompletedAt?: string; undone: boolean }
+  >();
   private currentAppSettings: AppSettings = {
     libraryPageSize: 25,
     archivedPageSize: 25,
@@ -227,6 +236,17 @@ export class MockLibraryGateway implements LibraryGateway {
         ).length
       }))
       .sort((left, right) => left.name.localeCompare(right.name));
+  }
+
+  async createLanguage(input: CreateLanguageInput): Promise<LanguageSettings> {
+    const name = input.name.trim();
+    if (!name) {
+      throw new Error('Language name is required');
+    }
+    const settings = this.settingsFor(name);
+    const updated = { ...settings, dictionaryUri1: input.dictionaryUri1.trim() };
+    this.languageSettings.set(name.toLocaleLowerCase(), updated);
+    return { ...updated };
   }
 
   async appSettings(): Promise<AppSettings> {
@@ -445,7 +465,8 @@ export class MockLibraryGateway implements LibraryGateway {
       archived: false,
       hasAudio: false,
       content: input.content,
-      sourceUri: input.sourceUri
+      sourceUri: input.sourceUri,
+      completedAt: undefined
     };
     this.settingsFor(text.language);
     this.texts.unshift(text);
@@ -477,7 +498,8 @@ export class MockLibraryGateway implements LibraryGateway {
       content: input.content,
       sourceUri: input.sourceUri,
       knownTerms: 0,
-      totalTerms: countUniqueTerms(input.content)
+      totalTerms: countUniqueTerms(input.content),
+      completedAt: undefined
     };
     this.texts[index] = updated;
     return this.withProgress(updated);
@@ -580,6 +602,88 @@ export class MockLibraryGateway implements LibraryGateway {
           startPosition: expression.startPosition,
           endPosition: expression.endPosition
         }))
+    };
+  }
+
+  async finishLesson(textId: number): Promise<FinishLessonOutcome> {
+    const index = this.texts.findIndex((candidate) => candidate.id === textId);
+    const text = this.texts[index];
+    if (!text || index < 0) {
+      throw new Error('Text was not found');
+    }
+    const termKeys: string[] = [];
+    for (const normalized of new Set(this.normalizedTermsFor(text))) {
+      const key = this.termKey(text.language, normalized);
+      if (this.terms.has(key)) {
+        continue;
+      }
+      this.terms.set(key, {
+        normalized,
+        displayText: normalized,
+        status: 99,
+        translation: '',
+        romanization: '',
+        wordCount: 1
+      });
+      this.trackTerm(key, 99);
+      termKeys.push(key);
+    }
+    const completionId = this.nextCompletionId++;
+    const completedAt = new Date().toISOString();
+    this.lessonCompletions.set(completionId, {
+      textId,
+      termKeys,
+      previousCompletedAt: text.completedAt,
+      undone: false
+    });
+    this.texts[index] = { ...text, completedAt };
+    const progress = this.withProgress(this.texts[index]!);
+    return {
+      completionId,
+      textId,
+      markedKnown: termKeys.length,
+      knownTerms: progress.knownTerms,
+      totalTerms: progress.totalTerms,
+      completedAt
+    };
+  }
+
+  async undoFinishLesson(input: UndoFinishLessonInput): Promise<UndoFinishLessonOutcome> {
+    const completion = this.lessonCompletions.get(input.completionId);
+    if (!completion) {
+      throw new Error('Lesson completion was not found');
+    }
+    if (completion.undone) {
+      throw new Error('Lesson completion was already undone');
+    }
+    let revertedTerms = 0;
+    for (const key of completion.termKeys) {
+      const term = this.terms.get(key);
+      if (
+        term?.status === 99 &&
+        term.translation === '' &&
+        term.romanization === '' &&
+        !(this.termTagIds.get(key)?.size)
+      ) {
+        this.terms.delete(key);
+        this.dueTerms.delete(key);
+        revertedTerms += 1;
+      }
+    }
+    completion.undone = true;
+    const index = this.texts.findIndex(({ id }) => id === completion.textId);
+    const text = this.texts[index];
+    if (!text || index < 0) {
+      throw new Error('Text was not found');
+    }
+    this.texts[index] = { ...text, completedAt: completion.previousCompletedAt };
+    const progress = this.withProgress(this.texts[index]!);
+    return {
+      textId: completion.textId,
+      revertedTerms,
+      knownTerms: progress.knownTerms,
+      totalTerms: progress.totalTerms,
+      completedAt: completion.previousCompletedAt
     };
   }
 

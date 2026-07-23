@@ -10,6 +10,7 @@ pub struct LibraryText {
     pub total_terms: i64,
     pub last_opened: String,
     pub archived: bool,
+    pub completed_at: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -25,6 +26,7 @@ pub struct TextDetails {
     pub source_uri: Option<String>,
     pub archived: bool,
     pub has_audio: bool,
+    pub completed_at: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -34,6 +36,13 @@ pub struct CreateTextInput {
     pub title: String,
     pub content: String,
     pub source_uri: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateLanguageInput {
+    pub name: String,
+    pub dictionary_uri_1: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -135,6 +144,33 @@ pub struct TermProgress {
     pub status: i64,
     pub known_terms: i64,
     pub total_terms: i64,
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FinishLessonOutcome {
+    pub completion_id: i64,
+    pub text_id: i64,
+    pub marked_known: i64,
+    pub known_terms: i64,
+    pub total_terms: i64,
+    pub completed_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UndoFinishLessonInput {
+    pub completion_id: i64,
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UndoFinishLessonOutcome {
+    pub text_id: i64,
+    pub reverted_terms: i64,
+    pub known_terms: i64,
+    pub total_terms: i64,
+    pub completed_at: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Serialize)]

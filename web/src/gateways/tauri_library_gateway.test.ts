@@ -59,6 +59,19 @@ describe('TauriLibraryGateway', () => {
     expect(invoke).toHaveBeenNthCalledWith(2, 'update_language', { input });
   });
 
+  it('creates the first language before a text exists', async () => {
+    const input = {
+      name: 'English',
+      dictionaryUri1: 'https://example.com/dictionary?q=###'
+    };
+    const response = { id: 1, ...input, textCount: 0 };
+    const invoke = vi.fn().mockResolvedValue(response);
+    const gateway = new TauriLibraryGateway(invoke);
+
+    await expect(gateway.createLanguage(input)).resolves.toEqual(response);
+    expect(invoke).toHaveBeenCalledWith('create_language', { input });
+  });
+
   it('loads and updates application settings', async () => {
     const settings = {
       libraryPageSize: 25,
@@ -251,6 +264,32 @@ describe('TauriLibraryGateway', () => {
     await expect(gateway.setTermStatus(input)).resolves.toEqual(progress);
     expect(invoke).toHaveBeenNthCalledWith(1, 'get_reading_text', { id: 8 });
     expect(invoke).toHaveBeenNthCalledWith(2, 'set_term_status', { input });
+  });
+
+  it('finishes and undoes a lesson through native commands', async () => {
+    const finished = {
+      completionId: 12,
+      textId: 8,
+      markedKnown: 3,
+      knownTerms: 4,
+      totalTerms: 5,
+      completedAt: '2026-07-23T10:00:00Z'
+    };
+    const undone = {
+      textId: 8,
+      revertedTerms: 3,
+      knownTerms: 1,
+      totalTerms: 5
+    };
+    const invoke = vi.fn().mockResolvedValueOnce(finished).mockResolvedValueOnce(undone);
+    const gateway = new TauriLibraryGateway(invoke);
+
+    await expect(gateway.finishLesson(8)).resolves.toEqual(finished);
+    await expect(gateway.undoFinishLesson({ completionId: 12 })).resolves.toEqual(undone);
+    expect(invoke).toHaveBeenNthCalledWith(1, 'finish_lesson', { textId: 8 });
+    expect(invoke).toHaveBeenNthCalledWith(2, 'undo_finish_lesson', {
+      input: { completionId: 12 }
+    });
   });
 
   it('loads and saves detailed term data', async () => {

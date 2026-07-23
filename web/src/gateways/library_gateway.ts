@@ -1,10 +1,12 @@
 import type {
   AppSettings,
   BackupSummary,
+  CreateLanguageInput,
   CreateTagInput,
   CreateTextInput,
   CreateExpressionInput,
   CreatedExpression,
+  FinishLessonOutcome,
   LanguageSettings,
   LibraryText,
   ReadingText,
@@ -24,6 +26,8 @@ import type {
   TermProgress,
   TextDetails,
   TextAudio,
+  UndoFinishLessonInput,
+  UndoFinishLessonOutcome,
   UpdateLanguageInput,
   UpdateTextInput
 } from '../domain/library';
@@ -31,6 +35,7 @@ import type {
 export interface LibraryGateway {
   listTexts(): Promise<readonly LibraryText[]>;
   listLanguages(): Promise<readonly LanguageSettings[]>;
+  createLanguage(input: CreateLanguageInput): Promise<LanguageSettings>;
   appSettings(): Promise<AppSettings>;
   updateAppSettings(settings: AppSettings): Promise<AppSettings>;
   updateLanguage(input: UpdateLanguageInput): Promise<LanguageSettings>;
@@ -51,6 +56,8 @@ export interface LibraryGateway {
   removeTextAudio(textId: number): Promise<void>;
   deleteText(id: number): Promise<void>;
   getReadingText(id: number): Promise<ReadingText>;
+  finishLesson(textId: number): Promise<FinishLessonOutcome>;
+  undoFinishLesson(input: UndoFinishLessonInput): Promise<UndoFinishLessonOutcome>;
   setTermStatus(input: SetTermStatusInput): Promise<TermProgress>;
   getTermDetails(textId: number, normalized: string): Promise<TermDetails>;
   saveTerm(input: SaveTermInput): Promise<SavedTerm>;

@@ -40,9 +40,19 @@ function cardWithTitle(title) {
 }
 
 async function visible(driver, locator, timeout = 10_000) {
-  const element = await driver.wait(until.elementLocated(locator), timeout);
-  await driver.wait(until.elementIsVisible(element), timeout);
-  return element;
+  return driver.wait(async () => {
+    const elements = await driver.findElements(locator);
+    for (const element of elements) {
+      try {
+        if (await element.isDisplayed()) {
+          return element;
+        }
+      } catch {
+        // The procedural WebView may replace a screen while an async query resolves.
+      }
+    }
+    return false;
+  }, timeout);
 }
 
 async function setValue(element, value) {
@@ -147,6 +157,10 @@ async function createTag(driver, name, comment) {
 }
 
 async function createText(driver, { language, title, content, source, audio, tagged = false }) {
+  if ((await driver.findElements(By.css('.text-form [name="title"]'))).length === 0) {
+    await driver.findElement(buttonWithText('Add content')).click();
+    await visible(driver, By.css('.text-form [name="title"]'));
+  }
   await setValue(await driver.findElement(By.css('[name="language"]')), language);
   await setValue(await driver.findElement(By.css('[name="title"]')), title);
   await setValue(await driver.findElement(By.css('[name="content"]')), content);
@@ -166,7 +180,7 @@ async function createText(driver, { language, title, content, source, audio, tag
 
 async function openLibrary(driver) {
   await driver.findElement(buttonWithText('← Back to library')).click();
-  await visible(driver, By.xpath('//h1[normalize-space(.)="Learning with Texts"]'));
+  await visible(driver, By.xpath('//h2[normalize-space(.)="Library"]'));
 }
 
 test('local QA exercises the complete supported desktop workflow', { timeout: 240_000 }, async () => {
@@ -227,10 +241,16 @@ test('local QA exercises the complete supported desktop workflow', { timeout: 24
     capabilities.set('tauri:options', { application });
     driver = await new Builder().withCapabilities(capabilities).usingServer(driverUrl).build();
 
-    await visible(driver, By.xpath('//h1[normalize-space(.)="Learning with Texts"]'));
+    await visible(driver, By.xpath('//h1[normalize-space(.)="Set up the language you want to learn"]'));
+    await setValue(
+      await driver.findElement(By.css('.first-language-form [name="language"]')),
+      'English'
+    );
+    await driver.findElement(buttonWithText('Save language and add your first text')).click();
+    await visible(driver, By.xpath('//h2[normalize-space(.)="Add a text"]'));
     assert.equal(
       await driver.findElement(By.css('.empty-state')).getText(),
-      'Your local library is empty. Use the form above to add a text.'
+      'Your local library is empty. Add your first text to begin.'
     );
     assert.equal(
       await driver.executeScript('return document.querySelector(".app-header img")?.naturalWidth;'),
@@ -238,7 +258,7 @@ test('local QA exercises the complete supported desktop workflow', { timeout: 24
     );
     await driver.findElement(buttonWithText('Save to library')).click();
     assert.notEqual(
-      await driver.findElement(By.css('[name="language"]')).getAttribute('validationMessage'),
+      await driver.findElement(By.css('[name="title"]')).getAttribute('validationMessage'),
       ''
     );
     await capture(driver, '01-empty-library.png');
@@ -252,7 +272,8 @@ test('local QA exercises the complete supported desktop workflow', { timeout: 24
     checkpoint('tag creation and duplicate validation');
 
     await driver.findElement(buttonWithText('← Back to library')).click();
-    await visible(driver, By.xpath('//h1[normalize-space(.)="Learning with Texts"]'));
+    await visible(driver, By.xpath('//h2[normalize-space(.)="Library"]'));
+    await driver.findElement(buttonWithText('Add content')).click();
     await setValue(await driver.findElement(By.css('[name="language"]')), 'French');
     await driver
       .findElement(By.css('.text-form input[type="file"][accept*=".txt"]'))
@@ -265,6 +286,7 @@ test('local QA exercises the complete supported desktop workflow', { timeout: 24
     await (await driver.wait(until.alertIsPresent(), 10_000)).accept();
     await driver.wait(async () => (await driver.findElements(cardWithTitle('qa-import'))).length === 0);
 
+    await driver.findElement(buttonWithText('Add content')).click();
     await setValue(await driver.findElement(By.css('[name="language"]')), 'English');
     await setValue(await driver.findElement(By.css('[name="title"]')), 'Invalid URL');
     await setValue(await driver.findElement(By.css('[name="content"]')), 'Must not save.');
@@ -340,8 +362,7 @@ test('local QA exercises the complete supported desktop workflow', { timeout: 24
       'https://example.com/updated-story'
     );
     await driver.findElement(buttonWithText('Save changes')).click();
-    await visible(driver, By.xpath('//h2[normalize-space(.)="Add a text"]'));
-    await waitForText(driver, By.css('.text-form .form-status'), '“QA Story” was updated.');
+    await waitForText(driver, By.css('.library-feedback'), '“QA Story” was updated.');
     const editedCard = await visible(driver, cardWithTitle('QA Story'));
     await editedCard.findElement(buttonWithinText('Edit')).click();
     assert.equal(
@@ -359,6 +380,18 @@ test('local QA exercises the complete supported desktop workflow', { timeout: 24
     const player = await visible(driver, By.css('audio[aria-label="Audio for QA Story"]'));
     assert.match(await player.getAttribute('src'), /^data:audio\/(?:x-)?wav;base64,/);
     checkpoint('audio validation and preservation');
+
+    await driver.findElement(buttonWithText('Finish lesson')).click();
+    await visible(driver, By.xpath('//button[normalize-space(.)="Lesson finished ✓"]'));
+    await waitForText(driver, By.css('.completion-notice'), 'set to Well Known');
+    await driver.findElement(buttonWithText('Undo')).click();
+    const completionNotice = await waitForText(
+      driver,
+      By.css('.completion-notice'),
+      'Lesson completion undone.'
+    );
+    await driver.wait(until.elementIsNotVisible(completionNotice), 3_000);
+    checkpoint('one-click lesson completion and undo');
 
     const hello = await driver.findElement(
       By.xpath('(//article[contains(@class,"reading-content")]//button[normalize-space(.)="Hello"])[1]')
@@ -448,8 +481,7 @@ test('local QA exercises the complete supported desktop workflow', { timeout: 24
       .findElement(By.css('.text-form input[type="file"][accept*="audio"]'))
       .sendKeys(validAudio);
     await driver.findElement(buttonWithText('Save changes')).click();
-    await visible(driver, By.xpath('//h2[normalize-space(.)="Add a text"]'));
-    await waitForText(driver, By.css('.text-form .form-status'), '“QA Story” was updated.');
+    await waitForText(driver, By.css('.library-feedback'), '“QA Story” was updated.');
     audioCard = await visible(driver, cardWithTitle('QA Story'));
     await audioCard.findElement(buttonWithinText('Open text')).click();
     await visible(driver, By.css('audio[aria-label="Audio for QA Story"]'));
@@ -567,6 +599,9 @@ test('local QA exercises the complete supported desktop workflow', { timeout: 24
       checkpoint(`created paginated text ${index}`);
     }
     await visible(driver, By.xpath('//nav[@aria-label="Pagination"]//span[.="Page 1 of 2"]'));
+    if ((await driver.findElements(cardWithTitle('Extra 1'))).length === 0) {
+      await driver.findElement(buttonWithText('Next →')).click();
+    }
     let sharedCard = await driver.findElement(cardWithTitle('Extra 1'));
     await sharedCard.findElement(buttonWithinText('Open text')).click();
     const sharedHello = await visible(
@@ -617,12 +652,14 @@ test('local QA exercises the complete supported desktop workflow', { timeout: 24
     await waitForText(driver, By.css('.term-editor .form-status'), 'Term saved.');
     checkpoint('fourth review term');
     await openLibrary(driver);
+    if ((await driver.findElements(By.xpath('//nav[@aria-label="Pagination"]//span[.="Page 2 of 2"]'))).length > 0) {
+      await driver.findElement(buttonWithText('← Previous')).click();
+    }
     await visible(driver, By.xpath('//nav[@aria-label="Pagination"]//span[.="Page 1 of 2"]'));
     assert.equal(
-      await driver.findElement(cardWithTitle('Extra 3')).findElement(By.css('.text-card__details')).getText(),
+      await driver.findElement(cardWithTitle('Extra 4')).findElement(By.css('.text-card__details')).getText(),
       'Word counts hidden in Settings'
     );
-    await driver.findElement(buttonWithText('Next →')).click();
     const disposableCard = await visible(driver, cardWithTitle('Extra 5'));
     await disposableCard.findElement(buttonWithinText('Delete')).click();
     await (await driver.wait(until.alertIsPresent(), 10_000)).dismiss();
@@ -695,7 +732,7 @@ test('local QA exercises the complete supported desktop workflow', { timeout: 24
     await driver.findElement(By.css('body')).sendKeys(Key.TAB);
     assert.equal(
       await driver.executeScript('return document.activeElement?.tagName;'),
-      'INPUT'
+      'BUTTON'
     );
     await driver.executeScript('document.documentElement.style.zoom = "200%";');
     assert.equal(await driver.findElement(buttonWithText('Settings')).isDisplayed(), true);
@@ -705,6 +742,8 @@ test('local QA exercises the complete supported desktop workflow', { timeout: 24
     await driver.quit();
     driver = undefined;
     driver = await new Builder().withCapabilities(capabilities).usingServer(driverUrl).build();
+    await visible(driver, buttonWithText('Library'));
+    await driver.findElement(buttonWithText('Library')).click();
     const relaunchedCard = await visible(driver, cardWithTitle('QA Story'));
     await relaunchedCard.findElement(buttonWithinText('Open text')).click();
     await visible(driver, By.css('audio[aria-label="Audio for QA Story"]'));

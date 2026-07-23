@@ -1,0 +1,973 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Interactive prototype of the UX proposals for LWT Desktop"
+    />
+    <title>LWT Desktop — UX Prototype</title>
+    <link rel="stylesheet" href="prototype.css" />
+  </head>
+  <body>
+    <div class="prototype-banner">
+      <span><strong>UX prototype</strong> · sample data, no persistence</span>
+      <button id="preview-state-toggle" class="preview-state-button" type="button">
+        Preview first use
+      </button>
+      <button id="theme-toggle" class="icon-button" type="button" aria-label="Toggle theme">
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M12 3a1 1 0 0 1 1 1v1a1 1 0 1 1-2 0V4a1 1 0 0 1 1-1Zm0 15a1 1 0 0 1 1 1v1a1 1 0 1 1-2 0v-1a1 1 0 0 1 1-1Zm9-6a1 1 0 0 1-1 1h-1a1 1 0 1 1 0-2h1a1 1 0 0 1 1 1ZM6 12a1 1 0 0 1-1 1H4a1 1 0 1 1 0-2h1a1 1 0 0 1 1 1Zm11.66-5.66a1 1 0 0 1 0 1.41l-.7.71a1 1 0 0 1-1.42-1.42l.71-.7a1 1 0 0 1 1.41 0ZM8.46 15.54a1 1 0 0 1 0 1.42l-.7.7a1 1 0 0 1-1.42-1.41l.7-.71a1 1 0 0 1 1.42 0Zm9.2 2.12a1 1 0 0 1-1.41 0l-.71-.7a1 1 0 0 1 1.42-1.42l.7.71a1 1 0 0 1 0 1.41ZM8.46 8.46a1 1 0 0 1-1.42 0l-.7-.7a1 1 0 0 1 1.41-1.42l.71.7a1 1 0 0 1 0 1.42ZM12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10Zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z" />
+        </svg>
+      </button>
+    </div>
+
+    <div class="app-frame">
+      <aside class="sidebar" aria-label="Primary navigation">
+        <div class="brand">
+          <img src="../../web/assets/lwt_icon_big.png" alt="" width="44" height="44" />
+          <div>
+            <strong>Learning with Texts</strong>
+            <span>Local library</span>
+          </div>
+        </div>
+
+        <nav class="side-nav">
+          <p class="nav-label">Study</p>
+          <button class="nav-item is-active" type="button" data-screen-target="home">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="m4 10 8-7 8 7v10a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1V10Z" />
+            </svg>
+            <span>Home</span>
+          </button>
+          <button class="nav-item" type="button" data-screen-target="library">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M5 3h12a2 2 0 0 1 2 2v15a1 1 0 0 1-1.45.9A7.7 7.7 0 0 0 14 20a7.7 7.7 0 0 0-3.55.9L9 21.62V7a2 2 0 0 0-2-2H5V3Zm0 4h2v13.38l-1.55-.77A1 1 0 0 1 5 18.72V7Z" />
+            </svg>
+            <span>Library</span>
+          </button>
+          <button class="nav-item" type="button" data-screen-target="vocabulary">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M4 4h16v3H4V4Zm0 6h10v3H4v-3Zm0 6h13v3H4v-3Z" />
+            </svg>
+            <span>Vocabulary</span>
+          </button>
+          <button class="nav-item" type="button" data-screen-target="review">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M12 3a9 9 0 1 1-8.49 6H1l3.5-4L8 9H5.62A7 7 0 1 0 12 5V3Zm-1 4h2v5.42l3.2 1.85-1 1.73-4.2-2.42V7Z" />
+            </svg>
+            <span>Review</span>
+            <span class="nav-badge">12</span>
+          </button>
+
+          <p class="nav-label">Organize</p>
+          <button class="nav-item" type="button" data-screen-target="settings">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M12 2a2 2 0 0 1 2 2v.35a8 8 0 0 1 1.8.75l.25-.25a2 2 0 0 1 2.83 0l.27.27a2 2 0 0 1 0 2.83l-.25.25c.32.57.57 1.17.75 1.8H20a2 2 0 0 1 2 2v.38a2 2 0 0 1-2 2h-.35a8 8 0 0 1-.75 1.8l.25.25a2 2 0 0 1 0 2.83l-.27.27a2 2 0 0 1-2.83 0l-.25-.25a8 8 0 0 1-1.8.75V20a2 2 0 0 1-2 2h-.38a2 2 0 0 1-2-2v-.35a8 8 0 0 1-1.8-.75l-.25.25a2 2 0 0 1-2.83 0l-.27-.27a2 2 0 0 1 0-2.83l.25-.25a8 8 0 0 1-.75-1.8H4a2 2 0 0 1-2-2v-.38a2 2 0 0 1 2-2h.35a8 8 0 0 1 .75-1.8l-.25-.25a2 2 0 0 1 0-2.83l.27-.27a2 2 0 0 1 2.83 0l.25.25A8 8 0 0 1 10 4.35V4a2 2 0 0 1 2-2Zm0 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z" />
+            </svg>
+            <span>Settings</span>
+          </button>
+        </nav>
+
+        <div class="local-note">
+          <span class="status-dot"></span>
+          <div>
+            <strong>Your data stays local</strong>
+            <span id="backup-status">Last backup: today, 9:42 AM</span>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main-area">
+        <header class="topbar">
+          <button class="language-switch" type="button">
+            <span id="active-language-code" class="flag">EN</span>
+            <span id="active-language-label">English</span>
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="m7 9 5 5 5-5H7Z" />
+            </svg>
+          </button>
+          <div class="topbar-actions">
+            <button class="icon-button" type="button" aria-label="Search">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M10.5 3a7.5 7.5 0 1 1-4.73 13.32l-3.04 3.04-1.42-1.42 3.05-3.04A7.5 7.5 0 0 1 10.5 3Zm0 2a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z" />
+              </svg>
+            </button>
+            <button class="avatar" type="button" aria-label="Open profile menu">LB</button>
+          </div>
+        </header>
+
+        <section id="screen-home" class="screen is-active" aria-label="Home">
+          <div id="home-populated-state">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">WEDNESDAY, JULY 22</p>
+              <h1 id="home-title">Pick up where you left off</h1>
+              <p>Your content and most important reviews are ready here.</p>
+            </div>
+            <button class="primary-button" id="open-import" type="button" data-open-import>
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z" />
+              </svg>
+              Add content
+            </button>
+          </div>
+
+          <div class="next-actions">
+            <article class="continue-card">
+              <div class="book-cover book-cover--blue" aria-hidden="true">
+                <span>THE MAN<br />AND THE<br />DOG</span>
+              </div>
+              <div class="continue-content">
+                <div class="card-meta">
+                  <span class="chip">English · A2</span>
+                  <button class="ghost-icon" type="button" aria-label="More options">•••</button>
+                </div>
+                <div>
+                  <p class="section-kicker">CONTINUE READING</p>
+                  <h2>The Man and the Dog</h2>
+                  <p>You stopped at paragraph 6 of 9.</p>
+                </div>
+                <div class="progress-row">
+                  <div class="progress-track" aria-label="75% complete">
+                    <span style="width: 75%"></span>
+                  </div>
+                  <strong>75%</strong>
+                </div>
+                <button class="primary-button open-reader" type="button">
+                  Continue reading
+                  <span aria-hidden="true">→</span>
+                </button>
+              </div>
+            </article>
+
+            <article class="review-summary">
+              <div class="review-summary__icon">
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M12 3a9 9 0 1 1-8.49 6H1l3.5-4L8 9H5.62A7 7 0 1 0 12 5V3Z" />
+                </svg>
+              </div>
+              <div>
+                <p class="section-kicker">TODAY'S REVIEW</p>
+                <h2><strong>12</strong> terms are due now</h2>
+                <p>About 6 minutes · 4 from the current text</p>
+              </div>
+              <div class="review-preview" aria-label="Sample terms">
+                <span>along</span>
+                <span>generous</span>
+                <span>auffinden</span>
+                <span>+9</span>
+              </div>
+              <button class="secondary-button" type="button" data-screen-target="review">
+                Start review
+                <span aria-hidden="true">→</span>
+              </button>
+            </article>
+          </div>
+
+          <section class="library-section" aria-labelledby="recent-title">
+            <div class="section-heading">
+              <div>
+                <h2 id="recent-title">Recently studied</h2>
+                <p>Recently studied or added · excludes the featured text</p>
+              </div>
+              <button class="secondary-button compact" type="button" data-screen-target="library">
+                View library
+                <span aria-hidden="true">→</span>
+              </button>
+            </div>
+
+            <div class="book-grid">
+              <article class="book-card" data-title="alice's adventures in wonderland" data-language="english">
+                <div class="book-cover book-cover--rose" aria-hidden="true">
+                  <span>ALICE'S<br />ADVENTURES IN<br />WONDERLAND</span>
+                </div>
+                <div class="book-card__body">
+                  <div class="card-meta">
+                    <span class="chip">English</span>
+                    <button class="ghost-icon" type="button" aria-label="More options">•••</button>
+                  </div>
+                  <h3>Alice's Adventures in Wonderland</h3>
+                  <p>Added today · 1,248 terms</p>
+                  <div class="progress-row progress-row--small">
+                    <div class="progress-track"><span style="width: 21%"></span></div>
+                    <strong>21%</strong>
+                  </div>
+                  <button class="card-link" type="button">Open text →</button>
+                </div>
+              </article>
+
+              <article class="book-card" data-title="die leiden des jungen werthers" data-language="german">
+                <div class="book-cover book-cover--amber" aria-hidden="true">
+                  <span>DIE LEIDEN<br />DES JUNGEN<br />WERTHERS</span>
+                </div>
+                <div class="book-card__body">
+                  <div class="card-meta">
+                    <span class="chip">German</span>
+                    <button class="ghost-icon" type="button" aria-label="More options">•••</button>
+                  </div>
+                  <h3>Die Leiden des jungen Werthers</h3>
+                  <p>Yesterday · 241 terms</p>
+                  <div class="progress-row progress-row--small">
+                    <div class="progress-track"><span style="width: 38%"></span></div>
+                    <strong>38%</strong>
+                  </div>
+                  <button class="card-link" type="button">Continue reading →</button>
+                </div>
+              </article>
+
+              <article class="book-card" data-title="don du sang" data-language="french">
+                <div class="book-cover book-cover--rose" aria-hidden="true">
+                  <span>DON<br />DU<br />SANG</span>
+                </div>
+                <div class="book-card__body">
+                  <div class="card-meta">
+                    <span class="chip">French</span>
+                    <button class="ghost-icon" type="button" aria-label="More options">•••</button>
+                  </div>
+                  <h3>Don du sang</h3>
+                  <p>3 days ago · 117 terms</p>
+                  <div class="progress-row progress-row--small">
+                    <div class="progress-track"><span style="width: 55%"></span></div>
+                    <strong>55%</strong>
+                  </div>
+                  <button class="card-link" type="button">Continue reading →</button>
+                </div>
+              </article>
+            </div>
+          </section>
+          </div>
+
+          <div id="home-empty-state" class="first-use-state" hidden>
+            <div class="first-use-heading">
+              <p class="eyebrow">WELCOME TO LEARNING WITH TEXTS</p>
+              <h1>Set up the language you want to learn</h1>
+              <p>
+                Choose your learning language first. Then add real content and build
+                vocabulary from meaningful context.
+              </p>
+            </div>
+
+            <form id="first-language-form" class="first-language-card">
+              <div class="first-language-card__heading">
+                <div>
+                  <p class="eyebrow">STEP 1 OF 2</p>
+                  <h2>Language details</h2>
+                </div>
+                <span>Required fields</span>
+              </div>
+
+              <div class="dialog-grid">
+                <label class="field">
+                  <span>Language you are learning</span>
+                  <select id="inline-learning-language">
+                    <option selected>English</option>
+                    <option>German</option>
+                    <option>French</option>
+                    <option>Spanish</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Translation language</span>
+                  <select>
+                    <option selected>Portuguese</option>
+                    <option>English</option>
+                    <option>German</option>
+                    <option>French</option>
+                    <option>Spanish</option>
+                  </select>
+                </label>
+              </div>
+
+              <label class="field">
+                <span>Primary dictionary URL <small>Optional</small></span>
+                <input value="https://dictionary.example/?q=###" />
+                <small>Use ### where the selected term should appear.</small>
+              </label>
+
+              <div class="first-language-card__footer">
+                <span>Advanced language rules can be changed later in Settings.</span>
+                <button class="primary-button" type="submit">
+                  Save language and add your first text
+                  <span aria-hidden="true">→</span>
+                </button>
+              </div>
+            </form>
+
+            <div class="first-use-steps" aria-label="How Learning with Texts works">
+              <article>
+                <span>1</span>
+                <div>
+                  <strong>Choose a language</strong>
+                  <p>Set the language you are learning and your translation language.</p>
+                </div>
+              </article>
+              <article>
+                <span>2</span>
+                <div>
+                  <strong>Add your first text</strong>
+                  <p>Paste or upload content that matches your interests and level.</p>
+                </div>
+              </article>
+              <article>
+                <span>3</span>
+                <div>
+                  <strong>Read and review</strong>
+                  <p>Mark unfamiliar terms; saved words will return in Review.</p>
+                </div>
+              </article>
+            </div>
+
+            <p class="first-use-review-note">
+              Dictionaries and advanced language rules can be adjusted later in Settings.
+            </p>
+          </div>
+        </section>
+
+        <section id="screen-library" class="screen" aria-labelledby="library-title" hidden>
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">COLLECTION</p>
+              <h1 id="library-title">Library</h1>
+              <p>Browse and manage all of your active and archived texts.</p>
+            </div>
+            <button class="primary-button" id="open-import-library" type="button" data-open-import>
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z" />
+              </svg>
+              Add content
+            </button>
+          </div>
+
+          <div id="library-populated-state">
+            <div class="section-heading library-page-heading">
+              <div>
+                <h2>All texts</h2>
+                <p>32 active · 6 archived</p>
+              </div>
+              <div class="view-switch" aria-label="Library layout">
+                <button class="is-active" type="button" aria-label="Grid view">
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 0h7v7h-7v-7Z" />
+                  </svg>
+                </button>
+                <button type="button" aria-label="List view">
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="M4 5h16v3H4V5Zm0 6h16v3H4v-3Zm0 6h16v3H4v-3Z" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="library-toolbar">
+              <label class="search-field">
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M10.5 3a7.5 7.5 0 1 1-4.73 13.32l-3.04 3.04-1.42-1.42 3.05-3.04A7.5 7.5 0 0 1 10.5 3Zm0 2a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z" />
+                </svg>
+                <span class="sr-only">Search texts</span>
+                <input id="library-search" type="search" placeholder="Search by title..." />
+              </label>
+              <button class="filter-button" type="button">
+                All languages
+                <span aria-hidden="true">⌄</span>
+              </button>
+              <button class="filter-button" type="button">
+                All tags
+                <span aria-hidden="true">⌄</span>
+              </button>
+              <button class="filter-button" type="button">
+                Last read
+                <span aria-hidden="true">⌄</span>
+              </button>
+            </div>
+
+            <div class="book-grid" id="book-grid">
+            <article class="book-card" data-title="the man and the dog" data-language="english">
+              <div class="book-cover book-cover--blue" aria-hidden="true">
+                <span>THE MAN<br />AND THE<br />DOG</span>
+              </div>
+              <div class="book-card__body">
+                <div class="card-meta">
+                  <span class="chip">English</span>
+                  <button class="ghost-icon" type="button" aria-label="More options">•••</button>
+                </div>
+                <h3>The Man and the Dog</h3>
+                <p>Today · 184 terms</p>
+                <div class="progress-row progress-row--small">
+                  <div class="progress-track"><span style="width: 75%"></span></div>
+                  <strong>75%</strong>
+                </div>
+                <button class="card-link open-reader" type="button">Continue reading →</button>
+              </div>
+            </article>
+
+            <article class="book-card" data-title="die leiden des jungen werthers" data-language="german">
+              <div class="book-cover book-cover--amber" aria-hidden="true">
+                <span>DIE LEIDEN<br />DES JUNGEN<br />WERTHERS</span>
+              </div>
+              <div class="book-card__body">
+                <div class="card-meta">
+                  <span class="chip">German</span>
+                  <button class="ghost-icon" type="button" aria-label="More options">•••</button>
+                </div>
+                <h3>Die Leiden des jungen Werthers</h3>
+                <p>Yesterday · 241 terms</p>
+                <div class="progress-row progress-row--small">
+                  <div class="progress-track"><span style="width: 38%"></span></div>
+                  <strong>38%</strong>
+                </div>
+                <button class="card-link" type="button">Continue reading →</button>
+              </div>
+            </article>
+
+            <article class="book-card" data-title="don du sang" data-language="french">
+              <div class="book-cover book-cover--rose" aria-hidden="true">
+                <span>DON<br />DU<br />SANG</span>
+              </div>
+              <div class="book-card__body">
+                <div class="card-meta">
+                  <span class="chip">French</span>
+                  <button class="ghost-icon" type="button" aria-label="More options">•••</button>
+                </div>
+                <h3>Don du sang</h3>
+                <p>3 days ago · 117 terms</p>
+                <div class="progress-row progress-row--small">
+                  <div class="progress-track"><span style="width: 55%"></span></div>
+                  <strong>55%</strong>
+                </div>
+                <button class="card-link" type="button">Continue reading →</button>
+              </div>
+            </article>
+
+            <article class="book-card" data-title="alice's adventures in wonderland" data-language="english">
+              <div class="book-cover book-cover--rose" aria-hidden="true">
+                <span>ALICE'S<br />ADVENTURES IN<br />WONDERLAND</span>
+              </div>
+              <div class="book-card__body">
+                <div class="card-meta">
+                  <span class="chip">English</span>
+                  <button class="ghost-icon" type="button" aria-label="More options">•••</button>
+                </div>
+                <h3>Alice's Adventures in Wonderland</h3>
+                <p>June 18 · 1,248 terms</p>
+                <div class="progress-row progress-row--small">
+                  <div class="progress-track"><span style="width: 21%"></span></div>
+                  <strong>21%</strong>
+                </div>
+                <button class="card-link" type="button">Continue reading →</button>
+              </div>
+            </article>
+
+            <article class="book-card" data-title="le petit prince" data-language="french">
+              <div class="book-cover book-cover--blue" aria-hidden="true">
+                <span>LE<br />PETIT<br />PRINCE</span>
+              </div>
+              <div class="book-card__body">
+                <div class="card-meta">
+                  <span class="chip">French</span>
+                  <button class="ghost-icon" type="button" aria-label="More options">•••</button>
+                </div>
+                <h3>Le Petit Prince</h3>
+                <p>June 12 · 892 terms</p>
+                <div class="progress-row progress-row--small">
+                  <div class="progress-track"><span style="width: 64%"></span></div>
+                  <strong>64%</strong>
+                </div>
+                <button class="card-link" type="button">Continue reading →</button>
+              </div>
+            </article>
+
+            <article class="book-card" data-title="der prozess" data-language="german">
+              <div class="book-cover book-cover--amber" aria-hidden="true">
+                <span>DER<br />PROZESS</span>
+              </div>
+              <div class="book-card__body">
+                <div class="card-meta">
+                  <span class="chip">German</span>
+                  <button class="ghost-icon" type="button" aria-label="More options">•••</button>
+                </div>
+                <h3>Der Prozess</h3>
+                <p>May 29 · 1,536 terms</p>
+                <div class="progress-row progress-row--small">
+                  <div class="progress-track"><span style="width: 12%"></span></div>
+                  <strong>12%</strong>
+                </div>
+                <button class="card-link" type="button">Continue reading →</button>
+              </div>
+            </article>
+            </div>
+            <p id="search-empty" class="empty-search" hidden>
+              No texts match your search.
+            </p>
+          </div>
+
+          <div id="library-empty-state" class="library-empty-state" hidden>
+            <span class="first-text-cta__icon" aria-hidden="true">＋</span>
+            <h2>No texts in your library yet</h2>
+            <p>Set up a learning language, then add your first text.</p>
+            <button class="primary-button" type="button" data-screen-target="home">
+              Set up your first language on Home
+            </button>
+          </div>
+        </section>
+
+        <section id="screen-reader" class="screen" aria-labelledby="reader-title" hidden>
+          <div class="reader-heading">
+            <button class="back-button" type="button" data-screen-target="library">
+              <span aria-hidden="true">←</span>
+              Library
+            </button>
+            <div class="reader-title-group">
+              <div>
+                <p class="eyebrow">ENGLISH · A2</p>
+                <h1 id="reader-title">The Man and the Dog</h1>
+              </div>
+              <div class="reader-actions">
+                <button id="complete-reading" class="primary-button compact" type="button">
+                  Finish lesson
+                </button>
+                <button class="secondary-button compact" type="button">Aa</button>
+                <button class="secondary-button compact" type="button">Translate sentence</button>
+                <button class="ghost-icon bordered" type="button" aria-label="More options">•••</button>
+              </div>
+            </div>
+            <div class="reader-progress">
+              <div class="progress-track">
+                <span id="reader-progress-bar" style="width: 75%"></span>
+              </div>
+              <span id="reader-progress-label">138 of 184 terms known</span>
+            </div>
+          </div>
+
+          <div class="reader-layout">
+            <article class="reading-pane">
+              <div class="audio-player">
+                <button type="button" aria-label="Play audio">
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="m8 5 11 7-11 7V5Z" />
+                  </svg>
+                </button>
+                <span>00:42</span>
+                <div class="audio-track"><span style="width: 31%"></span></div>
+                <span>02:16</span>
+                <button class="speed-button" type="button">1×</button>
+              </div>
+
+              <div class="reading-legend" aria-label="Term status legend">
+                <span><i class="term-dot term-dot--new"></i>New</span>
+                <span><i class="term-dot term-dot--learning"></i>Learning</span>
+                <span><i class="term-dot term-dot--known"></i>Known</span>
+              </div>
+
+              <div class="reading-copy">
+                <p>
+                  <button class="word word--known" type="button" data-term="A" data-translation="indefinite article" data-status="known">A</button>
+                  <button class="word word--learning is-selected" type="button" data-term="man" data-translation="adult male" data-status="learning">man</button>
+                  <button class="word word--known" type="button" data-term="and" data-translation="used to join words" data-status="known">and</button>
+                  <button class="word word--known" type="button" data-term="his" data-translation="belonging to him" data-status="known">his</button>
+                  <button class="word word--learning" type="button" data-term="dog" data-translation="domesticated canine" data-status="learning">dog</button>
+                  walked
+                  <button class="word word--new" type="button" data-term="along" data-translation="following the length of" data-status="new">along</button>
+                  the road. The morning was quiet, and the fields stretched far beyond the old
+                  stone wall.
+                </p>
+                <p class="current-sentence">
+                  The
+                  <button class="word word--learning" type="button" data-term="man" data-translation="adult male" data-status="learning">man</button>
+                  carried a small bag, while the
+                  <button class="word word--learning" type="button" data-term="dog" data-translation="domesticated canine" data-status="learning">dog</button>
+                  ran ahead and returned whenever the path turned.
+                </p>
+                <p>
+                  “We have a long way to go,” he said, but his companion only wagged its tail.
+                  Together they crossed the bridge and followed the river toward the village.
+                </p>
+                <p>
+                  Near the water they met an old woman who smiled at them. She offered the dog a
+                  piece of bread and pointed to a shorter path through the woods.
+                </p>
+              </div>
+            </article>
+
+            <aside class="term-panel is-open" aria-labelledby="term-panel-title">
+              <div class="term-panel__handle" aria-hidden="true"></div>
+              <div class="term-panel__top">
+                <div>
+                  <p class="eyebrow">SELECTED WORD</p>
+                  <h2 id="term-panel-title">man</h2>
+                  <p class="pronunciation">/mæn/ · noun</p>
+                </div>
+                <button id="close-term-panel" class="icon-button panel-close" type="button" aria-label="Close panel">×</button>
+              </div>
+
+              <div class="context-box">
+                <span>In this sentence</span>
+                <p>The <mark>man</mark> carried a small bag.</p>
+              </div>
+
+              <div class="panel-section">
+                <div class="panel-label">
+                  <span>Translation</span>
+                  <button type="button">Open dictionary ↗</button>
+                </div>
+                <div class="translation-options">
+                  <button class="is-selected" type="button">adult male</button>
+                  <button type="button">person</button>
+                  <button type="button">human being</button>
+                </div>
+                <label class="field">
+                  <span class="sr-only">Custom translation</span>
+                  <input id="term-translation" value="adult male" />
+                </label>
+              </div>
+
+              <div class="panel-section">
+                <span class="field-title">Status</span>
+                <div class="status-control" role="group" aria-label="Term status">
+                  <button type="button" data-status-value="new"><i></i>New</button>
+                  <button class="is-selected" type="button" data-status-value="learning"><i></i>Learning</button>
+                  <button type="button" data-status-value="known"><i></i>Known</button>
+                </div>
+              </div>
+
+              <details class="advanced-details">
+                <summary>More details</summary>
+                <label class="field">
+                  <span>Romanization</span>
+                  <input placeholder="Optional" />
+                </label>
+                <label class="field">
+                  <span>Tags</span>
+                  <input placeholder="Add a tag..." />
+                </label>
+              </details>
+
+              <div class="panel-actions">
+                <button id="save-term" class="primary-button" type="button">Save term</button>
+                <span><kbd>Ctrl</kbd> + <kbd>Enter</kbd></span>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section id="screen-vocabulary" class="screen" aria-labelledby="vocabulary-title" hidden>
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">VOCABULARY</p>
+              <h1 id="vocabulary-title">Words and expressions</h1>
+              <p>Browse, organize, and review every term in your library.</p>
+            </div>
+            <div class="heading-actions">
+              <button class="secondary-button" type="button">Import CSV/TSV</button>
+              <button class="primary-button" type="button">Export</button>
+            </div>
+          </div>
+
+          <div class="metric-row">
+            <article><strong>846</strong><span>saved terms</span></article>
+            <article><strong>312</strong><span>learning</span></article>
+            <article><strong>498</strong><span>known</span></article>
+            <article class="metric-alert"><strong>12</strong><span>due for review</span></article>
+          </div>
+
+          <section class="vocabulary-card">
+            <div class="library-toolbar">
+              <label class="search-field">
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M10.5 3a7.5 7.5 0 1 1-4.73 13.32l-3.04 3.04-1.42-1.42 3.05-3.04A7.5 7.5 0 0 1 10.5 3Zm0 2a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z" />
+                </svg>
+                <span class="sr-only">Search vocabulary</span>
+                <input type="search" placeholder="Term, translation, or sentence..." />
+              </label>
+              <button class="filter-button" type="button">English <span>⌄</span></button>
+              <button class="filter-button" type="button">All statuses <span>⌄</span></button>
+              <button class="filter-button" type="button">All tags <span>⌄</span></button>
+            </div>
+
+            <div class="bulk-bar">
+              <label><input type="checkbox" /> Select page</label>
+              <span>846 results</span>
+              <button type="button">Review selection</button>
+              <button type="button">Change status</button>
+              <button type="button">Add tag</button>
+            </div>
+
+            <div class="term-table-wrap">
+              <table class="term-table">
+                <thead>
+                  <tr>
+                    <th><span class="sr-only">Select</span></th>
+                    <th>Term</th>
+                    <th>Translation</th>
+                    <th>Context</th>
+                    <th>Status</th>
+                    <th>Next review</th>
+                    <th><span class="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><input type="checkbox" aria-label="Select along" /></td>
+                    <td><strong>along</strong><span>English · 4 occurrences</span></td>
+                    <td>following the length of</td>
+                    <td>walked <mark>along</mark> the road</td>
+                    <td><span class="status-pill status-pill--learning">Learning 2</span></td>
+                    <td><span class="due-now">Now</span></td>
+                    <td><button class="ghost-icon" type="button" aria-label="Actions for along">•••</button></td>
+                  </tr>
+                  <tr>
+                    <td><input type="checkbox" aria-label="Select generous" /></td>
+                    <td><strong>generous</strong><span>English · 2 occurrences</span></td>
+                    <td>willing to give</td>
+                    <td>a simple and <mark>generous</mark> act</td>
+                    <td><span class="status-pill status-pill--learning">Learning 4</span></td>
+                    <td>Tomorrow</td>
+                    <td><button class="ghost-icon" type="button" aria-label="Actions for generous">•••</button></td>
+                  </tr>
+                  <tr>
+                    <td><input type="checkbox" aria-label="Select bridge" /></td>
+                    <td><strong>bridge</strong><span>English · 1 occurrence</span></td>
+                    <td>structure over an obstacle</td>
+                    <td>they crossed the <mark>bridge</mark></td>
+                    <td><span class="status-pill status-pill--known">Known</span></td>
+                    <td>—</td>
+                    <td><button class="ghost-icon" type="button" aria-label="Actions for bridge">•••</button></td>
+                  </tr>
+                  <tr>
+                    <td><input type="checkbox" aria-label="Select auffinden" /></td>
+                    <td><strong>auffinden</strong><span>German · 3 occurrences</span></td>
+                    <td>find / locate</td>
+                    <td>habe <mark>auffinden</mark> können</td>
+                    <td><span class="status-pill status-pill--learning">Learning 3</span></td>
+                    <td>In 2 days</td>
+                    <td><button class="ghost-icon" type="button" aria-label="Actions for auffinden">•••</button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section id="screen-review" class="screen review-screen" aria-labelledby="review-title" hidden>
+          <div class="review-header">
+            <button class="back-button" type="button" data-screen-target="home">
+              <span aria-hidden="true">←</span>
+              Home
+            </button>
+            <div class="review-progress-copy">
+              <span>3 of 12</span>
+              <div class="progress-track"><span style="width: 25%"></span></div>
+            </div>
+            <button class="secondary-button compact" type="button">End session</button>
+          </div>
+
+          <div class="review-stage">
+            <p class="eyebrow">RECOGNITION · ENGLISH</p>
+            <h1 id="review-title">along</h1>
+            <p class="review-context">A man and his dog walked <mark>along</mark> the road.</p>
+            <button id="reveal-answer" class="primary-button reveal-button" type="button">
+              Show answer
+              <kbd>Space</kbd>
+            </button>
+
+            <div id="review-answer" class="review-answer-prototype" hidden>
+              <span>Translation</span>
+              <strong>following the length of</strong>
+              <p>A preposition indicating movement that follows a line or path.</p>
+            </div>
+
+            <div id="review-rating" class="rating-grid" hidden>
+              <button type="button" data-rating="again">
+                <kbd>1</kbd>
+                <strong>Again</strong>
+                <span>10 min</span>
+              </button>
+              <button type="button" data-rating="hard">
+                <kbd>2</kbd>
+                <strong>Hard</strong>
+                <span>1 day</span>
+              </button>
+              <button type="button" data-rating="good">
+                <kbd>3</kbd>
+                <strong>Good</strong>
+                <span>4 days</span>
+              </button>
+              <button type="button" data-rating="easy">
+                <kbd>4</kbd>
+                <strong>Easy</strong>
+                <span>30 days</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="review-footer">
+            <span>12 terms · about 6 minutes</span>
+            <button type="button">Edit term</button>
+          </div>
+        </section>
+
+        <section id="screen-settings" class="screen" aria-labelledby="settings-title" hidden>
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">PREFERENCES</p>
+              <h1 id="settings-title">Settings</h1>
+              <p>Adjust the experience with a clear view of what will change.</p>
+            </div>
+          </div>
+
+          <div class="settings-layout">
+            <nav class="settings-nav" aria-label="Settings sections">
+              <button class="is-active" type="button">Appearance and reading</button>
+              <button type="button">Review</button>
+              <button type="button">Languages</button>
+              <button type="button">Tags</button>
+              <button type="button">Backup and data</button>
+              <button type="button">Help and shortcuts</button>
+            </nav>
+
+            <div class="settings-content">
+              <section class="settings-section">
+                <div>
+                  <h2>Appearance and reading</h2>
+                  <p>Preferences applied to the reader and library.</p>
+                </div>
+                <div class="setting-row">
+                  <div>
+                    <strong>Theme</strong>
+                    <span>You can also follow the operating system.</span>
+                  </div>
+                  <div class="segmented">
+                    <button type="button">Light</button>
+                    <button class="is-active" type="button">System</button>
+                    <button type="button">Dark</button>
+                  </div>
+                </div>
+                <div class="setting-row">
+                  <div>
+                    <strong>Counts and progress</strong>
+                    <span>Show known-term progress on library cards.</span>
+                  </div>
+                  <label class="switch">
+                    <input type="checkbox" checked />
+                    <span></span>
+                  </label>
+                </div>
+                <div class="setting-row">
+                  <div>
+                    <strong>Texts per page</strong>
+                    <span>Search still covers the entire library.</span>
+                  </div>
+                  <select aria-label="Texts per page">
+                    <option>12 texts</option>
+                    <option selected>24 texts</option>
+                    <option>48 texts</option>
+                  </select>
+                </div>
+              </section>
+
+              <section class="settings-section language-settings-preview">
+                <div class="language-setting-heading">
+                  <div>
+                    <h2>Language: English</h2>
+                    <p>3 texts use these settings.</p>
+                  </div>
+                  <button class="secondary-button compact" type="button">Change language</button>
+                </div>
+                <label class="field">
+                  <span>Primary dictionary</span>
+                  <input value="https://dictionary.example/?q=###" />
+                </label>
+                <label class="field">
+                  <span>Sentence translation</span>
+                  <input value="https://translate.example/?text=###" />
+                </label>
+                <details class="advanced-settings">
+                  <summary>Advanced segmentation rules</summary>
+                  <p>
+                    Changing these rules will reprocess 3 texts and may remove 2 expression
+                    positions.
+                  </p>
+                </details>
+                <button class="primary-button" type="button">Save changes</button>
+              </section>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <nav class="bottom-nav" aria-label="Mobile primary navigation">
+        <button class="is-active" type="button" data-screen-target="home">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m4 10 8-7 8 7v10H4V10Z" /></svg>
+          Home
+        </button>
+        <button type="button" data-screen-target="library">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 3h14v18l-7-3-7 3V3Z" /></svg>
+          Library
+        </button>
+        <button type="button" data-screen-target="vocabulary">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 4h16v3H4V4Zm0 6h10v3H4v-3Zm0 6h13v3H4v-3Z" /></svg>
+          Terms
+        </button>
+        <button type="button" data-screen-target="review">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 1-8.5 6H1l3.5-4L8 9H5.6A7 7 0 1 0 12 5V3Z" /></svg>
+          Review
+        </button>
+      </nav>
+    </div>
+
+    <dialog id="import-dialog" class="import-dialog">
+      <form method="dialog">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">NEW CONTENT</p>
+            <h2>What would you like to study?</h2>
+          </div>
+          <button class="icon-button" value="cancel" aria-label="Close">×</button>
+        </div>
+
+        <div class="source-tabs" role="tablist" aria-label="Content source">
+          <button class="is-active" type="button" role="tab">Paste text</button>
+          <button type="button" role="tab">Upload file</button>
+          <button type="button" role="tab">Import URL</button>
+        </div>
+
+        <div class="dialog-grid">
+          <label class="field">
+            <span>Language</span>
+            <select>
+              <option>English</option>
+              <option>German</option>
+              <option>French</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Title</span>
+            <input placeholder="Text title" />
+          </label>
+        </div>
+        <label class="field">
+          <span>Text</span>
+          <textarea rows="9" placeholder="Paste the content you want to study..."></textarea>
+          <small>You can preview the analysis before saving.</small>
+        </label>
+        <div class="dialog-actions">
+          <button class="secondary-button" value="cancel">Cancel</button>
+          <button class="secondary-button" type="button">Preview analysis</button>
+          <button class="primary-button" value="default">Save and open</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden>
+      <span>✓</span>
+      <p>
+        <strong>Term saved</strong><br />
+        <span class="toast-message">The translation and status were updated.</span>
+      </p>
+      <button id="undo-finish" class="toast-action" type="button" hidden>Undo</button>
+    </div>
+
+    <script src="prototype.js"></script>
+  </body>
+</html>

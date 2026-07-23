@@ -1,10 +1,11 @@
 use crate::database::Database;
 use crate::models::{
-    AppSettings, BackupSummary, CreateExpressionInput, CreateTagInput, CreateTextInput,
-    CreatedExpression, LanguageSettings, LibraryText, ReadingText, RecordReviewInput, ReviewCard,
-    ReviewOutcome, ReviewStatistics, SaveTermInput, SaveTextAudioInput, SavedTerm,
-    SetTermStatusInput, SetTermTagsInput, SetTextArchivedInput, SetTextTagsInput, Tag, TermDetails,
-    TermProgress, TextAudio, TextDetails, UpdateLanguageInput, UpdateTextInput,
+    AppSettings, BackupSummary, CreateExpressionInput, CreateLanguageInput, CreateTagInput,
+    CreateTextInput, CreatedExpression, FinishLessonOutcome, LanguageSettings, LibraryText,
+    ReadingText, RecordReviewInput, ReviewCard, ReviewOutcome, ReviewStatistics, SaveTermInput,
+    SaveTextAudioInput, SavedTerm, SetTermStatusInput, SetTermTagsInput, SetTextArchivedInput,
+    SetTextTagsInput, Tag, TermDetails, TermProgress, TextAudio, TextDetails,
+    UndoFinishLessonInput, UndoFinishLessonOutcome, UpdateLanguageInput, UpdateTextInput,
 };
 use tauri::Manager;
 
@@ -16,6 +17,14 @@ fn list_texts(database: tauri::State<'_, Database>) -> Result<Vec<LibraryText>, 
 #[tauri::command]
 fn list_languages(database: tauri::State<'_, Database>) -> Result<Vec<LanguageSettings>, String> {
     database.list_languages()
+}
+
+#[tauri::command]
+fn create_language(
+    database: tauri::State<'_, Database>,
+    input: CreateLanguageInput,
+) -> Result<LanguageSettings, String> {
+    database.create_language(input)
 }
 
 #[tauri::command]
@@ -156,6 +165,22 @@ fn get_reading_text(database: tauri::State<'_, Database>, id: i64) -> Result<Rea
 }
 
 #[tauri::command]
+fn finish_lesson(
+    database: tauri::State<'_, Database>,
+    text_id: i64,
+) -> Result<FinishLessonOutcome, String> {
+    database.finish_lesson(text_id)
+}
+
+#[tauri::command]
+fn undo_finish_lesson(
+    database: tauri::State<'_, Database>,
+    input: UndoFinishLessonInput,
+) -> Result<UndoFinishLessonOutcome, String> {
+    database.undo_finish_lesson(input)
+}
+
+#[tauri::command]
 fn set_term_status(
     database: tauri::State<'_, Database>,
     input: SetTermStatusInput,
@@ -223,6 +248,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             list_texts,
             list_languages,
+            create_language,
             app_settings,
             update_app_settings,
             update_language,
@@ -243,6 +269,8 @@ pub fn run() {
             remove_text_audio,
             delete_text,
             get_reading_text,
+            finish_lesson,
+            undo_finish_lesson,
             set_term_status,
             get_term_details,
             save_term,

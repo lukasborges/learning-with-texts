@@ -1,5 +1,31 @@
 # QA Execution Report
 
+## UX Regression Run — 2026-07-23
+
+- **Application:** LWT Desktop 0.1.0
+- **Host:** local Arch Linux x86_64
+- **Runtime:** debug DEB/Tauri binary with isolated application data
+- **Commands:** `npm run check`, `npm test`, `npm run build:web:tauri`,
+  `npm run test:e2e:build`, `npm run test:e2e:smoke`, `npm run test:qa`,
+  and `git diff --check`
+
+| Status | Scenarios | Result |
+| --- | --- | --- |
+| [x] Pass | HOME-01, HOME-03, HOME-04 | Inline first-language setup persisted before text creation; the add form inherited the language; after opening a text, Home featured it and did not repeat it in Recent. |
+| [x] Pass | NAV-01 | Home, Library, Review, and Settings navigation opened the intended separate screens in the packaged WebView. |
+| [x] Pass | LIB-01–08 | The Library empty state, contextual Add content form, import/edit/archive/delete, pagination, and persistence passed. |
+| [x] Pass | READ-01–11 | Reader parsing, exact Learning statuses, contextual editor, one-click Finish lesson, Well Known conversion, learning-term preservation, persisted completion, and single-use Undo passed. |
+| [x] Pass | REV-01–04, STAT-01 | The review queue, all four ratings, empty completion state, and statistics passed after the Reader changes. |
+| [x] Pass | CFG-01–07, DATA-01–05 | Tags, language rules, RTL, settings, audio, backup, rollback, and legacy restore remained green. |
+| [ ] Not run | HOME-02, HOME-05, NAV-02 | These visual variants are documented for manual/exploratory coverage; the underlying empty/current branches compile and first-use/current states have automated coverage. |
+| [ ] Not run | VOC-01–04 | The prototype Vocabulary inventory remains a proposed screen; these acceptance scenarios are ready but the screen is not part of this implementation slice. |
+
+Automated totals for this run: 41 web tests, 42 Rust tests, 17 release-script
+tests, one packaged smoke workflow, and one full packaged QA workflow. All
+executed tests passed. The GStreamer plugin scanner repeated its known range
+warnings while initializing test audio; media persistence and the WebView
+workflow still completed successfully.
+
 ## Test Run
 
 - **Date:** 2026-07-22

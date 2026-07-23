@@ -64,6 +64,21 @@ describe('MockLibraryGateway', () => {
     expect(reading.sentences).toHaveLength(2);
   });
 
+  it('creates a language independently from text creation', async () => {
+    const gateway = new MockLibraryGateway();
+
+    const language = await gateway.createLanguage({
+      name: 'Korean',
+      dictionaryUri1: 'https://example.com?q=###'
+    });
+
+    expect(language).toMatchObject({
+      name: 'Korean',
+      dictionaryUri1: 'https://example.com?q=###',
+      textCount: 0
+    });
+  });
+
   it('round-trips a portable browser-preview backup', async () => {
     const gateway = new MockLibraryGateway();
     await gateway.updateAppSettings({
@@ -198,6 +213,36 @@ describe('MockLibraryGateway', () => {
         .flatMap(({ items }) => items)
         .find(({ normalized }) => normalized === 'dog')
     ).toMatchObject({ status: 5 });
+  });
+
+  it('finishes a lesson without changing learning terms and supports undo', async () => {
+    const gateway = new MockLibraryGateway();
+    await gateway.saveTerm({
+      textId: 1,
+      normalized: 'dog',
+      status: 2,
+      translation: 'cachorro',
+      romanization: ''
+    });
+
+    const finished = await gateway.finishLesson(1);
+    const afterFinish = await gateway.getReadingText(1);
+    const learning = afterFinish.sentences
+      .flatMap(({ items }) => items)
+      .find(({ normalized }) => normalized === 'dog');
+
+    expect(finished.markedKnown).toBeGreaterThan(0);
+    expect(learning?.status).toBe(2);
+    expect((await gateway.getText(1)).completedAt).toBeTruthy();
+
+    const undone = await gateway.undoFinishLesson({
+      completionId: finished.completionId
+    });
+    expect(undone.revertedTerms).toBe(finished.markedKnown);
+    expect((await gateway.getText(1)).completedAt).toBeUndefined();
+    await expect(
+      gateway.undoFinishLesson({ completionId: finished.completionId })
+    ).rejects.toThrow('already undone');
   });
 
   it('stores translation and romanization for a term', async () => {

@@ -75,6 +75,8 @@ struct BackupText {
     updated_at: String,
     #[serde(default)]
     archived: bool,
+    #[serde(default)]
+    completed_at: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -922,7 +924,7 @@ impl Database {
                 .prepare(
                     "SELECT id, language_id, title, content, annotated_content,
                             audio_uri, source_uri, last_opened_at, created_at, updated_at,
-                            archived
+                            archived, completed_at
                      FROM texts ORDER BY id",
                 )
                 .map_err(|error| format!("Unable to prepare backup texts: {error}"))?;
@@ -940,6 +942,7 @@ impl Database {
                         created_at: row.get(8)?,
                         updated_at: row.get(9)?,
                         archived: row.get(10)?,
+                        completed_at: row.get(11)?,
                     })
                 })
                 .map_err(|error| format!("Unable to read backup texts: {error}"))?;
@@ -1235,8 +1238,9 @@ impl Database {
                 .execute(
                     "INSERT INTO texts
                         (id, language_id, title, content, annotated_content, audio_uri,
-                         source_uri, last_opened_at, created_at, updated_at, archived)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                         source_uri, last_opened_at, created_at, updated_at, archived,
+                         completed_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
                     params![
                         text.id,
                         text.language_id,
@@ -1248,7 +1252,8 @@ impl Database {
                         text.last_opened_at,
                         text.created_at,
                         text.updated_at,
-                        text.archived
+                        text.archived,
+                        text.completed_at
                     ],
                 )
                 .map_err(|error| format!("Unable to restore a text: {error}"))?;
@@ -1463,6 +1468,66 @@ impl Database {
             .map_err(|error| format!("Unable to load language settings: {error}"))?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|error| format!("Unable to decode language settings: {error}"))
+    }
+
+    pub fn create_language(&self, input: CreateLanguageInput) -> Result<LanguageSettings, String> {
+        let name = input.name.trim().to_string();
+        let dictionary_uri_1 = input.dictionary_uri_1.trim().to_string();
+        if name.is_empty() {
+            return Err("Language is required".to_string());
+        }
+        if name.chars().count() > 40 {
+            return Err("Language must not exceed 40 characters".to_string());
+        }
+        if dictionary_uri_1.chars().count() > 1_000 {
+            return Err("Dictionary URL must not exceed 1,000 characters".to_string());
+        }
+
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| "The desktop database lock is unavailable".to_string())?;
+        let transaction = connection
+            .transaction()
+            .map_err(|error| format!("Unable to start language creation: {error}"))?;
+        let (id, _) = find_or_create_language(&transaction, &name)?;
+        transaction
+            .execute(
+                "UPDATE languages SET dictionary_uri_1 = ?1 WHERE id = ?2",
+                params![dictionary_uri_1, id],
+            )
+            .map_err(|error| format!("Unable to configure the language: {error}"))?;
+        let language = transaction
+            .query_row(
+                "SELECT id, name, dictionary_uri_1, dictionary_uri_2,
+                        google_translate_uri, export_template, text_size,
+                        character_substitutions, regexp_split_sentences,
+                        split_each_character, remove_spaces, right_to_left
+                 FROM languages WHERE id = ?1",
+                [id],
+                |row| {
+                    Ok(LanguageSettings {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        dictionary_uri_1: row.get(2)?,
+                        dictionary_uri_2: row.get(3)?,
+                        google_translate_uri: row.get(4)?,
+                        export_template: row.get(5)?,
+                        text_size: row.get(6)?,
+                        character_substitutions: row.get(7)?,
+                        sentence_terminators: row.get(8)?,
+                        split_each_character: row.get(9)?,
+                        remove_spaces: row.get(10)?,
+                        right_to_left: row.get(11)?,
+                        text_count: 0,
+                    })
+                },
+            )
+            .map_err(|error| format!("Unable to load the created language: {error}"))?;
+        transaction
+            .commit()
+            .map_err(|error| format!("Unable to save the language: {error}"))?;
+        Ok(language)
     }
 
     pub fn app_settings(&self) -> Result<AppSettings, String> {
@@ -1708,10 +1773,14 @@ impl Database {
                          WHERE text_items.text_id = texts.id
                            AND text_items.is_word = 1) AS total_terms,
                         COALESCE(texts.last_opened_at, ''),
-                        texts.archived
+                        texts.archived,
+                        texts.completed_at
                  FROM texts
                  INNER JOIN languages ON languages.id = texts.language_id
-                 ORDER BY texts.last_opened_at DESC, texts.title COLLATE NOCASE",
+                 ORDER BY texts.last_opened_at DESC,
+                          texts.created_at DESC,
+                          texts.id DESC,
+                          texts.title COLLATE NOCASE",
             )
             .map_err(|error| format!("Unable to prepare the library query: {error}"))?;
 
@@ -1725,6 +1794,7 @@ impl Database {
                     total_terms: row.get(4)?,
                     last_opened: row.get(5)?,
                     archived: row.get(6)?,
+                    completed_at: row.get(7)?,
                 })
             })
             .map_err(|error| format!("Unable to read the text library: {error}"))?;
@@ -1772,6 +1842,7 @@ impl Database {
             total_terms,
             last_opened: String::new(),
             archived: false,
+            completed_at: None,
         })
     }
 
@@ -1905,7 +1976,8 @@ impl Database {
                         texts.content,
                         texts.source_uri,
                         texts.archived,
-                        EXISTS(SELECT 1 FROM text_audio WHERE text_audio.text_id = texts.id)
+                        EXISTS(SELECT 1 FROM text_audio WHERE text_audio.text_id = texts.id),
+                        texts.completed_at
                  FROM texts
                  INNER JOIN languages ON languages.id = texts.language_id
                  WHERE texts.id = ?1",
@@ -1922,6 +1994,7 @@ impl Database {
                         source_uri: row.get(7)?,
                         archived: row.get(8)?,
                         has_audio: row.get(9)?,
+                        completed_at: row.get(10)?,
                     })
                 },
             )
@@ -1962,6 +2035,7 @@ impl Database {
                      title = ?2,
                      content = ?3,
                      source_uri = ?4,
+                     completed_at = NULL,
                      updated_at = CURRENT_TIMESTAMP
                  WHERE id = ?5",
                 params![
@@ -1992,6 +2066,7 @@ impl Database {
             total_terms,
             last_opened: String::new(),
             archived,
+            completed_at: None,
         })
     }
 
@@ -2238,6 +2313,201 @@ impl Database {
             status: input.status,
             known_terms,
             total_terms,
+        })
+    }
+
+    pub fn finish_lesson(&self, text_id: i64) -> Result<FinishLessonOutcome, String> {
+        if text_id <= 0 {
+            return Err("Text was not found".to_string());
+        }
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| "The desktop database lock is unavailable".to_string())?;
+        let transaction = connection
+            .transaction()
+            .map_err(|error| format!("Unable to start lesson completion: {error}"))?;
+        let (language_id, previous_completed_at) = transaction
+            .query_row(
+                "SELECT language_id, completed_at FROM texts WHERE id = ?1",
+                [text_id],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, Option<String>>(1)?)),
+            )
+            .optional()
+            .map_err(|error| format!("Unable to load the lesson: {error}"))?
+            .ok_or_else(|| "Text was not found".to_string())?;
+        transaction
+            .execute(
+                "INSERT INTO lesson_completions (text_id, previous_completed_at)
+                 VALUES (?1, ?2)",
+                params![text_id, previous_completed_at],
+            )
+            .map_err(|error| format!("Unable to record lesson completion: {error}"))?;
+        let completion_id = transaction.last_insert_rowid();
+        let missing_terms = {
+            let mut statement = transaction
+                .prepare(
+                    "SELECT MIN(text_items.surface), text_items.normalized
+                     FROM text_items
+                     LEFT JOIN terms
+                       ON terms.language_id = text_items.language_id
+                      AND terms.normalized = text_items.normalized
+                     WHERE text_items.text_id = ?1
+                       AND text_items.is_word = 1
+                       AND terms.id IS NULL
+                     GROUP BY text_items.normalized
+                     ORDER BY MIN(text_items.id)",
+                )
+                .map_err(|error| format!("Unable to prepare unmarked lesson terms: {error}"))?;
+            let rows = statement
+                .query_map([text_id], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+                })
+                .map_err(|error| format!("Unable to load unmarked lesson terms: {error}"))?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|error| format!("Unable to decode unmarked lesson terms: {error}"))?
+        };
+        let mut marked_known = 0;
+        for (display_text, normalized) in missing_terms {
+            transaction
+                .execute(
+                    "INSERT INTO terms
+                        (language_id, display_text, normalized, status, word_count)
+                     VALUES (?1, ?2, ?3, 99, 1)",
+                    params![language_id, display_text, normalized],
+                )
+                .map_err(|error| format!("Unable to mark an unclicked word as known: {error}"))?;
+            let term_id = transaction.last_insert_rowid();
+            transaction
+                .execute(
+                    "INSERT INTO lesson_completion_terms (completion_id, term_id)
+                     VALUES (?1, ?2)",
+                    params![completion_id, term_id],
+                )
+                .map_err(|error| format!("Unable to record a completed word: {error}"))?;
+            marked_known += 1;
+        }
+        transaction
+            .execute(
+                "UPDATE texts
+                 SET completed_at = CURRENT_TIMESTAMP,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ?1",
+                [text_id],
+            )
+            .map_err(|error| format!("Unable to finish the lesson: {error}"))?;
+        let completed_at = transaction
+            .query_row(
+                "SELECT completed_at FROM texts WHERE id = ?1",
+                [text_id],
+                |row| row.get::<_, String>(0),
+            )
+            .map_err(|error| format!("Unable to load the completion time: {error}"))?;
+        let (known_terms, total_terms) = Self::text_progress(&transaction, text_id)?;
+        transaction
+            .commit()
+            .map_err(|error| format!("Unable to commit lesson completion: {error}"))?;
+        Ok(FinishLessonOutcome {
+            completion_id,
+            text_id,
+            marked_known,
+            known_terms,
+            total_terms,
+            completed_at,
+        })
+    }
+
+    pub fn undo_finish_lesson(
+        &self,
+        input: UndoFinishLessonInput,
+    ) -> Result<UndoFinishLessonOutcome, String> {
+        if input.completion_id <= 0 {
+            return Err("Lesson completion was not found".to_string());
+        }
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| "The desktop database lock is unavailable".to_string())?;
+        let transaction = connection
+            .transaction()
+            .map_err(|error| format!("Unable to start lesson completion undo: {error}"))?;
+        let (text_id, previous_completed_at, undone_at) = transaction
+            .query_row(
+                "SELECT text_id, previous_completed_at, undone_at
+                 FROM lesson_completions WHERE id = ?1",
+                [input.completion_id],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, Option<String>>(1)?,
+                        row.get::<_, Option<String>>(2)?,
+                    ))
+                },
+            )
+            .optional()
+            .map_err(|error| format!("Unable to load lesson completion: {error}"))?
+            .ok_or_else(|| "Lesson completion was not found".to_string())?;
+        if undone_at.is_some() {
+            return Err("Lesson completion was already undone".to_string());
+        }
+        let term_ids = {
+            let mut statement = transaction
+                .prepare(
+                    "SELECT term_id FROM lesson_completion_terms
+                     WHERE completion_id = ?1 ORDER BY term_id",
+                )
+                .map_err(|error| format!("Unable to prepare completed words: {error}"))?;
+            let rows = statement
+                .query_map([input.completion_id], |row| row.get::<_, i64>(0))
+                .map_err(|error| format!("Unable to load completed words: {error}"))?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|error| format!("Unable to decode completed words: {error}"))?
+        };
+        let mut reverted_terms = 0;
+        for term_id in term_ids {
+            reverted_terms += transaction
+                .execute(
+                    "DELETE FROM terms
+                     WHERE id = ?1
+                       AND status = 99
+                       AND translation = ''
+                       AND COALESCE(romanization, '') = ''
+                       AND review_count = 0
+                       AND NOT EXISTS (
+                           SELECT 1 FROM term_tags WHERE term_tags.term_id = terms.id
+                       )",
+                    [term_id],
+                )
+                .map_err(|error| format!("Unable to restore an unmarked word: {error}"))?
+                as i64;
+        }
+        transaction
+            .execute(
+                "UPDATE texts
+                 SET completed_at = ?1,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ?2",
+                params![previous_completed_at, text_id],
+            )
+            .map_err(|error| format!("Unable to restore lesson state: {error}"))?;
+        transaction
+            .execute(
+                "UPDATE lesson_completions
+                 SET undone_at = CURRENT_TIMESTAMP
+                 WHERE id = ?1",
+                [input.completion_id],
+            )
+            .map_err(|error| format!("Unable to record lesson completion undo: {error}"))?;
+        let (known_terms, total_terms) = Self::text_progress(&transaction, text_id)?;
+        transaction
+            .commit()
+            .map_err(|error| format!("Unable to commit lesson completion undo: {error}"))?;
+        Ok(UndoFinishLessonOutcome {
+            text_id,
+            reverted_terms,
+            known_terms,
+            total_terms,
+            completed_at: previous_completed_at,
         })
     }
 
@@ -2924,6 +3194,89 @@ mod tests {
                 "https://example.com/story".into(),
                 "English".into()
             )
+        );
+    }
+
+    #[test]
+    fn creates_a_first_language_before_any_text() {
+        let database = Database::in_memory().expect("database should migrate");
+
+        let language = database
+            .create_language(CreateLanguageInput {
+                name: " English ".into(),
+                dictionary_uri_1: " https://example.com/dictionary?q=### ".into(),
+            })
+            .expect("language should be created");
+
+        assert_eq!(language.name, "English");
+        assert_eq!(
+            language.dictionary_uri_1,
+            "https://example.com/dictionary?q=###"
+        );
+        assert_eq!(language.text_count, 0);
+        assert!(database.list_texts().unwrap().is_empty());
+    }
+
+    #[test]
+    fn finishes_a_lesson_in_one_step_and_can_undo_it() {
+        let database = Database::in_memory().expect("database should migrate");
+        let text = database
+            .create_text(text_input("English", "Lesson", "One two three one."))
+            .expect("text should be created");
+        database
+            .save_term(SaveTermInput {
+                text_id: text.id,
+                normalized: "two".into(),
+                status: 2,
+                translation: "dois".into(),
+                romanization: String::new(),
+            })
+            .expect("learning term should save");
+
+        let finished = database
+            .finish_lesson(text.id)
+            .expect("lesson should finish");
+        assert_eq!(finished.marked_known, 2);
+        assert_eq!(finished.known_terms, 2);
+        assert_eq!(finished.total_terms, 3);
+        assert!(database.get_text(text.id).unwrap().completed_at.is_some());
+        assert_eq!(
+            database
+                .get_term_details(text.id, "two".into())
+                .unwrap()
+                .status,
+            2
+        );
+        assert_eq!(
+            database
+                .get_term_details(text.id, "one".into())
+                .unwrap()
+                .status,
+            99
+        );
+
+        let undone = database
+            .undo_finish_lesson(UndoFinishLessonInput {
+                completion_id: finished.completion_id,
+            })
+            .expect("completion should undo");
+        assert_eq!(undone.reverted_terms, 2);
+        assert_eq!(undone.known_terms, 0);
+        assert!(database.get_text(text.id).unwrap().completed_at.is_none());
+        assert_eq!(
+            database
+                .get_term_details(text.id, "one".into())
+                .unwrap()
+                .status,
+            0
+        );
+        assert_eq!(
+            database
+                .undo_finish_lesson(UndoFinishLessonInput {
+                    completion_id: finished.completion_id,
+                })
+                .unwrap_err(),
+            "Lesson completion was already undone"
         );
     }
 

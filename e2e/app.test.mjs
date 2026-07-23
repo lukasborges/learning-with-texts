@@ -108,14 +108,17 @@ test('packaged desktop workflows persist and restore local data', { timeout: 120
       .build();
 
     const heading = await visible(driver, By.css('h1'));
-    assert.equal(await heading.getText(), 'Learning with Texts');
-    assert.match(await driver.findElement(By.css('.app-header p')).getText(), /local SQLite mode/);
+    assert.equal(await heading.getText(), 'Set up the language you want to learn');
+    await driver.findElement(By.css('.first-language-form [name="language"]')).sendKeys('English');
+    await driver
+      .findElement(buttonWithText('Save language and add your first text'))
+      .click();
+    await visible(driver, By.xpath('//h2[normalize-space(.)="Add a text"]'));
     assert.equal(
       await driver.findElement(By.css('.empty-state')).getText(),
-      'Your local library is empty. Use the form above to add a text.'
+      'Your local library is empty. Add your first text to begin.'
     );
 
-    await driver.findElement(By.css('[name="language"]')).sendKeys('English');
     await driver.findElement(By.css('[name="title"]')).sendKeys('E2E Story');
     await driver
       .findElement(By.css('[name="content"]'))
@@ -148,10 +151,32 @@ test('packaged desktop workflows persist and restore local data', { timeout: 120
       until.elementTextIs(await driver.findElement(By.css('.term-editor .form-status')), 'Term saved.'),
       10_000
     );
+    await driver.findElement(buttonWithText('Finish lesson')).click();
+    await visible(driver, By.xpath('//button[normalize-space(.)="Lesson finished ✓"]'));
+    assert.match(
+      await driver.findElement(By.css('.completion-notice span')).getText(),
+      /set to Well Known/
+    );
+    await driver.findElement(buttonWithText('Undo')).click();
+    await driver.wait(
+      until.elementTextIs(
+        await driver.findElement(By.css('.completion-notice')),
+        'Lesson completion undone.'
+      ),
+      10_000
+    );
 
     await driver.findElement(buttonWithText('← Back to library')).click();
-    await visible(driver, buttonWithText('Review terms'));
-    await driver.findElement(buttonWithText('Review terms')).click();
+    await driver.findElement(buttonWithText('Home')).click();
+    await visible(driver, By.xpath('//h1[normalize-space(.)="Pick up where you left off"]'));
+    assert.equal(await driver.findElement(By.css('.continue-card h2')).getText(), 'E2E Story');
+    assert.equal(
+      await driver.findElement(By.css('.recent-grid .empty-state')).getText(),
+      'No other recent texts yet.'
+    );
+    await driver.findElement(buttonWithText('Library')).click();
+    await visible(driver, buttonWithText('Review'));
+    await driver.findElement(buttonWithText('Review')).click();
     await visible(driver, By.xpath('//h1[normalize-space(.)="Review terms"]'));
     assert.equal(await driver.findElement(By.css('.review-card h2')).getText(), 'Hello');
     await driver.findElement(buttonWithText('Show answer')).click();
