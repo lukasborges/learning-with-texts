@@ -73,6 +73,7 @@ const gateway = createLibraryGateway();
 let showingArchivedTexts = false;
 let libraryPage = 0;
 let tagPage = 0;
+let vocabularyPage = 0;
 let addingText = false;
 let pendingLanguage = '';
 let libraryQuery = '';
@@ -1795,6 +1796,11 @@ async function renderVocabulary(): Promise<void> {
   const tableBody = document.createElement('tbody');
   table.append(tableHead, tableBody);
   tableWrap.append(table);
+  const pagerHostTop = document.createElement('div');
+  pagerHostTop.className = 'pager-host pager-host--top';
+  const pagerHostBottom = document.createElement('div');
+  pagerHostBottom.className = 'pager-host pager-host--bottom';
+  const pageSize = 50;
 
   let editorDialog: HTMLDialogElement | undefined;
   const openEditor = (term: VocabularyTerm): void => {
@@ -1927,63 +1933,85 @@ async function renderVocabulary(): Promise<void> {
           : 'No terms match these filters.';
       row.append(cell);
       tableBody.append(row);
-      return;
-    }
-    for (const term of filtered) {
-      const row = document.createElement('tr');
-      const termCell = document.createElement('td');
-      const termName = document.createElement('strong');
-      termName.textContent = term.displayText;
-      const termMeta = document.createElement('span');
-      termMeta.textContent = `${term.language} · ${term.occurrenceCount} ${
-        term.occurrenceCount === 1 ? 'occurrence' : 'occurrences'
-      }`;
-      termCell.append(termName, termMeta);
-      const translationCell = document.createElement('td');
-      translationCell.textContent = term.translation || 'No translation';
-      const contextCell = document.createElement('td');
-      contextCell.className = 'term-context';
-      appendHighlightedContext(contextCell, term.context, term.displayText);
-      if (term.sourceTitle) {
-        const source = document.createElement('span');
-        source.textContent = term.sourceTitle;
-        contextCell.append(source);
+    } else {
+      const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+      vocabularyPage = Math.min(vocabularyPage, pageCount - 1);
+      const pageTerms = filtered.slice(
+        vocabularyPage * pageSize,
+        (vocabularyPage + 1) * pageSize
+      );
+      for (const term of pageTerms) {
+        const row = document.createElement('tr');
+        const termCell = document.createElement('td');
+        const termName = document.createElement('strong');
+        termName.textContent = term.displayText;
+        const termMeta = document.createElement('span');
+        termMeta.textContent = `${term.language} · ${term.occurrenceCount} ${
+          term.occurrenceCount === 1 ? 'occurrence' : 'occurrences'
+        }`;
+        termCell.append(termName, termMeta);
+        const translationCell = document.createElement('td');
+        translationCell.textContent = term.translation || 'No translation';
+        const contextCell = document.createElement('td');
+        contextCell.className = 'term-context';
+        appendHighlightedContext(contextCell, term.context, term.displayText);
+        if (term.sourceTitle) {
+          const source = document.createElement('span');
+          source.textContent = term.sourceTitle;
+          contextCell.append(source);
+        }
+        const statusCell = document.createElement('td');
+        const statusPill = document.createElement('span');
+        statusPill.className = `status-pill ${
+          term.status >= 1 && term.status <= 4
+            ? 'status-pill--learning'
+            : term.status === 98
+              ? 'status-pill--ignored'
+              : 'status-pill--known'
+        }`;
+        statusPill.textContent = detailedStatusLabel(term.status);
+        statusCell.append(statusPill);
+        const reviewCell = document.createElement('td');
+        reviewCell.textContent =
+          term.status === 98 || term.status === 99
+            ? '—'
+            : !term.nextReviewAt || new Date(term.nextReviewAt).getTime() <= Date.now()
+              ? 'Now'
+              : new Date(term.nextReviewAt).toLocaleDateString();
+        const actionCell = document.createElement('td');
+        const edit = document.createElement('button');
+        edit.type = 'button';
+        edit.className = 'term-edit-button';
+        edit.textContent = 'Edit';
+        edit.setAttribute('aria-label', `Edit ${term.displayText}`);
+        edit.addEventListener('click', () => openEditor(term));
+        actionCell.append(edit);
+        row.append(termCell, translationCell, contextCell, statusCell, reviewCell, actionCell);
+        tableBody.append(row);
       }
-      const statusCell = document.createElement('td');
-      const statusPill = document.createElement('span');
-      statusPill.className = `status-pill ${
-        term.status >= 1 && term.status <= 4
-          ? 'status-pill--learning'
-          : term.status === 98
-            ? 'status-pill--ignored'
-            : 'status-pill--known'
-      }`;
-      statusPill.textContent = detailedStatusLabel(term.status);
-      statusCell.append(statusPill);
-      const reviewCell = document.createElement('td');
-      reviewCell.textContent =
-        term.status === 98 || term.status === 99
-          ? '—'
-          : !term.nextReviewAt || new Date(term.nextReviewAt).getTime() <= Date.now()
-            ? 'Now'
-            : new Date(term.nextReviewAt).toLocaleDateString();
-      const actionCell = document.createElement('td');
-      const edit = document.createElement('button');
-      edit.type = 'button';
-      edit.className = 'term-edit-button';
-      edit.textContent = 'Edit';
-      edit.setAttribute('aria-label', `Edit ${term.displayText}`);
-      edit.addEventListener('click', () => openEditor(term));
-      actionCell.append(edit);
-      row.append(termCell, translationCell, contextCell, statusCell, reviewCell, actionCell);
-      tableBody.append(row);
+    }
+    for (const host of [pagerHostTop, pagerHostBottom]) {
+      host.replaceChildren();
+      if (filtered.length > pageSize) {
+        host.append(
+          createPager(filtered.length, vocabularyPage, pageSize, (page) => {
+            vocabularyPage = page;
+            renderRows();
+            tableWrap.scrollIntoView({ block: 'start' });
+          })
+        );
+      }
     }
   };
-  search.addEventListener('input', renderRows);
-  language.addEventListener('change', renderRows);
-  status.addEventListener('change', renderRows);
+  const applyFilters = (): void => {
+    vocabularyPage = 0;
+    renderRows();
+  };
+  search.addEventListener('input', applyFilters);
+  language.addEventListener('change', applyFilters);
+  status.addEventListener('change', applyFilters);
   renderRows();
-  card.append(toolbar, resultBar, tableWrap);
+  card.append(toolbar, resultBar, pagerHostTop, tableWrap, pagerHostBottom);
   shell.append(heading, metrics, card);
   mountScreen(shell, 'vocabulary', language.value || 'All languages');
 }

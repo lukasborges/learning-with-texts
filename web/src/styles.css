@@ -5065,6 +5065,40 @@ body:has(.adw-window) {
   background: #eef4fc;
 }
 
+.adw-window .pager {
+  gap: 6px;
+  padding: 10px 14px;
+}
+
+.adw-window .pager button {
+  min-height: 34px;
+  padding: 5px 12px;
+  border: 1px solid var(--adw-border);
+  border-radius: 8px;
+  background: #f6f5f4;
+  color: var(--adw-text);
+  font-size: 12px;
+}
+
+.adw-window .pager button:not(:disabled):hover {
+  border-color: rgb(0 0 0 / 22%);
+  background: #fff;
+}
+
+.adw-window .pager button:disabled {
+  opacity: 0.45;
+}
+
+.adw-window .pager span {
+  color: var(--adw-muted);
+  font-size: 12px;
+}
+
+.adw-window .vocabulary-card .pager-host--top .pager,
+.adw-window .vocabulary-card .pager-host--bottom .pager {
+  border-color: var(--adw-border-soft);
+}
+
 .adw-window .editor-dialog {
   border-radius: 14px;
   background: #fff;
@@ -5730,6 +5764,14 @@ body:has(.desktop-app) {
 .vocabulary-card .library-toolbar {
   padding: 8px;
   border-bottom: 1px solid var(--desktop-line);
+}
+
+.vocabulary-card .pager-host--top .pager {
+  border-bottom: 1px solid var(--desktop-line);
+}
+
+.vocabulary-card .pager-host--bottom .pager {
+  border-top: 1px solid var(--desktop-line);
 }
 
 .library-toolbar select,
