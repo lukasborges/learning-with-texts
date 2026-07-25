@@ -1,6 +1,6 @@
 [package]
 name = "lwt-desktop"
-version = "0.1.0"
+version = "0.1.1"
 description = "Local-first desktop runtime for Learning with Texts"
 edition = "2021"
 
