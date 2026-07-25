@@ -9,6 +9,14 @@ on:
         description: Existing release tag to build
         required: true
         type: string
+      target:
+        description: Release jobs to run
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - arch
 
 env:
   RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
@@ -18,6 +26,7 @@ permissions:
 
 jobs:
   release:
+    if: inputs.target != 'arch'
     name: ${{ matrix.artifact }}
     runs-on: ${{ matrix.runner }}
     environment: desktop-production
@@ -155,6 +164,11 @@ jobs:
   arch:
     name: lwt-desktop-arch-x86_64
     needs: release
+    if: >-
+      ${{
+        always() &&
+        (needs.release.result == 'success' || inputs.target == 'arch')
+      }}
     runs-on: ubuntu-24.04
     container: archlinux:base-devel
     environment: desktop-production
@@ -220,16 +234,23 @@ jobs:
       - name: Attach Arch package and integrity metadata
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: >-
-          gh release upload "$RELEASE_TAG"
-          artifacts/arch/*.pkg.tar.zst
-          artifacts/arch/lwt-desktop-arch-x86_64.cdx.json
-          artifacts/arch/lwt-desktop-arch-x86_64.SHA256SUMS
-          --clobber
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          gh release upload "$RELEASE_TAG" \
+            artifacts/arch/*.pkg.tar.zst \
+            artifacts/arch/lwt-desktop-arch-x86_64.cdx.json \
+            artifacts/arch/lwt-desktop-arch-x86_64.SHA256SUMS \
+            --clobber
 
   integrity:
     name: complete-release-integrity
     needs: [release, arch]
+    if: >-
+      ${{
+        always() &&
+        needs.arch.result == 'success' &&
+        (needs.release.result == 'success' || inputs.target == 'arch')
+      }}
     runs-on: ubuntu-24.04
     environment: desktop-production
     permissions:
