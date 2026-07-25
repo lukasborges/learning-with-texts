@@ -27,7 +27,22 @@ jobs:
           node-version: 20.19.0
           cache: npm
 
+      - name: Ensure the tested commit is still the master head
+        id: current
+        shell: bash
+        env:
+          TESTED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          master_sha="$(git rev-parse origin/master)"
+          if [ "$TESTED_SHA" = "$master_sha" ]; then
+            echo "is_current=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_current=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping stale E2E result for $TESTED_SHA; master is $master_sha."
+          fi
+
       - name: Resolve and validate release version
+        if: steps.current.outputs.is_current == 'true'
         id: release
         shell: bash
         run: |
@@ -37,6 +52,7 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - name: Check whether the release tag already exists
+        if: steps.current.outputs.is_current == 'true'
         id: existing
         shell: bash
         env:
@@ -49,7 +65,9 @@ jobs:
           fi
 
       - name: Create and push release tag
-        if: steps.existing.outputs.exists == 'false'
+        if: >-
+          steps.current.outputs.is_current == 'true' &&
+          steps.existing.outputs.exists == 'false'
         env:
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
           RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
@@ -60,7 +78,9 @@ jobs:
           git push origin "refs/tags/$RELEASE_TAG"
 
       - name: Start signed desktop release
-        if: steps.existing.outputs.exists == 'false'
+        if: >-
+          steps.current.outputs.is_current == 'true' &&
+          steps.existing.outputs.exists == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
