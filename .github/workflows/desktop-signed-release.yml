@@ -3,6 +3,15 @@ name: Signed Desktop Release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to build
+        required: true
+        type: string
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 permissions:
   contents: read
@@ -32,6 +41,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_TAG }}
 
       - name: Install Linux packaging dependencies
         if: runner.os == 'Linux'
@@ -59,7 +70,7 @@ jobs:
 
       - run: npm ci
       - name: Validate release tag and application versions
-        run: npm run release:validate -- --tag "${{ github.ref_name }}"
+        run: npm run release:validate -- --tag "$RELEASE_TAG"
       - run: npm run check
       - run: npm test
 
@@ -91,8 +102,8 @@ jobs:
           NO_STRIP: ${{ runner.os == 'Linux' && '1' || '' }}
         with:
           projectPath: .
-          tagName: ${{ github.ref_name }}
-          releaseName: LWT Desktop ${{ github.ref_name }}
+          tagName: ${{ env.RELEASE_TAG }}
+          releaseName: LWT Desktop ${{ env.RELEASE_TAG }}
           releaseBody: Windows installers are unsigned and may show an unknown-publisher warning. Verify the attached checksums and SBOM before installation.
           releaseDraft: true
           prerelease: false
@@ -136,7 +147,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: >-
-          gh release upload "${{ github.ref_name }}"
+          gh release upload "$RELEASE_TAG"
           "${{ matrix.bundle_root }}/${{ matrix.artifact }}.cdx.json"
           "${{ matrix.bundle_root }}/${{ matrix.artifact }}.SHA256SUMS"
           --clobber
@@ -160,13 +171,15 @@ jobs:
           libayatana-appindicator librsvg libsoup3 pango patchelf
 
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_TAG }}
 
       - name: Configure Rust
         run: rustup default stable
 
       - run: npm ci
       - name: Validate release tag and application versions
-        run: npm run release:validate -- --tag "${{ github.ref_name }}"
+        run: npm run release:validate -- --tag "$RELEASE_TAG"
       - run: npm run check
       - run: npm test
       - run: npx tauri build --no-bundle
@@ -208,7 +221,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: >-
-          gh release upload "${{ github.ref_name }}"
+          gh release upload "$RELEASE_TAG"
           artifacts/arch/*.pkg.tar.zst
           artifacts/arch/lwt-desktop-arch-x86_64.cdx.json
           artifacts/arch/lwt-desktop-arch-x86_64.SHA256SUMS
@@ -224,6 +237,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_TAG }}
 
       - uses: actions/setup-node@v6
         with:
@@ -235,11 +250,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p "${{ runner.temp }}/release-assets"
-          gh release download "${{ github.ref_name }}" --dir "${{ runner.temp }}/release-assets"
+          gh release download "$RELEASE_TAG" --dir "${{ runner.temp }}/release-assets"
 
       - name: Validate the complete release asset inventory
         run: |
-          version="${{ github.ref_name }}"
+          version="$RELEASE_TAG"
           node scripts/validate-release-assets.mjs \
             "${{ runner.temp }}/release-assets" \
             "${version#v}"
@@ -257,6 +272,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: >-
-          gh release upload "${{ github.ref_name }}"
+          gh release upload "$RELEASE_TAG"
           "${{ runner.temp }}/release-assets/SHA256SUMS"
           --clobber
