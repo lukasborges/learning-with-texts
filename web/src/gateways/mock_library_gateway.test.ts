@@ -199,6 +199,26 @@ describe('MockLibraryGateway', () => {
     expect((await gateway.getText(1)).hasAudio).toBe(false);
   });
 
+  it('generates Edge TTS audio in the preview session', async () => {
+    const gateway = new MockLibraryGateway();
+    const voices = await gateway.listTtsVoices('Português');
+
+    expect(voices[0]?.id).toMatch(/^pt-BR-/);
+    await expect(
+      gateway.generateTextAudio({
+        textId: 1,
+        voice: voices[0]?.id ?? '',
+        rate: 0
+      })
+    ).resolves.toMatchObject({
+      fileName: 'edge-tts-1.mp3',
+      mediaType: 'audio/mpeg'
+    });
+    await expect(gateway.getTextAudio(1)).resolves.toMatchObject({
+      fileName: 'edge-tts-1.mp3'
+    });
+  });
+
   it('opens parsed reading items and shares their status', async () => {
     const gateway = new MockLibraryGateway();
 

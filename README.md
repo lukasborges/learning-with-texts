@@ -16,6 +16,11 @@ Application data stays in the operating system's per-user application-data
 directory. Create a portable JSON backup from **Backup** before upgrades or
 moving to another computer.
 
+Audio can be imported from a local file or generated while saving a text with
+Edge TTS. Generation requires an internet connection, sends the text to
+Microsoft's online speech service, and stores the resulting MP3 in the local
+library. Imported and previously generated audio remains available offline.
+
 ## Develop
 
 Install Node.js 20.19 or newer, Rust, and the platform dependencies listed by

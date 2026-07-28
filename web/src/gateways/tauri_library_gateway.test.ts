@@ -232,15 +232,33 @@ describe('TauriLibraryGateway', () => {
       .fn()
       .mockResolvedValueOnce(audio)
       .mockResolvedValueOnce(audio)
+      .mockResolvedValueOnce([{ id: 'en-US-AvaNeural', label: 'Ava (en-US)' }])
+      .mockResolvedValueOnce(audio)
       .mockResolvedValueOnce(undefined);
     const gateway = new TauriLibraryGateway(invoke);
 
     await expect(gateway.saveTextAudio(input)).resolves.toEqual(audio);
     await expect(gateway.getTextAudio(8)).resolves.toEqual(audio);
+    await expect(gateway.listTtsVoices('English')).resolves.toEqual([
+      { id: 'en-US-AvaNeural', label: 'Ava (en-US)' }
+    ]);
+    await expect(
+      gateway.generateTextAudio({
+        textId: 8,
+        voice: 'en-US-AvaNeural',
+        rate: 0
+      })
+    ).resolves.toEqual(audio);
     await expect(gateway.removeTextAudio(8)).resolves.toBeUndefined();
     expect(invoke).toHaveBeenNthCalledWith(1, 'save_text_audio', { input });
     expect(invoke).toHaveBeenNthCalledWith(2, 'get_text_audio', { textId: 8 });
-    expect(invoke).toHaveBeenNthCalledWith(3, 'remove_text_audio', { textId: 8 });
+    expect(invoke).toHaveBeenNthCalledWith(3, 'list_tts_voices', {
+      language: 'English'
+    });
+    expect(invoke).toHaveBeenNthCalledWith(4, 'generate_text_audio', {
+      input: { textId: 8, voice: 'en-US-AvaNeural', rate: 0 }
+    });
+    expect(invoke).toHaveBeenNthCalledWith(5, 'remove_text_audio', { textId: 8 });
   });
 
   it('maps reading and term status commands to the native runtime', async () => {

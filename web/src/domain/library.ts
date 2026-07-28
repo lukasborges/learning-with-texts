@@ -44,6 +44,17 @@ export interface TextAudio {
   readonly dataBase64: string;
 }
 
+export interface GenerateTextAudioInput {
+  readonly textId: number;
+  readonly voice: string;
+  readonly rate: number;
+}
+
+export interface TtsVoice {
+  readonly id: string;
+  readonly label: string;
+}
+
 export type TermStatus = 0 | 1 | 2 | 3 | 4 | 5 | 98 | 99;
 
 export interface ReadingItem {

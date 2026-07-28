@@ -7,6 +7,7 @@ import type {
   CreateExpressionInput,
   CreatedExpression,
   FinishLessonOutcome,
+  GenerateTextAudioInput,
   LanguageSettings,
   LibraryText,
   ReadingText,
@@ -26,6 +27,7 @@ import type {
   TermProgress,
   TextDetails,
   TextAudio,
+  TtsVoice,
   UndoFinishLessonInput,
   UndoFinishLessonOutcome,
   UpdateLanguageInput,
@@ -125,6 +127,14 @@ export class TauriLibraryGateway implements LibraryGateway {
 
   removeTextAudio(textId: number): Promise<void> {
     return this.invoke<void>('remove_text_audio', { textId });
+  }
+
+  listTtsVoices(language: string): Promise<readonly TtsVoice[]> {
+    return this.invoke<TtsVoice[]>('list_tts_voices', { language });
+  }
+
+  generateTextAudio(input: GenerateTextAudioInput): Promise<TextAudio> {
+    return this.invoke<TextAudio>('generate_text_audio', { input });
   }
 
   deleteText(id: number): Promise<void> {

@@ -81,6 +81,21 @@ pub struct TextAudio {
     pub data_base64: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenerateTextAudioInput {
+    pub text_id: i64,
+    pub voice: String,
+    pub rate: i32,
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TtsVoice {
+    pub id: String,
+    pub label: String,
+}
+
 #[derive(Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadingItem {

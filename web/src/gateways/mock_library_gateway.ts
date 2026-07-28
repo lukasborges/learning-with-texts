@@ -7,6 +7,7 @@ import type {
   CreateExpressionInput,
   CreatedExpression,
   FinishLessonOutcome,
+  GenerateTextAudioInput,
   LanguageSettings,
   LibraryText,
   ReadingItem,
@@ -28,6 +29,7 @@ import type {
   TermStatus,
   TextDetails,
   TextAudio,
+  TtsVoice,
   UndoFinishLessonInput,
   UndoFinishLessonOutcome,
   UpdateLanguageInput,
@@ -550,6 +552,40 @@ export class MockLibraryGateway implements LibraryGateway {
     }
     this.media.delete(textId);
     text.hasAudio = false;
+  }
+
+  async listTtsVoices(language: string): Promise<readonly TtsVoice[]> {
+    const prefix =
+      {
+        english: 'en-US',
+        french: 'fr-FR',
+        german: 'de-DE',
+        portuguese: 'pt-BR',
+        português: 'pt-BR',
+        spanish: 'es-ES'
+      }[language.trim().toLocaleLowerCase()] ?? 'en-US';
+    return [
+      {
+        id: `${prefix}-DefaultNeural`,
+        label: `Default (${prefix})`
+      }
+    ];
+  }
+
+  async generateTextAudio(input: GenerateTextAudioInput): Promise<TextAudio> {
+    const text = this.texts.find(({ id }) => id === input.textId);
+    if (!text) {
+      throw new Error('Text was not found');
+    }
+    if (!input.voice || input.rate < -50 || input.rate > 100) {
+      throw new Error('The Edge TTS settings are invalid');
+    }
+    return this.saveTextAudio({
+      textId: input.textId,
+      fileName: `edge-tts-${input.textId}.mp3`,
+      mediaType: 'audio/mpeg',
+      dataBase64: 'SUQz'
+    });
   }
 
   async deleteText(id: number): Promise<void> {

@@ -1,13 +1,14 @@
 use crate::database::Database;
 use crate::models::{
     AppSettings, BackupSummary, CreateExpressionInput, CreateLanguageInput, CreateTagInput,
-    CreateTextInput, CreatedExpression, FinishLessonOutcome, LanguageSettings, LibraryText,
-    ReadingText, RecordReviewInput, ReviewCard, ReviewOutcome, ReviewStatistics, SaveTermInput,
-    SaveTextAudioInput, SavedTerm, SetTermStatusInput, SetTermTagsInput, SetTextArchivedInput,
-    SetTextTagsInput, Tag, TermDetails, TermProgress, TextAudio, TextDetails,
-    UndoFinishLessonInput, UndoFinishLessonOutcome, UpdateLanguageInput, UpdateTextInput,
-    UpdateVocabularyTermInput, VocabularyTerm,
+    CreateTextInput, CreatedExpression, FinishLessonOutcome, GenerateTextAudioInput,
+    LanguageSettings, LibraryText, ReadingText, RecordReviewInput, ReviewCard, ReviewOutcome,
+    ReviewStatistics, SaveTermInput, SaveTextAudioInput, SavedTerm, SetTermStatusInput,
+    SetTermTagsInput, SetTextArchivedInput, SetTextTagsInput, Tag, TermDetails, TermProgress,
+    TextAudio, TextDetails, TtsVoice, UndoFinishLessonInput, UndoFinishLessonOutcome,
+    UpdateLanguageInput, UpdateTextInput, UpdateVocabularyTermInput, VocabularyTerm,
 };
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use tauri::Manager;
 
 #[tauri::command]
@@ -156,6 +157,30 @@ fn remove_text_audio(database: tauri::State<'_, Database>, text_id: i64) -> Resu
 }
 
 #[tauri::command]
+fn list_tts_voices(language: String) -> Result<Vec<TtsVoice>, String> {
+    let language = language.trim();
+    if language.is_empty() || language.len() > 100 {
+        return Err("Choose a language before selecting an Edge TTS voice".to_string());
+    }
+    Ok(crate::tts::voices_for_language(language))
+}
+
+#[tauri::command]
+async fn generate_text_audio(
+    database: tauri::State<'_, Database>,
+    input: GenerateTextAudioInput,
+) -> Result<TextAudio, String> {
+    let text = database.get_text(input.text_id)?;
+    let audio = crate::tts::synthesize(&text.content, &input.voice, input.rate).await?;
+    database.save_text_audio(SaveTextAudioInput {
+        text_id: text.id,
+        file_name: format!("edge-tts-{}.mp3", text.id),
+        media_type: "audio/mpeg".to_string(),
+        data_base64: BASE64.encode(audio),
+    })
+}
+
+#[tauri::command]
 fn delete_text(database: tauri::State<'_, Database>, id: i64) -> Result<(), String> {
     database.delete_text(id)
 }
@@ -252,6 +277,7 @@ fn review_statistics(database: tauri::State<'_, Database>) -> Result<ReviewStati
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    kothok_edge_tts::init_tls();
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -283,6 +309,8 @@ pub fn run() {
             save_text_audio,
             get_text_audio,
             remove_text_audio,
+            list_tts_voices,
+            generate_text_audio,
             delete_text,
             get_reading_text,
             finish_lesson,

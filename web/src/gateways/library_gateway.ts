@@ -7,6 +7,7 @@ import type {
   CreateExpressionInput,
   CreatedExpression,
   FinishLessonOutcome,
+  GenerateTextAudioInput,
   LanguageSettings,
   LibraryText,
   ReadingText,
@@ -26,6 +27,7 @@ import type {
   TermProgress,
   TextDetails,
   TextAudio,
+  TtsVoice,
   UndoFinishLessonInput,
   UndoFinishLessonOutcome,
   UpdateLanguageInput,
@@ -56,6 +58,8 @@ export interface LibraryGateway {
   saveTextAudio(input: SaveTextAudioInput): Promise<TextAudio>;
   getTextAudio(textId: number): Promise<TextAudio | null>;
   removeTextAudio(textId: number): Promise<void>;
+  listTtsVoices(language: string): Promise<readonly TtsVoice[]>;
+  generateTextAudio(input: GenerateTextAudioInput): Promise<TextAudio>;
   deleteText(id: number): Promise<void>;
   getReadingText(id: number): Promise<ReadingText>;
   finishLesson(textId: number): Promise<FinishLessonOutcome>;

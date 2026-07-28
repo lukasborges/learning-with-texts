@@ -828,8 +828,38 @@ textarea {
 
 .text-form__content,
 .text-form__actions,
+.text-form__tts-toggle,
 .form-status {
   grid-column: 1 / -1;
+}
+
+.text-form .text-form__tts-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.8rem;
+  border: 1px solid #d9e1e8;
+  border-radius: 9px;
+  background: #f7f9fb;
+}
+
+.text-form .text-form__tts-toggle input {
+  width: auto;
+  margin-top: 0.15rem;
+}
+
+.text-form__tts-toggle span {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.text-form__tts-voice select {
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #aebdca;
+  border-radius: 8px;
+  background: #fff;
+  color: #243142;
 }
 
 .text-form__actions,
