@@ -84,6 +84,145 @@ let selectedLanguageId: number | undefined;
 let lookupWindow: WebviewWindow | undefined;
 let playbackRatePreference = 1;
 
+function closeOpenMenus(except?: Node): void {
+  document
+    .querySelectorAll<HTMLDetailsElement>('.text-card__menu[open], .primary-menu[open]')
+    .forEach((menu) => {
+      if (!except || !menu.contains(except)) {
+        menu.open = false;
+      }
+    });
+  document
+    .querySelectorAll<HTMLElement>('.app-combobox.is-open, .language-name-control.is-open')
+    .forEach((control) => {
+      if (except && control.contains(except)) {
+        return;
+      }
+      control.classList.remove('is-open');
+      const trigger = control.querySelector<HTMLElement>('[aria-expanded="true"]');
+      trigger?.setAttribute('aria-expanded', 'false');
+      const menu = control.querySelector<HTMLElement>(
+        '.app-combobox__menu, .language-name-menu'
+      );
+      if (menu) {
+        menu.hidden = true;
+      }
+    });
+}
+
+document.addEventListener('pointerdown', (event) => {
+  closeOpenMenus(event.target instanceof Node ? event.target : undefined);
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    closeOpenMenus();
+  }
+});
+
+let confirmationDialogId = 0;
+
+interface ConfirmationOptions {
+  readonly title: string;
+  readonly message: string;
+  readonly confirmLabel: string;
+  readonly destructive?: boolean;
+}
+
+type ToastKind = 'success' | 'error' | 'progress' | 'info';
+
+interface ToastOptions {
+  readonly kind?: ToastKind;
+  readonly dismissible?: boolean;
+}
+
+function showToast(message: string, options: ToastOptions = {}): HTMLElement | undefined {
+  const region = document.querySelector<HTMLElement>('.toast-region');
+  if (!region) {
+    return undefined;
+  }
+  const toast = document.createElement('div');
+  const kind = options.kind ?? 'info';
+  toast.className = `app-toast app-toast--${kind}`;
+  toast.setAttribute('role', kind === 'error' ? 'alert' : 'status');
+  const copy = document.createElement('span');
+  copy.textContent = message;
+  toast.append(copy);
+  if (options.dismissible !== false) {
+    const dismiss = document.createElement('button');
+    dismiss.type = 'button';
+    dismiss.setAttribute('aria-label', 'Dismiss notification');
+    dismiss.title = 'Dismiss';
+    dismiss.append(createAdwaitaIcon('window-close'));
+    dismiss.addEventListener('click', () => toast.remove());
+    toast.append(dismiss);
+  }
+  region.replaceChildren(toast);
+  return toast;
+}
+
+function confirmAction(options: ConfirmationOptions): Promise<boolean> {
+  closeOpenMenus();
+  return new Promise((resolve) => {
+    const dialog = document.createElement('dialog');
+    dialog.className = 'confirmation-dialog';
+    const content = document.createElement('div');
+    content.className = 'confirmation-dialog__content';
+    const icon = document.createElement('span');
+    icon.className = 'confirmation-dialog__icon';
+    icon.append(createAdwaitaIcon('information'));
+    const copy = document.createElement('div');
+    const title = document.createElement('h2');
+    const titleId = `confirmation-dialog-title-${++confirmationDialogId}`;
+    title.id = titleId;
+    title.textContent = options.title;
+    const message = document.createElement('p');
+    message.textContent = options.message;
+    copy.append(title, message);
+    content.append(icon, copy);
+
+    const actions = document.createElement('div');
+    actions.className = 'confirmation-dialog__actions';
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.textContent = 'Cancel';
+    const confirm = document.createElement('button');
+    confirm.type = 'button';
+    confirm.className = options.destructive ? 'destructive-action' : 'primary-action';
+    confirm.textContent = options.confirmLabel;
+    actions.append(cancel, confirm);
+    dialog.append(content, actions);
+    dialog.setAttribute('aria-labelledby', titleId);
+
+    let settled = false;
+    const finish = (accepted: boolean): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      dialog.close();
+      dialog.remove();
+      resolve(accepted);
+    };
+    cancel.addEventListener('click', () => finish(false));
+    confirm.addEventListener('click', () => finish(true));
+    dialog.addEventListener('cancel', (event) => {
+      event.preventDefault();
+      finish(false);
+    });
+    dialog.addEventListener('click', (event) => {
+      if (event.target === dialog) {
+        finish(false);
+      }
+    });
+
+    const host = document.querySelector('.adw-window') ?? applicationRoot;
+    host.append(dialog);
+    dialog.showModal();
+    cancel.focus();
+  });
+}
+
 async function openExternalLookup(url: string, title: string): Promise<void> {
   if (usesNativeDatabase) {
     if (lookupWindow) {
@@ -245,6 +384,9 @@ function createLanguageNameControl(): {
   };
 
   const setOpen = (open: boolean): void => {
+    if (open) {
+      closeOpenMenus(element);
+    }
     menu.hidden = !open;
     trigger.setAttribute('aria-expanded', String(open));
     element.classList.toggle('is-open', open);
@@ -397,6 +539,9 @@ function createCombobox(select: HTMLSelectElement): HTMLElement {
   const optionButtons: HTMLButtonElement[] = [];
 
   const setOpen = (open: boolean): void => {
+    if (open) {
+      closeOpenMenus(element);
+    }
     menu.hidden = !open;
     trigger.setAttribute('aria-expanded', String(open));
     element.classList.toggle('is-open', open);
@@ -674,13 +819,17 @@ function createImportPanel(
   removeAudio.className = 'button-secondary remove-audio';
   removeAudio.textContent = 'Delete existing audio';
   removeAudio.hidden = !editingText?.hasAudio;
-  removeAudio.addEventListener('click', () => {
-    if (
-      !editingText ||
-      !window.confirm(
-        'Remove the saved audio from this text? The text and learning progress will be kept.'
-      )
-    ) {
+  removeAudio.addEventListener('click', async () => {
+    if (!editingText) {
+      return;
+    }
+    const accepted = await confirmAction({
+      title: 'Delete existing audio?',
+      message: 'The text and learning progress will be kept.',
+      confirmLabel: 'Delete audio',
+      destructive: true
+    });
+    if (!accepted) {
       return;
     }
     removeAudio.disabled = true;
@@ -867,7 +1016,7 @@ function createImportPanel(
       .then(async (saved) => {
         if (generateAudio.checked) {
           savingAudio = true;
-          status.textContent = 'Generating audio…';
+          showToast('Generating audio…', { kind: 'progress' });
           await gateway.generateTextAudio({
             textId: saved.id,
             voice: ttsVoice.value,
@@ -880,7 +1029,7 @@ function createImportPanel(
           return saved;
         }
         savingAudio = true;
-        status.textContent = 'Saving audio…';
+        showToast('Saving audio…', { kind: 'progress' });
         await gateway.saveTextAudio({
           textId: saved.id,
           fileName: selectedAudio.name,
@@ -902,12 +1051,15 @@ function createImportPanel(
       .catch((error: unknown) => {
         const errorMessage = error instanceof Error ? error.message : String(error);
         if (savingAudio && savedText) {
+          const persistedText = savedText;
           addingText = false;
           pendingLanguage = '';
-          return render(
-            `“${savedText.title}” was saved, but its audio could not be saved: ${errorMessage}`,
-            savedText.id
-          );
+          return render('', persistedText.id).then(() => {
+            showToast(
+              `“${persistedText.title}” was saved, but its audio could not be saved: ${errorMessage}`,
+              { kind: 'error' }
+            );
+          });
         }
         submit.disabled = false;
         status.className = 'form-status form-status--error';
@@ -2496,7 +2648,9 @@ async function renderLanguages(): Promise<void> {
       .then((created) => {
         selectedLanguageId = created.id;
         addLanguageDialog.close();
-        return renderLanguages();
+        return renderLanguages().then(() => {
+          showToast(`Language “${created.name}” added.`, { kind: 'success' });
+        });
       })
       .catch((error: unknown) => {
         saveLanguage.disabled = false;
@@ -2667,7 +2821,8 @@ async function renderLanguages(): Promise<void> {
           rightToLeft: checkboxes[2]?.[1].checked ?? false
         })
         .then(() => {
-          feedback.textContent = 'Language settings saved.';
+          feedback.textContent = '';
+          showToast('Language settings saved.', { kind: 'success' });
         })
         .catch((error: unknown) => {
           feedback.className = 'form-status form-status--error';
@@ -2824,7 +2979,8 @@ async function renderAppSettings(): Promise<void> {
       .then(() => {
         libraryPage = 0;
         tagPage = 0;
-        feedback.textContent = 'Application settings saved.';
+        feedback.textContent = '';
+        showToast('Application settings saved.', { kind: 'success' });
       })
       .catch((error: unknown) => {
         feedback.className = 'form-status form-status--error';
@@ -2878,14 +3034,18 @@ async function renderAppSettings(): Promise<void> {
     void check()
       .then(async (update) => {
         if (!update) {
-          updateStatus.textContent = 'This application is up to date.';
+          updateStatus.textContent = '';
+          showToast('This application is up to date.', { kind: 'info' });
           return;
         }
-        const accepted = window.confirm(
-          `Version ${update.version} is available. Download, verify, and install it now?`
-        );
+        const accepted = await confirmAction({
+          title: `Install version ${update.version}?`,
+          message: 'The update will be downloaded, verified, and installed before the app restarts.',
+          confirmLabel: 'Install update'
+        });
         if (!accepted) {
-          updateStatus.textContent = `Version ${update.version} is available.`;
+          updateStatus.textContent = '';
+          showToast(`Version ${update.version} is available.`, { kind: 'info' });
           return;
         }
         updateStatus.textContent = `Downloading and verifying version ${update.version}…`;
@@ -2930,7 +3090,6 @@ async function renderTags(message = ''): Promise<void> {
   const feedback = document.createElement('p');
   feedback.className = 'form-status';
   feedback.setAttribute('role', 'status');
-  feedback.textContent = message;
   form.addEventListener('submit', (event) => {
     event.preventDefault();
     if (!form.reportValidity()) {
@@ -2990,6 +3149,9 @@ async function renderTags(message = ''): Promise<void> {
   }
   shell.append(heading, description, form, list);
   mountScreen(shell, 'tags');
+  if (message) {
+    showToast(message, { kind: 'success' });
+  }
 }
 
 async function renderDataManagement(): Promise<void> {
@@ -3040,7 +3202,8 @@ async function renderDataManagement(): Promise<void> {
         download.download = `lwt-backup-${new Date().toISOString().slice(0, 10)}.json`;
         download.click();
         window.setTimeout(() => URL.revokeObjectURL(url), 0);
-        exportStatus.textContent = 'Backup downloaded.';
+        exportStatus.textContent = '';
+        showToast('Backup downloaded.', { kind: 'success' });
       })
       .catch((error: unknown) => {
         exportStatus.className = 'form-status form-status--error';
@@ -3127,13 +3290,17 @@ async function renderDataManagement(): Promise<void> {
         restoreStatus.textContent = 'The selected backup could not be read.';
       });
   });
-  restoreButton.addEventListener('click', () => {
-    if (
-      !selectedPayload ||
-      !window.confirm(
-        'Restore this backup? The current local library will be replaced. This cannot be undone.'
-      )
-    ) {
+  restoreButton.addEventListener('click', async () => {
+    if (!selectedPayload) {
+      return;
+    }
+    const accepted = await confirmAction({
+      title: 'Replace the local library?',
+      message: 'Restoring this backup will replace the current library. This cannot be undone.',
+      confirmLabel: 'Restore backup',
+      destructive: true
+    });
+    if (!accepted) {
       return;
     }
     restoreButton.disabled = true;
@@ -3145,7 +3312,11 @@ async function renderDataManagement(): Promise<void> {
       .then((summary) => {
         const warningText =
           summary.warnings.length === 0 ? '' : ` Warnings: ${summary.warnings.join(' ')}`;
-        restoreStatus.textContent = `Restored ${summary.texts} texts (${summary.archivedTexts} archived), ${summary.terms} terms, ${summary.tags} tags, ${summary.media} legacy media items, and ${summary.reviews} reviews.${warningText}`;
+        restoreStatus.textContent = '';
+        showToast(
+          `Restored ${summary.texts} texts (${summary.archivedTexts} archived), ${summary.terms} terms, ${summary.tags} tags, ${summary.media} legacy media items, and ${summary.reviews} reviews.${warningText}`,
+          { kind: summary.warnings.length === 0 ? 'success' : 'info' }
+        );
         selectedPayload = '';
         file.value = '';
         restoreFileName.textContent = 'Browse…';
@@ -3278,9 +3449,17 @@ function createTextCard(text: LibraryText, showWordCounts: boolean): HTMLElement
   const archiveButton = document.createElement('button');
   archiveButton.type = 'button';
   archiveButton.textContent = text.archived ? 'Restore to library' : 'Archive';
-  archiveButton.addEventListener('click', () => {
+  archiveButton.addEventListener('click', async () => {
     const action = text.archived ? 'restore' : 'archive';
-    if (!window.confirm(`${action === 'archive' ? 'Archive' : 'Restore'} “${text.title}”?`)) {
+    const accepted = await confirmAction({
+      title: `${action === 'archive' ? 'Archive' : 'Restore'} this text?`,
+      message:
+        action === 'archive'
+          ? `“${text.title}” will move out of the active library.`
+          : `“${text.title}” will return to the active library.`,
+      confirmLabel: action === 'archive' ? 'Archive' : 'Restore'
+    });
+    if (!accepted) {
       return;
     }
     archiveButton.disabled = true;
@@ -3297,8 +3476,14 @@ function createTextCard(text: LibraryText, showWordCounts: boolean): HTMLElement
   deleteButton.type = 'button';
   deleteButton.className = 'button-danger';
   deleteButton.textContent = 'Delete';
-  deleteButton.addEventListener('click', () => {
-    if (!window.confirm(`Delete “${text.title}”? This cannot be undone.`)) {
+  deleteButton.addEventListener('click', async () => {
+    const accepted = await confirmAction({
+      title: 'Delete this text?',
+      message: `“${text.title}” and its learning progress will be permanently deleted. This cannot be undone.`,
+      confirmLabel: 'Delete',
+      destructive: true
+    });
+    if (!accepted) {
       return;
     }
     deleteButton.disabled = true;
@@ -3321,6 +3506,12 @@ function createTextCard(text: LibraryText, showWordCounts: boolean): HTMLElement
   menuPanel.className = 'text-card__menu-popup';
   menuPanel.append(editButton, archiveButton, deleteButton);
   moreActions.append(moreSummary, menuPanel);
+  moreActions.addEventListener('toggle', () => {
+    if (moreActions.open) {
+      closeOpenMenus(moreActions);
+    }
+    card.classList.toggle('has-open-menu', moreActions.open);
+  });
   meta.append(language, moreActions);
 
   const actions = document.createElement('div');
@@ -3474,6 +3665,11 @@ function mountScreen(
   localMenuNote.textContent = 'Local and available offline';
   menuPopup.append(localMenuNote);
   primaryMenu.append(primaryMenuButton, menuPopup);
+  primaryMenu.addEventListener('toggle', () => {
+    if (primaryMenu.open) {
+      closeOpenMenus(primaryMenu);
+    }
+  });
 
   const addText = document.createElement('button');
   addText.type = 'button';
@@ -3614,7 +3810,10 @@ function mountScreen(
     button.addEventListener('click', () => navigate(destination));
     mobileNav.append(button);
   }
-  frame.append(headerbar, body, mobileNav);
+  const toastRegion = document.createElement('div');
+  toastRegion.className = 'toast-region';
+  toastRegion.setAttribute('aria-live', 'polite');
+  frame.append(headerbar, body, mobileNav, toastRegion);
   applicationRoot.replaceChildren(frame);
 }
 
@@ -4160,12 +4359,6 @@ async function render(message = '', editingId?: number): Promise<void> {
       )
     );
     shell.append(editorDialog);
-  } else if (message) {
-    const feedback = document.createElement('p');
-    feedback.className = 'library-feedback';
-    feedback.setAttribute('role', 'status');
-    feedback.textContent = message;
-    shell.append(feedback);
   }
   shell.append(libraryHeader, collectionHeading, libraryToolbar, library);
   mountScreen(
@@ -4177,6 +4370,9 @@ async function render(message = '', editingId?: number): Promise<void> {
         'All languages')
   );
   editorDialog?.showModal();
+  if (!editorDialog && message) {
+    showToast(message, { kind: 'success' });
+  }
 }
 
 void renderHome();

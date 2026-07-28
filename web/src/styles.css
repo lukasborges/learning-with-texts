@@ -239,7 +239,6 @@ textarea {
   font-weight: 750;
 }
 
-.library-feedback,
 .completion-notice {
   margin: 0 0 1.25rem;
   padding: 0.85rem 1rem;
@@ -247,6 +246,102 @@ textarea {
   border-radius: 10px;
   background: #e7f7f1;
   color: #185b45;
+}
+
+.toast-region {
+  position: absolute;
+  z-index: 500;
+  top: 66px;
+  left: 50%;
+  display: grid;
+  width: min(680px, calc(100% - 32px));
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.app-toast {
+  display: grid;
+  min-height: 48px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 10px 9px 14px;
+  border: 1px solid;
+  border-radius: 11px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 20%);
+  color: #2e3436;
+  pointer-events: auto;
+}
+
+.app-toast::before {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: currentcolor;
+  content: "";
+}
+
+.app-toast--success {
+  border-color: #8bc7a8;
+  background: #edf9f3;
+  color: #176b4d;
+}
+
+.app-toast--error {
+  border-color: #e3a6aa;
+  background: #fff3f3;
+  color: #a51d2d;
+}
+
+.app-toast--info,
+.app-toast--progress {
+  border-color: #9abce3;
+  background: #f1f7fd;
+  color: #1c5c9e;
+}
+
+.app-toast--progress::before {
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentcolor;
+  border-right-color: transparent;
+  background: transparent;
+  animation: toast-spinner 700ms linear infinite;
+}
+
+.app-toast > span {
+  color: inherit;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.app-toast > button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.app-toast > button:hover {
+  background: rgb(0 0 0 / 7%);
+}
+
+.app-toast > button .adw-icon {
+  width: 15px;
+  height: 15px;
+}
+
+@keyframes toast-spinner {
+  to {
+    transform: rotate(1turn);
+  }
 }
 
 .completion-notice {
@@ -2521,6 +2616,16 @@ textarea {
   position: relative;
 }
 
+.adw-window .library-grid .text-card.book-card.has-open-menu {
+  position: relative;
+  z-index: 100;
+  overflow: visible;
+}
+
+.adw-window .text-card__menu[open] {
+  z-index: 101;
+}
+
 .adw-window .text-card__menu > summary {
   display: grid;
   width: 32px;
@@ -2545,7 +2650,7 @@ textarea {
 
 .adw-window .text-card__menu-popup {
   position: absolute;
-  z-index: 50;
+  z-index: 102;
   top: calc(100% + 4px);
   right: 0;
   display: grid;
@@ -3090,6 +3195,94 @@ textarea {
 .adw-window .tag-help-dialog__actions .primary-action {
   border-color: var(--adw-accent);
   background: var(--adw-accent);
+  color: #fff;
+}
+
+.adw-window .confirmation-dialog {
+  width: min(440px, calc(100vw - 32px));
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--adw-border);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--adw-text);
+  box-shadow: 0 20px 60px rgb(0 0 0 / 30%);
+}
+
+.adw-window .confirmation-dialog::backdrop {
+  background: rgb(0 0 0 / 42%);
+}
+
+.adw-window .confirmation-dialog__content {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
+  padding: 22px;
+}
+
+.adw-window .confirmation-dialog__icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--adw-accent-soft);
+  color: var(--adw-accent-hover);
+}
+
+.adw-window .confirmation-dialog__icon .adw-icon {
+  width: 19px;
+  height: 19px;
+}
+
+.adw-window .confirmation-dialog h2,
+.adw-window .confirmation-dialog p {
+  margin: 0;
+}
+
+.adw-window .confirmation-dialog h2 {
+  margin: 1px 0 7px;
+  font-size: 19px;
+  letter-spacing: -0.015em;
+}
+
+.adw-window .confirmation-dialog p {
+  color: var(--adw-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.adw-window .confirmation-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--adw-border-soft);
+  background: #f6f5f4;
+}
+
+.adw-window .confirmation-dialog__actions button {
+  min-height: 35px;
+  padding: 7px 14px;
+  border: 1px solid var(--adw-border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--adw-text);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.adw-window .confirmation-dialog__actions .primary-action {
+  border-color: var(--adw-accent);
+  background: var(--adw-accent);
+  color: #fff;
+}
+
+.adw-window .confirmation-dialog__actions .destructive-action {
+  border-color: #c01c28;
+  background: #c01c28;
   color: #fff;
 }
 
