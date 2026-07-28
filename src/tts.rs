@@ -31,7 +31,10 @@ pub async fn synthesize(text: &str, voice: &str, rate: i32) -> Result<Vec<u8>, S
         let events = EdgeTts
             .synthesize(chunk, voice, &rate, &locale)
             .await
-            .map_err(|error| format!("Edge TTS could not generate audio: {error}"))?;
+            .map_err(|_| {
+                "Audio could not be generated. Check your internet connection and try again."
+                    .to_string()
+            })?;
         for event in events {
             if let TtsEvent::Audio(bytes) = event {
                 if audio.len().saturating_add(bytes.len()) > MAX_AUDIO_BYTES {
@@ -43,7 +46,7 @@ pub async fn synthesize(text: &str, voice: &str, rate: i32) -> Result<Vec<u8>, S
     }
 
     if audio.is_empty() {
-        return Err("Edge TTS returned no audio".to_string());
+        return Err("Audio could not be generated. Try again.".to_string());
     }
     Ok(audio)
 }

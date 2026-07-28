@@ -578,7 +578,7 @@ export class MockLibraryGateway implements LibraryGateway {
       throw new Error('Text was not found');
     }
     if (!input.voice || input.rate < -50 || input.rate > 100) {
-      throw new Error('The Edge TTS settings are invalid');
+      throw new Error('The automatic audio settings are invalid');
     }
     return this.saveTextAudio({
       textId: input.textId,

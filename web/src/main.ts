@@ -1,5 +1,6 @@
 import addIconSvg from '../assets/icons/list-add-symbolic.svg?raw';
 import alarmIconSvg from '../assets/icons/alarm-symbolic.svg?raw';
+import audioGenerateIconSvg from '../assets/icons/audio-generate-symbolic.svg?raw';
 import audioIconSvg from '../assets/icons/audio-x-generic-symbolic.svg?raw';
 import audioVolumeHighIconSvg from '../assets/icons/audio-volume-high-symbolic.svg?raw';
 import audioVolumeMutedIconSvg from '../assets/icons/audio-volume-muted-symbolic.svg?raw';
@@ -46,8 +47,7 @@ import {
   audioImportError,
   buildExternalLookupUrl,
   detectAudioType,
-  formatPlaybackTime,
-  textImportError
+  formatPlaybackTime
 } from './ui/media';
 import { termStatusLabel } from './ui/term_status';
 import {
@@ -128,6 +128,7 @@ const adwaitaIconMarkup = {
   add: addIconSvg,
   alarm: alarmIconSvg,
   audio: audioIconSvg,
+  'audio-generate': audioGenerateIconSvg,
   'audio-volume-high': audioVolumeHighIconSvg,
   'audio-volume-muted': audioVolumeMutedIconSvg,
   checked: checkedIconSvg,
@@ -520,7 +521,7 @@ function createImportPanel(
   const description = document.createElement('p');
   description.textContent = editingText
     ? 'Update the text details and save your changes.'
-    : 'Paste a text below or load a UTF-8 text file. Review the details before saving.';
+    : 'Paste or type the text below. Review the details before saving.';
 
   const form = document.createElement('form');
   form.className = 'text-form';
@@ -563,33 +564,6 @@ function createImportPanel(
   title.maxLength = 200;
   title.value = editingText?.title ?? '';
 
-  const file = document.createElement('input');
-  file.type = 'file';
-  file.className = 'file-picker__input';
-  file.accept = '.txt,text/plain';
-  const fileField = document.createElement('div');
-  fileField.className = 'text-form__file-field';
-  const fileCaption = document.createElement('span');
-  fileCaption.className = 'text-form__field-caption';
-  fileCaption.textContent = 'Load a .txt file';
-  const filePicker = document.createElement('label');
-  filePicker.className = 'file-picker';
-  const fileIcon = document.createElement('span');
-  fileIcon.className = 'file-picker__icon';
-  fileIcon.append(createAdwaitaIcon('document-open'));
-  const fileCopy = document.createElement('span');
-  fileCopy.className = 'file-picker__copy';
-  const fileTitle = document.createElement('strong');
-  fileTitle.textContent = 'Choose a text file';
-  const fileHelp = document.createElement('small');
-  fileHelp.textContent = 'Click or drop · UTF-8 plain text · maximum 65 KB';
-  fileCopy.append(fileTitle, fileHelp);
-  const fileName = document.createElement('span');
-  fileName.className = 'file-picker__name';
-  fileName.textContent = 'Browse…';
-  filePicker.append(file, fileIcon, fileCopy, fileName);
-  fileField.append(fileCaption, filePicker);
-
   const audioFile = document.createElement('input');
   audioFile.type = 'file';
   audioFile.className = 'file-picker__input audio-file-input';
@@ -624,23 +598,33 @@ function createImportPanel(
   const generateAudio = document.createElement('input');
   generateAudio.type = 'checkbox';
   generateAudio.name = 'generateAudio';
+  generateAudio.className = 'audio-generation-checkbox';
+  const generateAudioField = document.createElement('div');
+  generateAudioField.className = 'text-form__file-field text-form__generate-audio-field';
+  const generateAudioCaption = document.createElement('span');
+  generateAudioCaption.className = 'text-form__field-caption';
+  generateAudioCaption.textContent = 'Generated audio (optional)';
   const generateAudioLabel = document.createElement('label');
-  generateAudioLabel.className = 'text-form__tts-toggle';
+  generateAudioLabel.className = 'file-picker file-picker--generate-audio';
+  const generateAudioIcon = document.createElement('span');
+  generateAudioIcon.className = 'file-picker__icon';
+  generateAudioIcon.append(createAdwaitaIcon('audio-generate'));
   const generateAudioCopy = document.createElement('span');
+  generateAudioCopy.className = 'file-picker__copy';
   const generateAudioTitle = document.createElement('strong');
-  generateAudioTitle.textContent = 'Generate audio with Edge TTS';
+  generateAudioTitle.textContent = 'Generate audio automatically';
   const generateAudioHelp = document.createElement('small');
-  generateAudioHelp.textContent =
-    'Sends this text to Microsoft’s online speech service and saves the generated MP3 locally.';
+  generateAudioHelp.textContent = 'Create a spoken version when you save · requires internet';
   generateAudioCopy.append(generateAudioTitle, generateAudioHelp);
-  generateAudioLabel.append(generateAudio, generateAudioCopy);
+  generateAudioLabel.append(generateAudioIcon, generateAudioCopy, generateAudio);
+  generateAudioField.append(generateAudioCaption, generateAudioLabel);
 
   const ttsVoice = document.createElement('select');
   ttsVoice.name = 'ttsVoice';
   ttsVoice.disabled = true;
   const ttsVoicePlaceholder = document.createElement('option');
   ttsVoicePlaceholder.value = '';
-  ttsVoicePlaceholder.textContent = 'Enable Edge TTS to load voices';
+  ttsVoicePlaceholder.textContent = 'Enable automatic audio to load voices';
   ttsVoice.append(ttsVoicePlaceholder);
   const ttsVoiceField = createField('Voice', ttsVoice);
   ttsVoiceField.classList.add('text-form__tts-voice');
@@ -688,7 +672,7 @@ function createImportPanel(
   const removeAudio = document.createElement('button');
   removeAudio.type = 'button';
   removeAudio.className = 'button-secondary remove-audio';
-  removeAudio.textContent = 'Remove saved audio';
+  removeAudio.textContent = 'Delete existing audio';
   removeAudio.hidden = !editingText?.hasAudio;
   removeAudio.addEventListener('click', () => {
     if (
@@ -746,51 +730,6 @@ function createImportPanel(
     });
   };
 
-  let handledTextFile: File | undefined;
-  const loadTextFile = (selectedFile: File | undefined): void => {
-    if (!selectedFile || selectedFile === handledTextFile) {
-      return;
-    }
-    handledTextFile = selectedFile;
-    const importError = textImportError(selectedFile);
-    if (importError) {
-      file.value = '';
-      handledTextFile = undefined;
-      fileTitle.textContent = 'Choose a text file';
-      fileName.textContent = 'Browse…';
-      filePicker.classList.remove('has-file');
-      status.className = 'form-status form-status--error';
-      status.textContent = importError;
-      return;
-    }
-    fileTitle.textContent = 'Text file selected';
-    fileName.textContent = selectedFile.name;
-    filePicker.classList.add('has-file');
-
-    void selectedFile
-      .text()
-      .then((fileContent) => {
-        content.value = fileContent;
-        if (title.value.trim() === '') {
-          title.value = selectedFile.name.replace(/\.[^.]+$/, '');
-        }
-        status.className = 'form-status';
-        status.textContent = `${selectedFile.name} loaded. Review it before saving.`;
-      })
-      .catch(() => {
-        file.value = '';
-        handledTextFile = undefined;
-        fileTitle.textContent = 'Choose a text file';
-        fileName.textContent = 'Browse…';
-        filePicker.classList.remove('has-file');
-        status.className = 'form-status form-status--error';
-        status.textContent = 'The selected file could not be read.';
-      });
-  };
-  file.addEventListener('input', () => loadTextFile(file.files?.[0]));
-  file.addEventListener('change', () => loadTextFile(file.files?.[0]));
-  enableFileDrop(filePicker, loadTextFile);
-
   let selectedAudioFile: File | undefined;
   let voiceRequest = 0;
   const selectAudioFile = (selectedAudio: File | undefined): void => {
@@ -809,6 +748,7 @@ function createImportPanel(
     }
     selectedAudioFile = selectedAudio;
     generateAudio.checked = false;
+    generateAudioLabel.classList.remove('is-enabled');
     ttsVoiceField.hidden = true;
     ttsVoice.disabled = true;
     voiceRequest += 1;
@@ -825,16 +765,17 @@ function createImportPanel(
     const requestedLanguage = language.value.trim();
     if (!requestedLanguage) {
       generateAudio.checked = false;
+      generateAudioLabel.classList.remove('is-enabled');
       ttsVoiceField.hidden = true;
       status.className = 'form-status form-status--error';
-      status.textContent = 'Choose a language before enabling Edge TTS.';
+      status.textContent = 'Choose a language before enabling automatic audio.';
       return;
     }
     const request = ++voiceRequest;
     ttsVoice.disabled = true;
     ttsVoice.replaceChildren(new Option('Loading voices…', ''));
     status.className = 'form-status';
-    status.textContent = 'Loading Edge TTS voices…';
+    status.textContent = 'Loading voices…';
     try {
       const voices = await gateway.listTtsVoices(requestedLanguage);
       if (request !== voiceRequest || !generateAudio.checked) {
@@ -844,15 +785,16 @@ function createImportPanel(
         ...voices.map((voice) => new Option(voice.label, voice.id))
       );
       if (voices.length === 0) {
-        throw new Error(`No Edge TTS voice is available for ${requestedLanguage}.`);
+        throw new Error(`No voice is available for ${requestedLanguage}.`);
       }
       ttsVoice.disabled = false;
-      status.textContent = 'Edge TTS will generate an MP3 after the text is saved.';
+      status.textContent = 'Audio will be generated after the text is saved.';
     } catch (error) {
       if (request !== voiceRequest) {
         return;
       }
       generateAudio.checked = false;
+      generateAudioLabel.classList.remove('is-enabled');
       ttsVoiceField.hidden = true;
       status.className = 'form-status form-status--error';
       status.textContent = error instanceof Error ? error.message : String(error);
@@ -860,6 +802,7 @@ function createImportPanel(
   };
 
   generateAudio.addEventListener('change', () => {
+    generateAudioLabel.classList.toggle('is-enabled', generateAudio.checked);
     ttsVoiceField.hidden = !generateAudio.checked;
     if (!generateAudio.checked) {
       voiceRequest += 1;
@@ -894,7 +837,7 @@ function createImportPanel(
     }
     if (generateAudio.checked && (!ttsVoice.value || ttsVoice.disabled)) {
       status.className = 'form-status form-status--error';
-      status.textContent = 'Choose an Edge TTS voice before saving.';
+      status.textContent = 'Choose a voice before saving.';
       return;
     }
 
@@ -924,7 +867,7 @@ function createImportPanel(
       .then(async (saved) => {
         if (generateAudio.checked) {
           savingAudio = true;
-          status.textContent = 'Generating audio with Edge TTS…';
+          status.textContent = 'Generating audio…';
           await gateway.generateTextAudio({
             textId: saved.id,
             voice: ttsVoice.value,
@@ -985,9 +928,8 @@ function createImportPanel(
   form.append(
     languageControl,
     titleField,
-    fileField,
     audioField,
-    generateAudioLabel,
+    generateAudioField,
     ttsVoiceField,
     contentField,
     createField('Source URL (optional)', sourceUri),

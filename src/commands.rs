@@ -160,7 +160,7 @@ fn remove_text_audio(database: tauri::State<'_, Database>, text_id: i64) -> Resu
 fn list_tts_voices(language: String) -> Result<Vec<TtsVoice>, String> {
     let language = language.trim();
     if language.is_empty() || language.len() > 100 {
-        return Err("Choose a language before selecting an Edge TTS voice".to_string());
+        return Err("Choose a language before selecting a voice".to_string());
     }
     Ok(crate::tts::voices_for_language(language))
 }

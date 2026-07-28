@@ -828,29 +828,8 @@ textarea {
 
 .text-form__content,
 .text-form__actions,
-.text-form__tts-toggle,
 .form-status {
   grid-column: 1 / -1;
-}
-
-.text-form .text-form__tts-toggle {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.65rem;
-  padding: 0.8rem;
-  border: 1px solid #d9e1e8;
-  border-radius: 9px;
-  background: #f7f9fb;
-}
-
-.text-form .text-form__tts-toggle input {
-  width: auto;
-  margin-top: 0.15rem;
-}
-
-.text-form__tts-toggle span {
-  display: grid;
-  gap: 0.2rem;
 }
 
 .text-form__tts-voice select {
@@ -860,6 +839,14 @@ textarea {
   border-radius: 8px;
   background: #fff;
   color: #243142;
+}
+
+.text-form__tts-voice[hidden] {
+  display: none;
+}
+
+.text-form .remove-audio[hidden] {
+  display: none;
 }
 
 .text-form__actions,
@@ -3134,6 +3121,24 @@ textarea {
   cursor: pointer;
 }
 
+.adw-window .text-form .file-picker--generate-audio .audio-generation-checkbox {
+  position: static;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  border-radius: 4px;
+  accent-color: var(--adw-accent);
+}
+
+.adw-window .file-picker--generate-audio.is-enabled {
+  border-color: var(--adw-accent);
+}
+
+.adw-window .text-form__tts-voice {
+  grid-column: 2;
+}
+
 .adw-window .file-picker:hover,
 .adw-window .file-picker:focus-within,
 .adw-window .file-picker.is-drag-over {
@@ -5211,6 +5216,10 @@ body:has(.adw-window) {
 @media (max-width: 640px) {
   .text-form {
     grid-template-columns: 1fr;
+  }
+
+  .adw-window .text-form__tts-voice {
+    grid-column: 1;
   }
 
   .term-editor__form {
