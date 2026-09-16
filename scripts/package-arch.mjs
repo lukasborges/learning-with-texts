@@ -7,6 +7,16 @@ import { fileURLToPath } from 'node:url';
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const packagingDirectory = path.join(repositoryRoot, 'packaging', 'arch');
 
+const iconInstallations = [
+  { source: '16x16.png', size: '16x16' },
+  { source: '32x32.png', size: '32x32' },
+  { source: '48x48.png', size: '48x48' },
+  { source: '64x64.png', size: '64x64' },
+  { source: '128x128.png', size: '128x128' },
+  { source: '128x128@2x.png', size: '256x256' },
+  { source: 'icon.png', size: '512x512' }
+];
+
 function parseArguments(arguments_) {
   const options = { build: false };
   for (let index = 0; index < arguments_.length; index += 1) {
@@ -34,6 +44,18 @@ function pkgbuild(version, checksums) {
   if (!/^\d+\.\d+\.\d+(?:[._+-][0-9A-Za-z.-]+)?$/.test(version)) {
     throw new Error(`Invalid Arch package version: ${version}`);
   }
+  const iconInstallLines = iconInstallations
+    .map(
+      ({ size }) =>
+        `  install -Dm644 "${'${srcdir}'}/lwt-desktop-${size}.png" "${'${pkgdir}'}/usr/share/icons/hicolor/${size}/apps/lwt-desktop.png"`
+    )
+    .join('\n');
+  const iconSourceEntries = iconInstallations
+    .map(({ size }) => `'lwt-desktop-${size}.png'`)
+    .join(' ');
+  const iconShaEntries = iconInstallations
+    .map(({ size }) => `'${checksums[`icon.${size}`]}'`)
+    .join(' ');
   return `# Generated from the repository-pinned desktop binary. Do not edit by hand.
 pkgname=lwt-desktop
 pkgver=${version}
@@ -46,13 +68,13 @@ depends=('cairo' 'desktop-file-utils' 'gdk-pixbuf2' 'glib2' 'gtk3' 'hicolor-icon
 optdepends=('gst-plugins-good: common audio codecs' 'gst-plugins-bad: additional audio codecs' 'gst-libav: FFmpeg audio codecs')
 options=('!strip' '!debug' '!emptydirs')
 install=lwt-desktop.install
-source=('lwt-desktop' 'lwt-desktop.desktop' 'lwt-desktop.png')
-sha256sums=('${checksums.binary}' '${checksums.desktop}' '${checksums.icon}')
+source=('lwt-desktop' 'lwt-desktop.desktop' ${iconSourceEntries})
+sha256sums=('${checksums.binary}' '${checksums.desktop}' ${iconShaEntries})
 
 package() {
   install -Dm755 "${'${srcdir}'}/lwt-desktop" "${'${pkgdir}'}/usr/bin/lwt-desktop"
   install -Dm644 "${'${srcdir}'}/lwt-desktop.desktop" "${'${pkgdir}'}/usr/share/applications/lwt-desktop.desktop"
-  install -Dm644 "${'${srcdir}'}/lwt-desktop.png" "${'${pkgdir}'}/usr/share/icons/hicolor/128x128/apps/lwt-desktop.png"
+${iconInstallLines}
 }
 `;
 }
@@ -63,11 +85,9 @@ export async function stageArchPackage({ binary, output, version }) {
 
   const stagedBinary = path.join(destination, 'lwt-desktop');
   const stagedDesktop = path.join(destination, 'lwt-desktop.desktop');
-  const stagedIcon = path.join(destination, 'lwt-desktop.png');
   await copyFile(path.resolve(binary), stagedBinary);
   await chmod(stagedBinary, 0o755);
   await copyFile(path.join(packagingDirectory, 'lwt-desktop.desktop'), stagedDesktop);
-  await copyFile(path.join(repositoryRoot, 'icons', '128x128.png'), stagedIcon);
   await copyFile(
     path.join(packagingDirectory, 'lwt-desktop.install'),
     path.join(destination, 'lwt-desktop.install')
@@ -75,9 +95,14 @@ export async function stageArchPackage({ binary, output, version }) {
 
   const checksums = {
     binary: await sha256(stagedBinary),
-    desktop: await sha256(stagedDesktop),
-    icon: await sha256(stagedIcon)
+    desktop: await sha256(stagedDesktop)
   };
+  for (const { source, size } of iconInstallations) {
+    const stagedIcon = path.join(destination, `lwt-desktop-${size}.png`);
+    await copyFile(path.join(repositoryRoot, 'icons', source), stagedIcon);
+    checksums[`icon.${size}`] = await sha256(stagedIcon);
+  }
+
   await writeFile(path.join(destination, 'PKGBUILD'), pkgbuild(version, checksums), 'utf8');
   return destination;
 }
